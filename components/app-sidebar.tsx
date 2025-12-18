@@ -18,6 +18,7 @@ import {
   IconPlaneDeparture,
 } from "@tabler/icons-react"
 import { useAuth } from "@/contexts/auth-context"
+import type { UserRole } from "@/lib/types/roles"
 
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
@@ -43,95 +44,144 @@ function getUserInitials(name: string, email: string): string {
   return email.substring(0, 2).toUpperCase()
 }
 
-const data = {
-  navMain: [
-    {
-      items: [
-        {
-          title: "Dashboard",
-          url: "#",
-          icon: IconHome,
-        },
-        {
-          title: "Scheduler",
-          url: "#",
-          icon: IconCalendar,
-        },
-        {
-          title: "Bookings",
-          url: "#",
-          icon: IconBook,
-          isActive: true,
-        },
-      ],
-    },
-    {
-      label: "Resources",
-      items: [
-        {
-          title: "Aircraft",
-          url: "#",
-          icon: IconPlane,
-        },
-        {
-          title: "Members",
-          url: "#",
-          icon: IconUsers,
-        },
-        {
-          title: "Staff",
-          url: "#",
-          icon: IconUserCog,
-        },
-      ],
-    },
-    {
-      label: "Operations",
-      items: [
-        {
-          title: "Invoicing",
-          url: "#",
-          icon: IconFileInvoice,
-        },
-        {
-          title: "Training",
-          url: "#",
-          icon: IconSchool,
-        },
-        {
-          title: "Equipment",
-          url: "#",
-          icon: IconTool,
-        },
-      ],
-    },
-    {
-      label: "Management",
-      items: [
-        {
-          title: "Tasks",
-          url: "#",
-          icon: IconCheckbox,
-        },
-        {
-          title: "Reports",
-          url: "#",
-          icon: IconReport,
-        },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "#",
-      icon: IconSettings,
-    },
-  ],
+// Navigation configuration with role-based access
+import type { Icon } from "@tabler/icons-react"
+
+interface NavItem {
+  title: string
+  url: string
+  icon: Icon
+  isActive?: boolean
+  roles: UserRole[] // Roles that can see this item
 }
 
+interface NavSection {
+  label?: string
+  items: NavItem[]
+}
+
+const navigationConfig: NavSection[] = [
+  {
+    items: [
+      {
+        title: "Dashboard",
+        url: "/dashboard",
+        icon: IconHome,
+        roles: ['owner', 'admin', 'instructor', 'member', 'student'],
+      },
+      {
+        title: "Scheduler",
+        url: "/scheduler",
+        icon: IconCalendar,
+        roles: ['owner', 'admin', 'instructor', 'member', 'student'],
+      },
+      {
+        title: "Bookings",
+        url: "/bookings",
+        icon: IconBook,
+        isActive: true,
+        roles: ['owner', 'admin', 'instructor', 'member', 'student'],
+      },
+    ],
+  },
+  {
+    label: "Resources",
+    items: [
+      {
+        title: "Aircraft",
+        url: "/aircraft",
+        icon: IconPlane,
+        roles: ['owner', 'admin', 'instructor'],
+      },
+      {
+        title: "Members",
+        url: "/members",
+        icon: IconUsers,
+        roles: ['owner', 'admin', 'instructor'],
+      },
+      {
+        title: "Staff",
+        url: "/staff",
+        icon: IconUserCog,
+        roles: ['owner', 'admin'],
+      },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      {
+        title: "Invoicing",
+        url: "/invoicing",
+        icon: IconFileInvoice,
+        roles: ['owner', 'admin', 'instructor'],
+      },
+      {
+        title: "Training",
+        url: "/training",
+        icon: IconSchool,
+        roles: ['owner', 'admin', 'instructor'],
+      },
+      {
+        title: "Equipment",
+        url: "/equipment",
+        icon: IconTool,
+        roles: ['owner', 'admin', 'instructor'],
+      },
+    ],
+  },
+  {
+    label: "Management",
+    items: [
+      {
+        title: "Tasks",
+        url: "/tasks",
+        icon: IconCheckbox,
+        roles: ['owner', 'admin', 'instructor'],
+      },
+      {
+        title: "Reports",
+        url: "/reports",
+        icon: IconReport,
+        roles: ['owner', 'admin', 'instructor'],
+      },
+    ],
+  },
+]
+
+const secondaryNavItems: NavItem[] = [
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: IconSettings,
+    roles: ['owner', 'admin', 'instructor', 'member', 'student'],
+  },
+]
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { user, loading } = useAuth()
+  const { user, role, loading } = useAuth()
+
+  // Filter navigation items based on user role
+  const filteredNavMain = React.useMemo(() => {
+    if (!role) return []
+    
+    return navigationConfig
+      .map(section => ({
+        label: section.label,
+        items: section.items
+          .filter(item => item.roles.includes(role))
+          .map(({ roles, ...item }) => item), // Remove roles property
+      }))
+      .filter(section => section.items.length > 0) // Remove empty sections
+  }, [role])
+
+  const filteredNavSecondary = React.useMemo(() => {
+    if (!role) return []
+    
+    return secondaryNavItems
+      .filter(item => item.roles.includes(role))
+      .map(({ roles, ...item }) => item) // Remove roles property
+  }, [role])
 
   const userData = React.useMemo(() => {
     if (!user) {
@@ -178,8 +228,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
-          <NavMain sections={data.navMain} />
-          <NavSecondary items={data.navSecondary} className="mt-auto" />
+          <NavMain sections={filteredNavMain} />
+          <NavSecondary items={filteredNavSecondary} className="mt-auto" />
         </SidebarContent>
         <SidebarFooter>
           <div className="px-2 py-4 text-sm text-muted-foreground text-center">
@@ -208,8 +258,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain sections={data.navMain} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain sections={filteredNavMain} />
+        <NavSecondary items={filteredNavSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={userData} />

@@ -252,6 +252,86 @@ export default function BookingDetailPage() {
   const { role } = useAuth()
   const bookingId = params.id as string
   const isMobile = useIsMobile()
+  
+  // Track sidebar state for banner positioning
+  const [sidebarLeft, setSidebarLeft] = React.useState(0)
+  
+  React.useEffect(() => {
+    if (isMobile) {
+      setSidebarLeft(0)
+      return
+    }
+
+    const updateSidebarPosition = () => {
+      // Find the sidebar gap element which shows the actual sidebar width
+      const sidebarGap = document.querySelector('[data-slot="sidebar-gap"]')
+      if (sidebarGap) {
+        const computedWidth = window.getComputedStyle(sidebarGap).width
+        const width = parseFloat(computedWidth) || 0
+        setSidebarLeft(width)
+        return
+      }
+
+      // Fallback: Check sidebar state from data attributes
+      const sidebar = document.querySelector('[data-slot="sidebar"]')
+      if (!sidebar) {
+        setSidebarLeft(0)
+        return
+      }
+
+      const state = sidebar.getAttribute('data-state')
+      const collapsible = sidebar.getAttribute('data-collapsible')
+      
+      // Calculate left offset based on sidebar state
+      if (state === 'collapsed') {
+        if (collapsible === 'icon') {
+          // Icon mode: use icon width (3rem = 48px)
+          setSidebarLeft(48)
+        } else {
+          // Offcanvas mode: sidebar is hidden
+          setSidebarLeft(0)
+        }
+      } else {
+        // Expanded: get actual width from CSS variable or computed style
+        const sidebarContainer = sidebar.querySelector('[data-slot="sidebar-container"]')
+        if (sidebarContainer) {
+          const computedWidth = window.getComputedStyle(sidebarContainer).width
+          const width = parseFloat(computedWidth) || 256
+          setSidebarLeft(width)
+        } else {
+          setSidebarLeft(256) // Fallback
+        }
+      }
+    }
+
+    // Initial check with a small delay to ensure DOM is ready
+    const timeoutId = setTimeout(updateSidebarPosition, 100)
+
+    // Watch for changes using MutationObserver
+    const observer = new MutationObserver(updateSidebarPosition)
+    const sidebarWrapper = document.querySelector('[data-slot="sidebar-wrapper"]')
+    if (sidebarWrapper) {
+      observer.observe(sidebarWrapper, {
+        attributes: true,
+        attributeFilter: ['data-state', 'data-collapsible'],
+        subtree: true,
+        childList: true,
+        attributeOldValue: false
+      })
+    }
+
+    // Also listen for resize in case sidebar width changes
+    window.addEventListener('resize', updateSidebarPosition)
+    // Listen for transition end in case sidebar is animating
+    window.addEventListener('transitionend', updateSidebarPosition)
+
+    return () => {
+      clearTimeout(timeoutId)
+      observer.disconnect()
+      window.removeEventListener('resize', updateSidebarPosition)
+      window.removeEventListener('transitionend', updateSidebarPosition)
+    }
+  }, [isMobile])
 
   const queryClient = useQueryClient()
 
@@ -573,15 +653,15 @@ export default function BookingDetailPage() {
                 </div>
 
                 {/* Name Row */}
-                <div className="mb-4 sm:mb-6">
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-foreground leading-tight">
+                <div className="mb-6 sm:mb-8">
+                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground leading-tight">
                     {studentName}
                   </h1>
                 </div>
 
                 {/* Action Buttons Row */}
                 {isAdminOrInstructor && (
-                  <div className="flex flex-row items-center gap-3">
+                  <div className="flex flex-row items-center gap-3 sm:gap-4">
                     {/* Conditional Status Buttons */}
                     {booking.status === 'unconfirmed' && (
                       <Button 
@@ -632,40 +712,52 @@ export default function BookingDetailPage() {
                       </Button>
                     )}
                     
-                    {/* Options Dropdown - Always Visible */}
+                    {/* Options - Improved Dropdown */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button 
                           variant="outline" 
                           size="lg" 
-                          className="border-border/50 hover:bg-accent/80 h-12 sm:h-11 flex-1 sm:flex-initial px-6 sm:px-8 text-base font-medium"
+                          className="border-border/50 hover:bg-accent/80 h-12 sm:h-11 flex-1 sm:flex-initial px-6 sm:px-8 text-base font-medium rounded-lg"
                         >
                           <IconDotsVertical className="h-5 w-5 mr-2" />
                           Options
                           <IconChevronDown className="h-4 w-4 ml-2" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56">
-                        <DropdownMenuItem onClick={() => {
-                          // TODO: Implement print checkout sheet functionality
-                          toast.info("Print checkout sheet functionality to be implemented")
-                        }}>
-                          <IconFileText className="h-4 w-4 mr-2" />
-                          Print Checkout Sheet
+                      <DropdownMenuContent 
+                        align={isMobile ? "center" : "end"}
+                        className={`${isMobile ? "w-[calc(100vw-2rem)]" : "w-56"} rounded-xl shadow-lg border border-border/50 bg-card p-2`}
+                      >
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            // TODO: Implement print checkout sheet functionality
+                            toast.info("Print checkout sheet functionality to be implemented")
+                          }}
+                          className="rounded-lg px-4 py-3 cursor-pointer focus:bg-muted/50 transition-colors my-0.5"
+                        >
+                          <IconFileText className="h-4 w-4 mr-3 text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Print Checkout Sheet</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          // TODO: Implement other options
-                          toast.info("Additional options to be implemented")
-                        }}>
-                          <IconEye className="h-4 w-4 mr-2" />
-                          View Details
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            // TODO: Implement other options
+                            toast.info("Additional options to be implemented")
+                          }}
+                          className="rounded-lg px-4 py-3 cursor-pointer focus:bg-muted/50 transition-colors my-0.5"
+                        >
+                          <IconEye className="h-4 w-4 mr-3 text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">View Details</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          // TODO: Implement cancel booking
-                          toast.info("Cancel booking functionality to be implemented")
-                        }}>
-                          <IconTrash className="h-4 w-4 mr-2" />
-                          Cancel Booking
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            // TODO: Implement cancel booking
+                            toast.info("Cancel booking functionality to be implemented")
+                          }}
+                          className="rounded-lg px-4 py-3 cursor-pointer focus:bg-red-50 dark:focus:bg-red-950/30 transition-colors my-0.5"
+                        >
+                          <IconTrash className="h-4 w-4 mr-3 text-red-600 dark:text-red-400 flex-shrink-0" />
+                          <span className="text-sm font-medium text-red-600 dark:text-red-400">Cancel Booking</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -675,54 +767,29 @@ export default function BookingDetailPage() {
             </div>
 
             {/* Main Content with Generous Padding */}
-            <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pb-8 ${
-              isMobile ? "pb-24" : "py-8"
+            <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 ${
+              isMobile ? "pt-8 pb-24" : "pt-10 pb-8"
             }`}>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                 {/* Left Column: Booking Details */}
                 <div className="lg:col-span-2 space-y-6">
                   <Card className="shadow-sm border border-border/50 bg-card">
                     <CardHeader className="pb-6 border-b border-border/20">
-                      <div className={`flex ${isMobile ? "flex-col gap-4" : "items-center justify-between"}`}>
-                        <CardTitle className="flex items-center gap-3 text-2xl font-bold text-foreground">
-                          <IconCalendar className="h-6 w-6 text-foreground" />
-                          Booking Details
-                        </CardTitle>
-                        {hasChanges && (
-                          <div className={`flex items-center gap-3 ${isMobile ? "w-full" : ""}`}>
-                            <Button
-                              variant="outline"
-                              size="default"
-                              onClick={handleUndo}
-                              disabled={updateMutation.isPending}
-                              className={`border-border/50 hover:bg-accent/80 h-10 px-5 ${isMobile ? "flex-1" : ""}`}
-                            >
-                              <IconRotateClockwise className="h-4 w-4 mr-2" />
-                              Undo Changes
-                            </Button>
-                            <Button
-                              size="default"
-                              onClick={handleSubmit(onSubmit)}
-                              disabled={updateMutation.isPending}
-                              className={`bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-10 px-5 ${isMobile ? "flex-1" : ""}`}
-                            >
-                              <IconDeviceFloppy className="h-4 w-4 mr-2" />
-                              {updateMutation.isPending ? "Saving..." : "Save"}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
+                      <CardTitle className="flex items-center gap-3 text-2xl font-bold text-foreground">
+                        <IconCalendar className="h-6 w-6 text-foreground" />
+                        Booking Details
+                      </CardTitle>
                     </CardHeader>
-                    <CardContent className="pt-6">
+                    <CardContent className="pt-6 space-y-6">
                       <form onSubmit={handleSubmit(onSubmit)}>
                         <FieldGroup className="space-y-6">
                           {/* Scheduled Times */}
-                          <div className="space-y-4 p-6 bg-muted/30 rounded-xl border border-border/30">
+                          <div className="space-y-4 p-6 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
                             <div className="flex items-center gap-3 mb-5">
                               <IconClock className="h-4 w-4 text-foreground" />
                               <h3 className="font-bold text-sm uppercase tracking-wider text-foreground">Scheduled Times</h3>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                               <Field>
                                 <FieldLabel className="text-sm font-semibold text-foreground mb-2">Start Time</FieldLabel>
                                 <div className="flex gap-3 items-end">
@@ -731,7 +798,7 @@ export default function BookingDetailPage() {
                                       <PopoverTrigger asChild>
                                         <Button
                                           variant="outline"
-                                          className="w-full justify-between font-normal border-border/50 bg-background hover:bg-accent/50 h-10"
+                                          className="w-full justify-between font-normal border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
                                         >
                                           {startDate
                                             ? startDate.toLocaleDateString("en-US", {
@@ -768,7 +835,7 @@ export default function BookingDetailPage() {
                                       value={startTime || "none"}
                                       onValueChange={(value) => setStartTime(value === "none" ? "" : value)}
                                     >
-                                      <SelectTrigger className="w-full border-border/50 bg-background hover:bg-accent/50 h-10">
+                                      <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                         <SelectValue placeholder="Time">
                                           {startTime ? formatTimeForDisplay(startTime) : "Time"}
                                         </SelectValue>
@@ -796,7 +863,7 @@ export default function BookingDetailPage() {
                                       <PopoverTrigger asChild>
                                         <Button
                                           variant="outline"
-                                          className="w-full justify-between font-normal border-border/50 bg-background hover:bg-accent/50 h-10"
+                                          className="w-full justify-between font-normal border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
                                         >
                                           {endDate
                                             ? endDate.toLocaleDateString("en-US", {
@@ -830,7 +897,7 @@ export default function BookingDetailPage() {
                                       value={endTime || "none"}
                                       onValueChange={(value) => setEndTime(value === "none" ? "" : value)}
                                     >
-                                      <SelectTrigger className="w-full border-border/50 bg-background hover:bg-accent/50 h-10">
+                                      <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                         <SelectValue placeholder="Time">
                                           {endTime ? formatTimeForDisplay(endTime) : "Time"}
                                         </SelectValue>
@@ -854,7 +921,7 @@ export default function BookingDetailPage() {
                           </div>
 
                           {/* Booking Information - Two Column Layout */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <Field>
                               <FieldLabel className="flex items-center gap-2 text-sm font-medium text-foreground">
                                 <IconUser className="h-4 w-4 text-foreground" />
@@ -922,7 +989,7 @@ export default function BookingDetailPage() {
                                   </PopoverContent>
                                 </Popover>
                               ) : (
-                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium">
+                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {studentName}
                                 </div>
                               )}
@@ -938,7 +1005,7 @@ export default function BookingDetailPage() {
                                   value={watch("instructor_id") || "none"}
                                   onValueChange={(value) => setValue("instructor_id", value === "none" ? null : value, { shouldDirty: true })}
                                 >
-                                  <SelectTrigger className="w-full border-border/50 bg-background hover:bg-accent/50 transition-colors">
+                                  <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Instructor" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -956,7 +1023,7 @@ export default function BookingDetailPage() {
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium">
+                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {instructorName}
                                 </div>
                               )}
@@ -972,7 +1039,7 @@ export default function BookingDetailPage() {
                                   value={watch("aircraft_id")}
                                   onValueChange={(value) => setValue("aircraft_id", value, { shouldDirty: true })}
                                 >
-                                  <SelectTrigger className="w-full border-border/50 bg-background hover:bg-accent/50 transition-colors">
+                                  <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Aircraft" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -984,7 +1051,7 @@ export default function BookingDetailPage() {
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium">
+                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {booking.aircraft
                                     ? `${booking.aircraft.registration} - ${booking.aircraft.manufacturer} ${booking.aircraft.type}`
                                     : "—"}
@@ -1002,7 +1069,7 @@ export default function BookingDetailPage() {
                                   value={watch("flight_type_id") || "none"}
                                   onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
                                 >
-                                  <SelectTrigger className="w-full border-border/50 bg-background hover:bg-accent/50 transition-colors">
+                                  <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Flight Type" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1015,7 +1082,7 @@ export default function BookingDetailPage() {
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium">
+                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {booking.flight_type?.name || "—"}
                                 </div>
                               )}
@@ -1030,7 +1097,7 @@ export default function BookingDetailPage() {
                                 value={watch("booking_type")}
                                 onValueChange={(value) => setValue("booking_type", value as BookingType, { shouldDirty: true })}
                               >
-                                <SelectTrigger className="w-full border-border/50 bg-background hover:bg-accent/50 transition-colors">
+                                <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1052,7 +1119,7 @@ export default function BookingDetailPage() {
                                   value={watch("lesson_id") || "none"}
                                   onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
                                 >
-                                  <SelectTrigger className="w-full border-border/50 bg-background hover:bg-accent/50 transition-colors">
+                                  <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Lesson" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1065,7 +1132,7 @@ export default function BookingDetailPage() {
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium">
+                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {booking.lesson_id ? "Lesson selected" : "No lesson selected"}
                                 </div>
                               )}
@@ -1076,7 +1143,7 @@ export default function BookingDetailPage() {
                               <Textarea
                                 {...register("purpose")}
                                 placeholder="Enter booking description"
-                                className="min-h-[100px] border-border/50 bg-background focus-visible:ring-primary/20"
+                                className="min-h-[100px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus-visible:ring-primary/20"
                               />
                               {errors.purpose && (
                                 <p className="text-sm text-destructive mt-1">{errors.purpose.message}</p>
@@ -1102,9 +1169,9 @@ export default function BookingDetailPage() {
                 </div>
 
                 {/* Right Column: Resources */}
-                <div className="space-y-6">
+                <div className="space-y-6 lg:space-y-8">
                   {/* Resources Card - Combined People and Aircraft */}
-                  <Card className="shadow-sm border border-border/50 bg-card">
+                  <Card className="shadow-md border border-border/50 bg-card rounded-xl">
                     <CardHeader className="pb-5 border-b border-border/20">
                       <CardTitle className="text-xl font-bold text-foreground">
                         Resources
@@ -1119,7 +1186,7 @@ export default function BookingDetailPage() {
                         </div>
                         
                         {/* Member Card */}
-                        <div className="bg-muted/30 rounded-lg border border-border/30 p-4 space-y-2">
+                        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-3 shadow-sm">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-2">
                               <IconUser className="h-4 w-4 text-foreground" />
@@ -1130,14 +1197,14 @@ export default function BookingDetailPage() {
                           <Badge variant="outline" className="text-xs font-semibold border-gray-300 text-gray-700 dark:text-gray-300 dark:border-gray-600">
                             Student
                           </Badge>
-                          <div className="font-bold text-base text-foreground">{studentName}</div>
+                          <div className="font-bold text-base text-gray-900 dark:text-gray-100">{studentName}</div>
                           {booking.student?.email && (
-                            <div className="text-sm text-muted-foreground">{booking.student.email}</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">{booking.student.email}</div>
                           )}
                         </div>
 
                         {/* Solo Booking / Instructor Card */}
-                        <div className="bg-muted/30 rounded-lg border border-border/30 p-4 space-y-2">
+                        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-3 shadow-sm">
                           <div className="flex items-center gap-2">
                             <IconUser className="h-4 w-4 text-foreground" />
                             <span className="text-sm font-medium text-foreground">Solo Booking</span>
@@ -1147,13 +1214,13 @@ export default function BookingDetailPage() {
                               <Badge variant="outline" className="text-xs font-semibold border-gray-300 text-gray-700 dark:text-gray-300 dark:border-gray-600">
                                 Staff
                               </Badge>
-                              <div className="font-bold text-base text-foreground">{instructorName}</div>
+                              <div className="font-bold text-base text-gray-900 dark:text-gray-100">{instructorName}</div>
                               {booking.instructor?.user?.email && (
-                                <div className="text-sm text-muted-foreground">{booking.instructor.user.email}</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">{booking.instructor.user.email}</div>
                               )}
                             </>
                           ) : (
-                            <div className="text-sm text-muted-foreground">No instructor assigned</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">No instructor assigned</div>
                           )}
                         </div>
                       </div>
@@ -1166,20 +1233,20 @@ export default function BookingDetailPage() {
                         </div>
                         
                         {booking.aircraft ? (
-                          <div className="bg-muted/30 rounded-lg border border-border/30 p-4 space-y-2">
+                          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-3 shadow-sm">
                             <div className="flex items-center gap-2">
                               <IconPlane className="h-4 w-4 text-foreground" />
-                              <div className="font-bold text-base text-foreground">
+                              <div className="font-bold text-base text-gray-900 dark:text-gray-100">
                                 {booking.aircraft.registration} ({booking.aircraft.type})
                               </div>
                             </div>
-                            <div className="text-sm text-muted-foreground">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
                               {booking.aircraft.manufacturer}{booking.aircraft.model ? `, ${booking.aircraft.model}` : ''}
                             </div>
                           </div>
                         ) : (
-                          <div className="bg-muted/30 rounded-lg border border-border/30 p-4">
-                            <div className="text-sm text-muted-foreground">No aircraft assigned</div>
+                          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">No aircraft assigned</div>
                           </div>
                         )}
                       </div>
@@ -1189,7 +1256,7 @@ export default function BookingDetailPage() {
               </div>
 
               {/* Audit Log - Table Format at Bottom */}
-              <Card className="shadow-sm border border-border/40 bg-card mt-8">
+              <Card className="shadow-md border border-border/50 bg-card rounded-xl mt-8">
                 <CardHeader className="pb-2 sm:pb-3 border-b border-border/20">
                   <button
                     type="button"
@@ -1197,7 +1264,7 @@ export default function BookingDetailPage() {
                     className="flex items-center gap-2 w-full text-left"
                   >
                     <IconChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground transition-transform ${auditLogOpen ? '' : '-rotate-90'}`} />
-                    <CardTitle className="text-base sm:text-lg font-semibold text-foreground">
+                    <CardTitle className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
                       Booking History
                     </CardTitle>
                   </button>
@@ -1206,17 +1273,17 @@ export default function BookingDetailPage() {
                   <CardContent className="pt-3 sm:pt-4 px-0 sm:px-6">
                     {auditLogs.length === 0 ? (
                       <div className="text-center py-6 sm:py-8 px-4">
-                        <p className="text-xs sm:text-sm text-muted-foreground">No history available</p>
-                        <p className="text-xs text-muted-foreground mt-1">Changes to this booking will appear here</p>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">No history available</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Changes to this booking will appear here</p>
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
                             <tr className="border-b border-border/30">
-                              <th className="text-left py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-foreground">Date</th>
-                              <th className="text-left py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-foreground">User</th>
-                              <th className="text-left py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-foreground">Description</th>
+                              <th className="text-left py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100">Date</th>
+                              <th className="text-left py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100">User</th>
+                              <th className="text-left py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100">Description</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1238,14 +1305,14 @@ export default function BookingDetailPage() {
                               
                               return (
                                 <tr key={log.id} className="border-b border-border/20 last:border-0">
-                                  <td className="py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm text-foreground whitespace-nowrap">
+                                  <td className="py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
                                     <span className="hidden sm:inline">{formattedDate}, {formattedTime}</span>
                                     <span className="sm:hidden">{formattedDate}<br />{formattedTime}</span>
                                   </td>
-                                  <td className="py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm text-foreground">
+                                  <td className="py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-gray-100">
                                     {userName}
                                   </td>
-                                  <td className="py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm text-foreground">
+                                  <td className="py-1.5 sm:py-2 px-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-gray-100">
                                     {formatAuditDescription(log)}
                                   </td>
                                 </tr>
@@ -1261,26 +1328,36 @@ export default function BookingDetailPage() {
             </div>
           </div>
           
-          {/* Sticky Bottom Bar for Mobile - Save Changes */}
-          {isMobile && hasChanges && (
-            <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg">
-              <div className="px-4 py-3 safe-area-inset-bottom">
-                <div className="flex items-center gap-3">
+          {/* Sticky Bottom Bar - Save Changes */}
+          {hasChanges && (
+            <div 
+              className="fixed bottom-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl"
+              style={{ 
+                position: 'fixed',
+                bottom: 0,
+                // On mobile: full width, on desktop: start after sidebar (adjusts dynamically)
+                left: isMobile ? 0 : `${sidebarLeft}px`,
+                right: 0,
+                zIndex: 50
+              }}
+            >
+              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+                <div className="flex items-center justify-end gap-4">
                   <Button
                     variant="outline"
-                    size="default"
+                    size="lg"
                     onClick={handleUndo}
                     disabled={updateMutation.isPending}
-                    className="flex-1 h-11 border border-slate-300/60 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm"
+                    className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
                   >
                     <IconRotateClockwise className="h-4 w-4 mr-2" />
                     Undo Changes
                   </Button>
                   <Button
-                    size="default"
+                    size="lg"
                     onClick={handleSubmit(onSubmit)}
                     disabled={updateMutation.isPending}
-                    className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm hover:shadow-md transition-all"
+                    className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
                   >
                     <IconDeviceFloppy className="h-4 w-4 mr-2" />
                     {updateMutation.isPending ? "Saving..." : "Save Changes"}

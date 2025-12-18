@@ -2,11 +2,15 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
-import { SidebarTrigger } from "@/components/ui/sidebar"
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { Menu } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { IconPlaneDeparture } from "@tabler/icons-react"
 
 export function SiteHeader() {
   const isMobile = useIsMobile()
+  const { toggleSidebar } = useSidebar()
   
   return (
     <header className={`flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height) ${
@@ -15,21 +19,47 @@ export function SiteHeader() {
         : "border-border/40 bg-gradient-to-r from-slate-50 via-blue-50/40 to-background dark:from-slate-900 dark:via-slate-800/60 dark:to-background"
     }`}>
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
-        <SidebarTrigger className={`-ml-1 ${isMobile ? "text-slate-100 hover:text-white" : ""}`} />
-        <Separator
-          orientation="vertical"
-          className={`mx-2 data-[orientation=vertical]:h-4 ${
-            isMobile ? "bg-slate-600/50" : ""
-          }`}
-        />
-        <div className={`ml-auto flex items-center gap-2 ${isMobile ? "text-slate-100" : ""}`}>
-          <span className={`text-sm ${isMobile ? "text-slate-300" : "text-muted-foreground"}`}>Hello,</span>
-          <span className={`text-sm font-medium ${isMobile ? "text-slate-100" : ""}`}>Callum Soutar</span>
-          <Avatar className="h-8 w-8">
-            <AvatarImage src="/avatars/callum.jpg" alt="Callum Soutar" />
-            <AvatarFallback className={isMobile ? "bg-slate-700/80 text-slate-100" : ""}>CS</AvatarFallback>
-          </Avatar>
-        </div>
+        {isMobile ? (
+          <>
+            {/* Mobile: Hamburger menu (left), Flight Desk Pro (center), Avatar (right) */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 text-slate-100 hover:text-white hover:bg-slate-700/50"
+              onClick={toggleSidebar}
+            >
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle Sidebar</span>
+            </Button>
+            <div className="flex flex-1 items-center justify-center gap-2">
+              <IconPlaneDeparture className="h-5 w-5 text-slate-100" />
+              <span className="text-base font-semibold text-slate-100">Flight Desk Pro</span>
+            </div>
+            <div className="flex items-center">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src="/avatars/callum.jpg" alt="Callum Soutar" />
+                <AvatarFallback className="bg-slate-700/80 text-slate-100">CS</AvatarFallback>
+              </Avatar>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Desktop: Original layout */}
+            <SidebarTrigger className="-ml-1" />
+            <Separator
+              orientation="vertical"
+              className="mx-2 data-[orientation=vertical]:h-4"
+            />
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Hello,</span>
+              <span className="text-sm font-medium">Callum Soutar</span>
+              <Avatar className="h-8 w-8">
+                <AvatarImage src="/avatars/callum.jpg" alt="Callum Soutar" />
+                <AvatarFallback>CS</AvatarFallback>
+              </Avatar>
+            </div>
+          </>
+        )}
       </div>
     </header>
   )

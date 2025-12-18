@@ -113,12 +113,96 @@ function getErrorMessage(err: unknown) {
 }
 
 export default function BookingCheckoutPage() {
+  console.log('🚀 BookingCheckoutPage component rendering')
+  
   const params = useParams()
   const { role } = useAuth()
   const bookingId = params.id as string
   const isMobile = useIsMobile()
 
   const queryClient = useQueryClient()
+  
+  // Track sidebar state for banner positioning - must be called before any conditional returns
+  const [sidebarLeft, setSidebarLeft] = React.useState(0)
+  
+  React.useEffect(() => {
+    if (isMobile) {
+      setSidebarLeft(0)
+      return
+    }
+
+    const updateSidebarPosition = () => {
+      // Find the sidebar gap element which shows the actual sidebar width
+      const sidebarGap = document.querySelector('[data-slot="sidebar-gap"]')
+      if (sidebarGap) {
+        const computedWidth = window.getComputedStyle(sidebarGap).width
+        const width = parseFloat(computedWidth) || 0
+        setSidebarLeft(width)
+        return
+      }
+
+      // Fallback: Check sidebar state from data attributes
+      const sidebar = document.querySelector('[data-slot="sidebar"]')
+      if (!sidebar) {
+        setSidebarLeft(0)
+        return
+      }
+
+      const state = sidebar.getAttribute('data-state')
+      const collapsible = sidebar.getAttribute('data-collapsible')
+      
+      // Calculate left offset based on sidebar state
+      if (state === 'collapsed') {
+        if (collapsible === 'icon') {
+          // Icon mode: use icon width (3rem = 48px)
+          setSidebarLeft(48)
+        } else {
+          // Offcanvas mode: sidebar is hidden
+          setSidebarLeft(0)
+        }
+      } else {
+        // Expanded: get actual width from CSS variable or computed style
+        const sidebarContainer = sidebar.querySelector('[data-slot="sidebar-container"]')
+        if (sidebarContainer) {
+          const computedWidth = window.getComputedStyle(sidebarContainer).width
+          const width = parseFloat(computedWidth) || 256
+          setSidebarLeft(width)
+        } else {
+          setSidebarLeft(256) // Fallback
+        }
+      }
+    }
+
+    // Initial check with a small delay to ensure DOM is ready
+    const timeoutId = setTimeout(updateSidebarPosition, 100)
+
+    // Watch for changes using MutationObserver
+    const observer = new MutationObserver(updateSidebarPosition)
+    const sidebarWrapper = document.querySelector('[data-slot="sidebar-wrapper"]')
+    if (sidebarWrapper) {
+      observer.observe(sidebarWrapper, {
+        attributes: true,
+        attributeFilter: ['data-state', 'data-collapsible'],
+        subtree: true,
+        childList: true,
+        attributeOldValue: false
+      })
+    }
+
+    // Also listen for resize in case sidebar width changes
+    window.addEventListener('resize', updateSidebarPosition)
+    // Listen for transition end in case sidebar is animating
+    window.addEventListener('transitionend', updateSidebarPosition)
+
+    return () => {
+      clearTimeout(timeoutId)
+      observer.disconnect()
+      window.removeEventListener('resize', updateSidebarPosition)
+      window.removeEventListener('transitionend', updateSidebarPosition)
+    }
+  }, [isMobile])
+  
+  console.log('🚀 Component initialized - bookingId:', bookingId, 'isMobile:', isMobile)
 
   const {
     register,
@@ -270,17 +354,22 @@ export default function BookingCheckoutPage() {
   
   // Debug: Log form state (remove in production)
   React.useEffect(() => {
-    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      console.log('Form state:', { 
-        isDirty, 
-        hasChanges,
-        isInitialized,
-        isInitializing: isInitializingRef.current,
-        formValues: watch()
-      })
-    }
+    console.log('🔍 Form state changed:', { 
+      isDirty, 
+      hasChanges,
+      isInitialized,
+      isInitializing: isInitializingRef.current,
+      windowWidth: typeof window !== 'undefined' ? window.innerWidth : 'N/A',
+      isMobile,
+      formValues: watch()
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDirty, hasChanges, isInitialized])
+  }, [isDirty, hasChanges, isInitialized, isMobile])
+
+  // Debug: Log on every render to see if component is updating
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    console.log('🔄 Component render - hasChanges:', hasChanges, 'isDirty:', isDirty)
+  }
 
   // Track initialization key to reload form when flight log changes
   const lastInitializedKey = React.useRef<string | null>(null)
@@ -585,6 +674,7 @@ export default function BookingCheckoutPage() {
   const isError = bookingQuery.isError
 
   if (isLoading) {
+    console.log('⏳ Component is loading...')
     return (
       <SidebarProvider
         style={{
@@ -604,6 +694,7 @@ export default function BookingCheckoutPage() {
   }
 
   if (isError || !booking) {
+    console.log('❌ Component error or no booking - isError:', isError, 'booking:', booking)
     return (
       <SidebarProvider
         style={{
@@ -666,6 +757,8 @@ export default function BookingCheckoutPage() {
     ? [booking.instructor.first_name, booking.instructor.last_name].filter(Boolean).join(" ") || booking.instructor.user?.email || "—"
     : "—"
 
+  console.log('✅ Component ready to render - hasChanges:', hasChanges, 'isDirty:', isDirty, 'studentName:', studentName, 'isMobile:', isMobile, 'sidebarLeft:', sidebarLeft)
+
   return (
     <>
     <SidebarProvider
@@ -677,24 +770,16 @@ export default function BookingCheckoutPage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
-        <div className={`flex flex-1 flex-col ${isMobile ? "bg-slate-50 dark:bg-slate-950" : "bg-muted/30"}`}>
+        <div className="flex flex-1 flex-col bg-muted/30">
           <div className="flex flex-1 flex-col">
             {/* Header Section */}
-            <div className={`border-b ${
-              isMobile 
-                ? "bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800/60 shadow-sm" 
-                : "border-border/40 bg-gradient-to-br from-slate-50 via-blue-50/30 to-background dark:from-slate-900 dark:via-slate-800/50 dark:to-background"
-            }`}>
+            <div className="border-b border-border/40 bg-gradient-to-br from-slate-50 via-blue-50/30 to-background dark:from-slate-900 dark:via-slate-800/50 dark:to-background">
               <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
                 {/* Top Row: Back Button */}
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <Link
                     href={`/bookings/${bookingId}`}
-                    className={`inline-flex items-center gap-2 text-sm transition-colors ${
-                      isMobile 
-                        ? "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200" 
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <IconArrowLeft className="h-4 w-4" />
                     Back to Booking
@@ -702,15 +787,11 @@ export default function BookingCheckoutPage() {
                 </div>
 
                 {/* Title Row */}
-                <div className="mb-4 sm:mb-6">
-                  <h1 className={`text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight leading-tight ${
-                    isMobile ? "text-slate-900 dark:text-white" : "text-foreground"
-                  }`}>
+                <div className="mb-6 sm:mb-8">
+                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight text-foreground">
                     Flight Checkout
                   </h1>
-                  <p className={`mt-2 ${
-                    isMobile ? "text-slate-600 dark:text-slate-400" : "text-muted-foreground"
-                  }`}>
+                  <p className="mt-3 text-base sm:text-lg text-muted-foreground">
                     Convert booking to flight log for {studentName}
                   </p>
                 </div>
@@ -718,76 +799,29 @@ export default function BookingCheckoutPage() {
             </div>
 
             {/* Main Content */}
-            <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pb-8 ${
-              isMobile ? "bg-white dark:bg-slate-950 pb-24" : "py-8"
+            <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 ${
+              isMobile ? "pt-8 pb-24" : "pt-10 pb-8"
             }`}>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                 {/* Left Column: Flight Log Form */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 space-y-6 lg:space-y-8">
                   {/* Flight Log Form */}
-                  <Card className={`bg-card ${
-                    isMobile 
-                      ? "border border-slate-200 dark:border-slate-800/60 shadow-sm" 
-                      : "shadow-sm border border-border/50"
-                  }`}>
-                    <CardHeader className={`pb-6 border-b ${
-                      isMobile 
-                        ? "border-slate-200/60 dark:border-slate-800/50" 
-                        : "border-border/20"
-                    }`}>
-                      <div className={`flex ${isMobile ? "flex-col gap-4" : "items-center justify-between"}`}>
-                        <CardTitle className={`flex items-center gap-3 text-2xl font-bold ${
-                          isMobile ? "text-slate-900 dark:text-white" : "text-foreground"
-                        }`}>
-                          <IconPlane className={`h-6 w-6 ${
-                            isMobile ? "text-blue-600 dark:text-blue-400" : "text-foreground"
-                          }`} />
-                          Flight Log Details
-                        </CardTitle>
-                        {hasChanges && (
-                          <div className={`flex items-center gap-3 ${isMobile ? "w-full" : ""}`}>
-                            <Button
-                              variant="outline"
-                              size="default"
-                              onClick={handleUndo}
-                              disabled={checkoutMutation.isPending}
-                              className={`h-10 px-5 ${
-                                isMobile 
-                                  ? "flex-1 border border-slate-300/60 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                  : "border-border/50 hover:bg-accent/80"
-                              }`}
-                            >
-                              <IconRotateClockwise className="h-4 w-4 mr-2" />
-                              Undo Changes
-                            </Button>
-                            <Button
-                              size="default"
-                              onClick={handleFormSubmit}
-                              disabled={checkoutMutation.isPending}
-                              className={`bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm hover:shadow-md transition-all h-10 px-5 ${
-                                isMobile ? "flex-1" : ""
-                              }`}
-                            >
-                              <IconDeviceFloppy className="h-4 w-4 mr-2" />
-                              {checkoutMutation.isPending ? "Saving..." : "Save"}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
+                  <Card className="bg-card shadow-md border border-border/50 rounded-xl">
+                    <CardHeader className="pb-6 border-b border-border/20">
+                      <CardTitle className="flex items-center gap-3 text-2xl font-bold text-foreground">
+                        <IconPlane className="h-6 w-6 text-foreground" />
+                        Flight Log Details
+                      </CardTitle>
                     </CardHeader>
-                    <CardContent className="pt-6">
+                    <CardContent className="pt-6 space-y-6">
                       <form onSubmit={handleFormSubmit}>
                         <FieldSet className="w-full max-w-full">
                           <FieldGroup className="w-full max-w-full">
                             {/* Actual Flight Times */}
-                            <FieldSet className={`p-6 rounded-xl w-full max-w-full box-border ${
-                              isMobile 
-                                ? "bg-slate-50/80 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800/50 shadow-sm" 
-                                : "bg-muted/30 border border-border/30"
-                            }`}>
+                            <FieldSet className="p-6 rounded-xl w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
                               
                             
-                              <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                              <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <Field data-invalid={!!errors.actual_start}>
                                   <FieldLabel htmlFor="actual_start">Booking Start</FieldLabel>
                                   <div className="flex gap-3 items-end">
@@ -797,11 +831,7 @@ export default function BookingCheckoutPage() {
                                           <Button
                                             id="actual_start"
                                             variant="outline"
-                                            className={`w-full justify-between font-normal h-10 ${
-                                              isMobile 
-                                                ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                                : "border-border/50 bg-background hover:bg-accent/50"
-                                            }`}
+                                            className="w-full justify-between font-normal h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
                                             aria-invalid={!!errors.actual_start}
                                           >
                                             {actualStartDate
@@ -835,11 +865,7 @@ export default function BookingCheckoutPage() {
                                         value={actualStartTime || "none"}
                                         onValueChange={(value) => setActualStartTime(value === "none" ? "" : value)}
                                       >
-                                        <SelectTrigger className={`w-full h-10 ${
-                                          isMobile 
-                                            ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                            : "border-border/50 bg-background hover:bg-accent/50"
-                                        }`}>
+                                        <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                                           <SelectValue placeholder="Time">
                                             {actualStartTime ? formatTimeForDisplay(actualStartTime) : "Time"}
                                           </SelectValue>
@@ -867,11 +893,7 @@ export default function BookingCheckoutPage() {
                                           <Button
                                             id="actual_end"
                                             variant="outline"
-                                            className={`w-full justify-between font-normal h-10 ${
-                                              isMobile 
-                                                ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                                : "border-border/50 bg-background hover:bg-accent/50"
-                                            }`}
+                                            className="w-full justify-between font-normal h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
                                             aria-invalid={!!errors.actual_end}
                                           >
                                             {actualEndDate
@@ -903,11 +925,7 @@ export default function BookingCheckoutPage() {
                                         value={actualEndTime || "none"}
                                         onValueChange={(value) => setActualEndTime(value === "none" ? "" : value)}
                                       >
-                                        <SelectTrigger className={`w-full h-10 ${
-                                          isMobile 
-                                            ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                            : "border-border/50 bg-background hover:bg-accent/50"
-                                        }`}>
+                                        <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                                           <SelectValue placeholder="Time">
                                             {actualEndTime ? formatTimeForDisplay(actualEndTime) : "Time"}
                                           </SelectValue>
@@ -930,7 +948,7 @@ export default function BookingCheckoutPage() {
 
                             {/* Booking Information - Two Column Layout */}
                             <FieldSet>
-                              <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Field>
                                   <FieldLabel htmlFor="checked_out_aircraft_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
                                     <IconPlane className="h-4 w-4 text-primary" />
@@ -941,11 +959,7 @@ export default function BookingCheckoutPage() {
                                       value={watch("checked_out_aircraft_id") || "none"}
                                       onValueChange={(value) => setValue("checked_out_aircraft_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
-                                      <SelectTrigger id="checked_out_aircraft_id" className={`w-full transition-colors ${
-                                        isMobile 
-                                          ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                          : "border-border/50 bg-background hover:bg-accent/50"
-                                      }`}>
+                                      <SelectTrigger id="checked_out_aircraft_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                                         <SelectValue placeholder="Select Aircraft" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -958,7 +972,7 @@ export default function BookingCheckoutPage() {
                                       </SelectContent>
                                     </Select>
                                   ) : (
-                                    <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium">
+                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
                                       {booking.aircraft
                                         ? `${booking.aircraft.registration} - ${booking.aircraft.manufacturer} ${booking.aircraft.type}`
                                         : "—"}
@@ -976,11 +990,7 @@ export default function BookingCheckoutPage() {
                                       value={watch("checked_out_instructor_id") || "none"}
                                       onValueChange={(value) => setValue("checked_out_instructor_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
-                                      <SelectTrigger id="checked_out_instructor_id" className={`w-full transition-colors ${
-                                        isMobile 
-                                          ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                          : "border-border/50 bg-background hover:bg-accent/50"
-                                      }`}>
+                                      <SelectTrigger id="checked_out_instructor_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                                         <SelectValue placeholder="Select Instructor" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -998,7 +1008,7 @@ export default function BookingCheckoutPage() {
                                       </SelectContent>
                                     </Select>
                                   ) : (
-                                    <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium">
+                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
                                       {instructorName}
                                     </div>
                                   )}
@@ -1014,11 +1024,7 @@ export default function BookingCheckoutPage() {
                                       value={watch("flight_type_id") || "none"}
                                       onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
-                                      <SelectTrigger id="flight_type_id" className={`w-full transition-colors ${
-                                        isMobile 
-                                          ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                          : "border-border/50 bg-background hover:bg-accent/50"
-                                      }`} aria-invalid={!!errors.flight_type_id}>
+                                      <SelectTrigger id="flight_type_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800" aria-invalid={!!errors.flight_type_id}>
                                         <SelectValue placeholder="Select Flight Type" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -1031,7 +1037,7 @@ export default function BookingCheckoutPage() {
                                       </SelectContent>
                                     </Select>
                                   ) : (
-                                    <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium">
+                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
                                       {booking.flight_type?.name || "—"}
                                     </div>
                                   )}
@@ -1050,11 +1056,7 @@ export default function BookingCheckoutPage() {
                                       value={watch("lesson_id") || "none"}
                                       onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
-                                      <SelectTrigger id="lesson_id" className={`w-full transition-colors ${
-                                        isMobile 
-                                          ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                          : "border-border/50 bg-background hover:bg-accent/50"
-                                      }`} aria-invalid={!!errors.lesson_id}>
+                                      <SelectTrigger id="lesson_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800" aria-invalid={!!errors.lesson_id}>
                                         <SelectValue placeholder="Select Lesson" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -1067,7 +1069,7 @@ export default function BookingCheckoutPage() {
                                       </SelectContent>
                                     </Select>
                                   ) : (
-                                    <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium">
+                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
                                       {booking.lesson_id ? "Lesson selected" : "No lesson selected"}
                                     </div>
                                   )}
@@ -1082,11 +1084,7 @@ export default function BookingCheckoutPage() {
                                     id="purpose"
                                     {...register("purpose")}
                                     placeholder="Enter booking description"
-                                    className={`min-h-[100px] focus-visible:ring-primary/20 ${
-                                      isMobile 
-                                        ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm" 
-                                        : "border-border/50 bg-background"
-                                    }`}
+                                    className="min-h-[100px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus-visible:ring-primary/20"
                                     aria-invalid={!!errors.purpose}
                                   />
                                   {errors.purpose && (
@@ -1117,7 +1115,7 @@ export default function BookingCheckoutPage() {
                             <FieldSet>
                               <FieldLegend>Flight Details</FieldLegend>
                             
-                              <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-4">
+                              <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                                 <Field data-invalid={!!errors.route}>
                                   <FieldLabel htmlFor="route" className="flex items-center gap-2">
                                     <IconRoute className="h-4 w-4 text-foreground" />
@@ -1126,11 +1124,7 @@ export default function BookingCheckoutPage() {
                                   <Input
                                     id="route"
                                     {...register("route")}
-                                    className={`${
-                                      isMobile 
-                                        ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm" 
-                                        : "border-border/50 bg-background"
-                                    }`}
+                                    className="border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
                                     placeholder="e.g., YMMB - YMMB"
                                     aria-invalid={!!errors.route}
                                   />
@@ -1147,11 +1141,7 @@ export default function BookingCheckoutPage() {
                                     type="number"
                                     step="1"
                                     {...register("fuel_on_board", { valueAsNumber: true })}
-                                    className={`${
-                                      isMobile 
-                                        ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm" 
-                                        : "border-border/50 bg-background"
-                                    }`}
+                                    className="border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
                                     placeholder="0"
                                     aria-invalid={!!errors.fuel_on_board}
                                   />
@@ -1163,11 +1153,7 @@ export default function BookingCheckoutPage() {
                                   <Input
                                     id="passengers"
                                     {...register("passengers")}
-                                    className={`${
-                                      isMobile 
-                                        ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm" 
-                                        : "border-border/50 bg-background"
-                                    }`}
+                                    className="border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
                                     placeholder="Names of passengers"
                                     aria-invalid={!!errors.passengers}
                                   />
@@ -1184,11 +1170,7 @@ export default function BookingCheckoutPage() {
                                           <Button
                                             id="eta"
                                             variant="outline"
-                                            className={`w-full justify-between font-normal h-10 ${
-                                              isMobile 
-                                                ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                                : "border-border/50 bg-background hover:bg-accent/50"
-                                            }`}
+                                            className="w-full justify-between font-normal h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
                                             aria-invalid={!!errors.eta}
                                           >
                                             {etaDate
@@ -1219,11 +1201,7 @@ export default function BookingCheckoutPage() {
                                         value={etaTime || "none"}
                                         onValueChange={(value) => setEtaTime(value === "none" ? "" : value)}
                                       >
-                                        <SelectTrigger className={`w-full h-10 ${
-                                          isMobile 
-                                            ? "border border-slate-300/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm" 
-                                            : "border-border/50 bg-background hover:bg-accent/50"
-                                        }`}>
+                                        <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                                           <SelectValue placeholder="Time">
                                             {etaTime ? formatTimeForDisplay(etaTime) : "Time"}
                                           </SelectValue>
@@ -1245,11 +1223,7 @@ export default function BookingCheckoutPage() {
                             </FieldSet>
 
                             {/* Checklists */}
-                            <FieldSet className={`p-6 rounded-xl w-full max-w-full box-border ${
-                              isMobile 
-                                ? "bg-slate-50/80 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800/50 shadow-sm" 
-                                : "bg-muted/30 border border-border/30"
-                            }`}>
+                            <FieldSet className="p-6 rounded-xl w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
                               <div className="mb-3 flex items-center gap-2 w-full">
                                 <IconFileText className="h-4 w-4 shrink-0" />
                                 <FieldLegend className="text-base font-medium break-words">Checklists</FieldLegend>
@@ -1291,23 +1265,21 @@ export default function BookingCheckoutPage() {
                                 id="flight_remarks"
                                 {...register("flight_remarks")}
                                 placeholder="Enter any flight remarks or notes"
-                                className="min-h-[100px] border-border/50 bg-background focus-visible:ring-primary/20"
+                                className="min-h-[100px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus-visible:ring-primary/20"
                                 aria-invalid={!!errors.flight_remarks}
                               />
                               <FieldError errors={errors.flight_remarks ? [{ message: errors.flight_remarks.message }] : undefined} />
                             </Field>
 
                             {/* Submit Button */}
-                            <div className={`flex items-center gap-3 pt-4 border-t ${
-                              isMobile 
-                                ? "flex-col border-slate-200/60 dark:border-slate-800/50" 
-                                : "justify-end border-border/30"
+                            <div className={`flex items-center gap-3 pt-4 border-t border-border/30 ${
+                              isMobile ? "flex-col" : "justify-end"
                             }`}>
                               <Button
                                 type="submit"
                                 size="lg"
                                 disabled={checkoutMutation.isPending}
-                                className={`bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm hover:shadow-md transition-all h-11 ${
+                                className={`bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-11 ${
                                   isMobile ? "w-full px-8" : "px-8"
                                 }`}
                               >
@@ -1323,64 +1295,46 @@ export default function BookingCheckoutPage() {
                 </div>
 
                 {/* Right Column: Summary */}
-                <div className="space-y-6">
-                  <Card className={`bg-card ${
-                    isMobile 
-                      ? "border border-slate-200/60 dark:border-slate-800/60 shadow-sm" 
-                      : "shadow-sm border border-border/50"
-                  }`}>
-                    <CardHeader className={`pb-5 border-b ${
-                      isMobile 
-                        ? "border-slate-200/60 dark:border-slate-800/50" 
-                        : "border-border/20"
-                    }`}>
-                      <CardTitle className={`text-xl font-bold ${
-                        isMobile ? "text-slate-900 dark:text-white" : "text-foreground"
-                      }`}>
+                <div className="space-y-6 lg:space-y-8">
+                  <Card className="bg-card shadow-md border border-border/50 rounded-xl">
+                    <CardHeader className="pb-5 border-b border-border/20">
+                      <CardTitle className="text-xl font-bold text-foreground">
                         Summary
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-6 space-y-6">
                       {/* People Section */}
-                      <div className={`rounded-lg p-4 space-y-3 text-sm ${
-                        isMobile 
-                          ? "bg-slate-50/80 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800/50 shadow-sm" 
-                          : "bg-muted/30 border border-border/30"
-                      }`}>
+                      <div className="rounded-xl p-5 space-y-4 text-sm bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
                         <div>
-                          <span className="text-muted-foreground">Member:</span>
-                          <div className="font-semibold text-foreground">{studentName}</div>
+                          <span className="text-gray-600 dark:text-gray-400">Member:</span>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{studentName}</div>
                           {booking.student?.email && (
-                            <div className="text-xs text-muted-foreground mt-0.5">{booking.student.email}</div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{booking.student.email}</div>
                           )}
                         </div>
                         {instructorName !== "—" && (
                           <div>
-                            <span className="text-muted-foreground">Instructor:</span>
-                            <div className="font-semibold text-foreground">{instructorName}</div>
+                            <span className="text-gray-600 dark:text-gray-400">Instructor:</span>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">{instructorName}</div>
                             {booking.instructor?.user?.email && (
-                              <div className="text-xs text-muted-foreground mt-0.5">{booking.instructor.user.email}</div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{booking.instructor.user.email}</div>
                             )}
                           </div>
                         )}
                       </div>
 
                       {/* Flight Details Section */}
-                      <div className={`rounded-lg p-4 space-y-3 text-sm ${
-                        isMobile 
-                          ? "bg-slate-50/80 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800/50 shadow-sm" 
-                          : "bg-muted/30 border border-border/30"
-                      }`}>
+                      <div className="rounded-xl p-5 space-y-4 text-sm bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
                         {booking.aircraft && (
                           <div>
-                            <span className="text-muted-foreground">Aircraft:</span>
-                            <div className="font-semibold text-foreground">{booking.aircraft.registration}</div>
+                            <span className="text-gray-600 dark:text-gray-400">Aircraft:</span>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">{booking.aircraft.registration}</div>
                           </div>
                         )}
                         {booking.start_time && (
                           <div>
-                            <span className="text-muted-foreground">Start:</span>
-                            <div className="font-semibold text-foreground">
+                            <span className="text-gray-600 dark:text-gray-400">Start:</span>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">
                               {new Date(booking.start_time).toLocaleString("en-US", {
                                 month: "short",
                                 day: "numeric",
@@ -1393,8 +1347,8 @@ export default function BookingCheckoutPage() {
                         )}
                         {booking.end_time && (
                           <div>
-                            <span className="text-muted-foreground">End:</span>
-                            <div className="font-semibold text-foreground">
+                            <span className="text-gray-600 dark:text-gray-400">End:</span>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">
                               {new Date(booking.end_time).toLocaleString("en-US", {
                                 month: "short",
                                 day: "numeric",
@@ -1407,8 +1361,8 @@ export default function BookingCheckoutPage() {
                         )}
                         {booking.purpose && (
                           <div>
-                            <span className="text-muted-foreground">Description:</span>
-                            <div className="font-semibold text-foreground mt-0.5">{booking.purpose}</div>
+                            <span className="text-gray-600 dark:text-gray-400">Description:</span>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{booking.purpose}</div>
                           </div>
                         )}
                       </div>
@@ -1422,38 +1376,82 @@ export default function BookingCheckoutPage() {
       </SidebarInset>
     </SidebarProvider>
     
-    {/* Sticky Bottom Bar for Mobile - Save Changes - Outside SidebarProvider for proper positioning */}
-    {isMobile && hasChanges && (
-      <div 
-        className="fixed bottom-0 left-0 right-0 z-[9999] border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl"
-        role="banner"
-        aria-label="Save changes"
-      >
-        <div className="px-4 py-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-          <div className="flex items-center gap-3">
+    {/* Debug indicator - remove in production */}
+    {process.env.NODE_ENV === 'development' && (
+      <div className="fixed top-20 right-4 bg-yellow-100 border-2 border-yellow-600 text-yellow-900 px-4 py-3 rounded-lg text-xs font-mono z-[10000] shadow-lg">
+        <div className="font-bold mb-1">Debug Info:</div>
+        <div>hasChanges: <span className={hasChanges ? 'text-green-700 font-bold' : 'text-red-700'}>{hasChanges ? 'TRUE' : 'FALSE'}</span></div>
+        <div>isDirty: <span className={isDirty ? 'text-green-700 font-bold' : 'text-red-700'}>{isDirty ? 'TRUE' : 'FALSE'}</span></div>
+        <div>isInitialized: {isInitialized ? 'TRUE' : 'FALSE'}</div>
+        <div>width: {typeof window !== 'undefined' ? window.innerWidth : 'N/A'}px</div>
+        <div>isMobile: {isMobile ? 'TRUE' : 'FALSE'}</div>
+        <div className="mt-2 text-xs text-yellow-700">Banner should show when hasChanges = TRUE</div>
+      </div>
+    )}
+    
+    {/* Sticky Bottom Bar - Save Changes - Always show in dev, or when hasChanges is true */}
+    <div 
+      className={`fixed border-t shadow-xl ${
+        hasChanges 
+          ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800' 
+          : process.env.NODE_ENV === 'development'
+          ? 'bg-red-200 border-red-600'
+          : 'hidden'
+      }`}
+      role="banner"
+      aria-label="Save changes"
+      style={{ 
+        position: 'fixed',
+        bottom: 0,
+        // On mobile: full width, on desktop: start after sidebar (adjusts dynamically)
+        left: isMobile ? 0 : `${sidebarLeft}px`,
+        right: 0,
+        zIndex: 99999, // Very high z-index to ensure it's on top
+        minHeight: '60px',
+        // Ensure it's visible on mobile with safe area support
+        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))',
+        // Use CSS custom property for better mobile support
+        transform: 'translateZ(0)', // Force hardware acceleration
+        WebkitTransform: 'translateZ(0)',
+        // Ensure it's not hidden
+        visibility: 'visible',
+        opacity: 1,
+        display: 'block',
+      }}
+    >
+      {!hasChanges && process.env.NODE_ENV === 'development' && (
+        <div className="text-center py-4 text-sm text-red-900 font-bold">
+          🔴 DEBUG: Banner is visible but hasChanges is FALSE - make a form change to see buttons
+          <br />
+          <span className="text-xs font-normal">hasChanges: {hasChanges ? 'TRUE' : 'FALSE'} | isDirty: {isDirty ? 'TRUE' : 'FALSE'}</span>
+        </div>
+      )}
+      {hasChanges && (
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+          <div className="flex items-center justify-end gap-4">
             <Button
               variant="outline"
-              size="default"
+              size="lg"
               onClick={handleUndo}
               disabled={checkoutMutation.isPending}
-              className="flex-1 h-11 border border-slate-300/60 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm"
+              className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
             >
               <IconRotateClockwise className="h-4 w-4 mr-2" />
               Undo Changes
             </Button>
             <Button
-              size="default"
+              size="lg"
               onClick={handleFormSubmit}
               disabled={checkoutMutation.isPending}
-              className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm hover:shadow-md transition-all"
+              className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
             >
               <IconDeviceFloppy className="h-4 w-4 mr-2" />
               {checkoutMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </div>
-      </div>
-    )}
+      )}
+    </div>
     </>
   )
 }

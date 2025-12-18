@@ -22,6 +22,7 @@ import type { UserRole } from "@/lib/types/roles"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Sidebar,
   SidebarContent,
@@ -158,6 +159,7 @@ const secondaryNavItems: NavItem[] = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, role, loading } = useAuth()
+  const isMobile = useIsMobile()
   const [mounted, setMounted] = React.useState(false)
   const [cachedRole, setCachedRole] = React.useState<UserRole | null>(null)
   
@@ -269,7 +271,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               >
                 <a href="#">
                   <IconPlaneDeparture className="!size-5" />
-                  <span className="text-base font-semibold">Flight Desk Pro</span>
+                  {!isMobile && (
+                    <span className="text-base font-semibold">Flight Desk Pro</span>
+                  )}
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -296,11 +300,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="data-[slot=sidebar-menu-button]:!p-1.5"
+              className={`data-[slot=sidebar-menu-button]:!p-1.5 ${isMobile ? 'justify-center' : ''}`}
             >
               <a href="#">
                 <IconPlaneDeparture className="!size-5" />
-                <span className="text-base font-semibold">Flight Desk Pro</span>
+                {!isMobile && (
+                  <span className="text-base font-semibold">Flight Desk Pro</span>
+                )}
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

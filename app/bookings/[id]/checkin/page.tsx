@@ -27,8 +27,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Field,
-  FieldContent,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -394,7 +392,7 @@ export default function BookingCheckinPage() {
         body: JSON.stringify(bookingUpdate),
       })
     },
-    onSuccess: async (result) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
       await queryClient.invalidateQueries({ queryKey: ["bookings"] })
       toast.success("Flight checked in successfully")

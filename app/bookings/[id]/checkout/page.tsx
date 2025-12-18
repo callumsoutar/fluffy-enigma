@@ -52,6 +52,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ChevronDownIcon } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { BookingWithRelations } from "@/lib/types/bookings"
 import { bookingUpdateSchema } from "@/lib/validation/bookings"
 import { z } from "zod"
@@ -646,7 +647,7 @@ export default function BookingCheckoutPage() {
       
       return bookingResult
     },
-    onSuccess: async (result) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
       await queryClient.invalidateQueries({ queryKey: ["bookings"] })
       toast.success("Booking updated successfully")
@@ -1020,6 +1021,33 @@ export default function BookingCheckoutPage() {
                                   <FieldLabel htmlFor="checked_out_aircraft_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
                                     <IconPlane className="h-4 w-4 text-primary" />
                                     Aircraft
+                                    {selectedAircraft && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className="inline-flex items-center justify-center rounded-full hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                                            aria-label="Aircraft meter readings"
+                                          >
+                                            <IconInfoCircle className="h-4 w-4 text-muted-foreground" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <div className="space-y-1">
+                                            <p className="font-semibold text-xs mb-1">Aircraft Meter Readings</p>
+                                            <p className="text-xs">Will be used as start values:</p>
+                                            <div className="flex gap-4 text-xs mt-1">
+                                              <span>
+                                                <span className="font-semibold">Tach:</span> {selectedAircraft.current_tach?.toFixed(1) ?? '—'}
+                                              </span>
+                                              <span>
+                                                <span className="font-semibold">Hobbs:</span> {selectedAircraft.current_hobbs?.toFixed(1) ?? '—'}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
                                   </FieldLabel>
                                   {options ? (
                                     <Select
@@ -1043,22 +1071,6 @@ export default function BookingCheckoutPage() {
                                       {booking.aircraft
                                         ? `${booking.aircraft.registration} - ${booking.aircraft.manufacturer} ${booking.aircraft.type}`
                                         : "—"}
-                                    </div>
-                                  )}
-                                  {/* Display aircraft meter readings that will be used */}
-                                  {selectedAircraft && (
-                                    <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                                      <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">
-                                        Aircraft Meter Readings (will be used as start values):
-                                      </p>
-                                      <div className="flex gap-4 text-xs text-blue-700 dark:text-blue-300">
-                                        <span>
-                                          <span className="font-semibold">Tach:</span> {selectedAircraft.current_tach?.toFixed(1) ?? '—'}
-                                        </span>
-                                        <span>
-                                          <span className="font-semibold">Hobbs:</span> {selectedAircraft.current_hobbs?.toFixed(1) ?? '—'}
-                                        </span>
-                                      </div>
                                     </div>
                                   )}
                                 </Field>

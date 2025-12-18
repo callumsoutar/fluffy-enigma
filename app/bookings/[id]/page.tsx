@@ -938,7 +938,6 @@ export default function BookingDetailPage() {
                                       className="w-full justify-between border-border/50 bg-background hover:bg-accent/50 transition-colors h-10"
                                     >
                                       {(() => {
-                                        // eslint-disable-next-line react-hooks/incompatible-library
                                         const userId = watch("user_id")
                                         if (!userId) return "Select Member"
                                         const selectedMember = options.members.find(m => m.id === userId)

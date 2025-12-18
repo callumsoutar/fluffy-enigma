@@ -144,7 +144,6 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
     })
   }, [aircraft, search])
 
-  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable<AircraftWithType>({
     data: filteredAircraft,
     columns,

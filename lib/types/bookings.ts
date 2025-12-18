@@ -30,16 +30,37 @@ export interface Booking {
   purpose: string
   remarks: string | null
   lesson_id: string | null
-  authorization_override: boolean | null
-  authorization_override_by: string | null
-  authorization_override_at: string | null
-  authorization_override_reason: string | null
   cancellation_category_id: string | null
   cancellation_reason: string | null
   cancelled_by: string | null
   cancelled_notes: string | null
   cancelled_at: string | null
   voucher_number: string | null
+  // Flight log fields (consolidated from flight_logs table)
+  checked_out_aircraft_id: string | null
+  checked_out_instructor_id: string | null
+  actual_start: string | null // ISO timestamp
+  actual_end: string | null // ISO timestamp
+  eta: string | null // ISO timestamp
+  hobbs_start: number | null
+  hobbs_end: number | null
+  tach_start: number | null
+  tach_end: number | null
+  flight_time_hobbs: number | null
+  flight_time_tach: number | null
+  flight_time: number | null
+  fuel_on_board: number | null
+  passengers: string | null
+  route: string | null
+  equipment: Record<string, unknown> | null // JSONB
+  briefing_completed: boolean | null
+  authorization_completed: boolean | null
+  flight_remarks: string | null
+  solo_end_hobbs: number | null
+  dual_time: number | null
+  solo_time: number | null
+  total_hours_start: number | null
+  total_hours_end: number | null
 }
 
 // Extended booking with joined data
@@ -69,6 +90,30 @@ export interface BookingWithRelations extends Booking {
   flight_type?: {
     id: string
     name: string
+  } | null
+  lesson?: {
+    id: string
+    name: string
+    description: string | null
+  } | null
+  checked_out_aircraft?: {
+    id: string
+    registration: string
+    type: string
+    model: string | null
+    manufacturer: string | null
+  } | null
+  checked_out_instructor?: {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    user_id: string | null
+    user?: {
+      id: string
+      first_name: string | null
+      last_name: string | null
+      email: string
+    } | null
   } | null
 }
 

@@ -36,7 +36,7 @@ export async function GET(
     )
   }
 
-  // Fetch booking with all relations
+  // Fetch booking with all relations (including flight log fields)
   const { data: booking, error } = await supabase
     .from('bookings')
     .select(`
@@ -66,6 +66,30 @@ export async function GET(
       flight_type:flight_type_id (
         id,
         name
+      ),
+      lesson:lesson_id (
+        id,
+        name,
+        description
+      ),
+      checked_out_aircraft:checked_out_aircraft_id (
+        id,
+        registration,
+        type,
+        model,
+        manufacturer
+      ),
+      checked_out_instructor:instructors!bookings_checked_out_instructor_id_fkey (
+        id,
+        first_name,
+        last_name,
+        user_id,
+        user:users!instructors_user_id_fkey (
+          id,
+          first_name,
+          last_name,
+          email
+        )
       )
     `)
     .eq('id', bookingId)
@@ -209,6 +233,7 @@ export async function PATCH(
     updateData.instructor_id = body.instructor_id
   }
   if (body.flight_type_id !== undefined) updateData.flight_type_id = body.flight_type_id
+  if (body.lesson_id !== undefined) updateData.lesson_id = body.lesson_id
   if (body.status !== undefined) {
     // Only admins/instructors can change status
     if (!isAdminOrInstructor) {
@@ -223,6 +248,32 @@ export async function PATCH(
   if (body.purpose !== undefined) updateData.purpose = body.purpose
   if (body.remarks !== undefined) updateData.remarks = body.remarks
   if (body.notes !== undefined) updateData.notes = body.notes
+  
+  // Flight log fields (consolidated from flight_logs table)
+  if (body.checked_out_aircraft_id !== undefined) updateData.checked_out_aircraft_id = body.checked_out_aircraft_id
+  if (body.checked_out_instructor_id !== undefined) updateData.checked_out_instructor_id = body.checked_out_instructor_id
+  if (body.actual_start !== undefined) updateData.actual_start = body.actual_start
+  if (body.actual_end !== undefined) updateData.actual_end = body.actual_end
+  if (body.eta !== undefined) updateData.eta = body.eta
+  if (body.hobbs_start !== undefined) updateData.hobbs_start = body.hobbs_start
+  if (body.hobbs_end !== undefined) updateData.hobbs_end = body.hobbs_end
+  if (body.tach_start !== undefined) updateData.tach_start = body.tach_start
+  if (body.tach_end !== undefined) updateData.tach_end = body.tach_end
+  if (body.flight_time_hobbs !== undefined) updateData.flight_time_hobbs = body.flight_time_hobbs
+  if (body.flight_time_tach !== undefined) updateData.flight_time_tach = body.flight_time_tach
+  if (body.flight_time !== undefined) updateData.flight_time = body.flight_time
+  if (body.fuel_on_board !== undefined) updateData.fuel_on_board = body.fuel_on_board
+  if (body.passengers !== undefined) updateData.passengers = body.passengers
+  if (body.route !== undefined) updateData.route = body.route
+  if (body.equipment !== undefined) updateData.equipment = body.equipment
+  if (body.briefing_completed !== undefined) updateData.briefing_completed = body.briefing_completed
+  if (body.authorization_completed !== undefined) updateData.authorization_completed = body.authorization_completed
+  if (body.flight_remarks !== undefined) updateData.flight_remarks = body.flight_remarks
+  if (body.solo_end_hobbs !== undefined) updateData.solo_end_hobbs = body.solo_end_hobbs
+  if (body.dual_time !== undefined) updateData.dual_time = body.dual_time
+  if (body.solo_time !== undefined) updateData.solo_time = body.solo_time
+  if (body.total_hours_start !== undefined) updateData.total_hours_start = body.total_hours_start
+  if (body.total_hours_end !== undefined) updateData.total_hours_end = body.total_hours_end
 
   // Update booking
   const { data: updatedBooking, error: updateError } = await supabase
@@ -256,6 +307,30 @@ export async function PATCH(
       flight_type:flight_type_id (
         id,
         name
+      ),
+      lesson:lesson_id (
+        id,
+        name,
+        description
+      ),
+      checked_out_aircraft:checked_out_aircraft_id (
+        id,
+        registration,
+        type,
+        model,
+        manufacturer
+      ),
+      checked_out_instructor:instructors!bookings_checked_out_instructor_id_fkey (
+        id,
+        first_name,
+        last_name,
+        user_id,
+        user:users!instructors_user_id_fkey (
+          id,
+          first_name,
+          last_name,
+          email
+        )
       )
     `)
     .single()

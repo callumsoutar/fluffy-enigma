@@ -87,8 +87,15 @@ export const bookingsQuerySchema = z.object({
 // Booking ID parameter schema
 export const bookingIdSchema = uuidSchema
 
-// PATCH request body schema
+// Numeric validation for meter readings and times
+const numericSchema = z.preprocess(
+  (val) => val === '' || val === null ? null : val,
+  z.coerce.number().positive().optional().nullable()
+)
+
+// PATCH request body schema (includes flight log fields)
 export const bookingUpdateSchema = z.object({
+  // Booking fields
   start_time: z.preprocess(
     (val) => val === '' ? undefined : val,
     dateSchema.optional()
@@ -107,6 +114,43 @@ export const bookingUpdateSchema = z.object({
   remarks: z.string().max(2000, 'Remarks too long').nullable().optional(),
   notes: z.string().max(2000, 'Notes too long').nullable().optional(),
   status: bookingStatusSchema.optional(),
+  // Flight log fields (consolidated from flight_logs)
+  checked_out_aircraft_id: z.union([uuidSchema, z.null()]).optional(),
+  checked_out_instructor_id: z.union([uuidSchema, z.null()]).optional(),
+  actual_start: z.preprocess(
+    (val) => val === '' ? undefined : val,
+    dateSchema.optional().nullable()
+  ),
+  actual_end: z.preprocess(
+    (val) => val === '' ? undefined : val,
+    dateSchema.optional().nullable()
+  ),
+  eta: z.preprocess(
+    (val) => val === '' ? undefined : val,
+    dateSchema.optional().nullable()
+  ),
+  hobbs_start: numericSchema,
+  hobbs_end: numericSchema,
+  tach_start: numericSchema,
+  tach_end: numericSchema,
+  flight_time_hobbs: numericSchema,
+  flight_time_tach: numericSchema,
+  flight_time: numericSchema,
+  fuel_on_board: z.preprocess(
+    (val) => val === '' || val === null ? null : val,
+    z.coerce.number().int().min(0).optional().nullable()
+  ),
+  passengers: z.string().max(500).optional().nullable(),
+  route: z.string().max(500).optional().nullable(),
+  equipment: z.record(z.string(), z.unknown()).optional().nullable(),
+  briefing_completed: z.boolean().optional(),
+  authorization_completed: z.boolean().optional(),
+  flight_remarks: z.string().max(2000).optional().nullable(),
+  solo_end_hobbs: numericSchema,
+  dual_time: numericSchema,
+  solo_time: numericSchema,
+  total_hours_start: numericSchema,
+  total_hours_end: numericSchema,
 }).strict() // Reject unknown fields
 
 /**

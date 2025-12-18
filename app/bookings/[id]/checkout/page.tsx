@@ -5,7 +5,6 @@ import { useParams } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
 import {
   IconArrowLeft,
   IconClock,
@@ -28,6 +27,7 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Field,
@@ -51,10 +51,12 @@ import {
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ChevronDownIcon } from "lucide-react"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import type { BookingWithRelations } from "@/lib/types/bookings"
-import type { FlightLogWithRelations } from "@/lib/types/flight-logs"
-import { flightLogCheckoutSchema, type FlightLogFormData } from "@/lib/validation/flight-logs"
+import { bookingUpdateSchema } from "@/lib/validation/bookings"
+import { z } from "zod"
+
+type FlightLogFormData = z.infer<typeof bookingUpdateSchema>
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 
@@ -113,8 +115,6 @@ function getErrorMessage(err: unknown) {
 }
 
 export default function BookingCheckoutPage() {
-  console.log('🚀 BookingCheckoutPage component rendering')
-  
   const params = useParams()
   const { role } = useAuth()
   const bookingId = params.id as string
@@ -201,8 +201,6 @@ export default function BookingCheckoutPage() {
       window.removeEventListener('transitionend', updateSidebarPosition)
     }
   }, [isMobile])
-  
-  console.log('🚀 Component initialized - bookingId:', bookingId, 'isMobile:', isMobile)
 
   const {
     register,
@@ -213,15 +211,10 @@ export default function BookingCheckoutPage() {
     setValue,
   } = useForm<FlightLogFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(flightLogCheckoutSchema) as any, // Type inference issue with zodResolver and complex Zod schemas
+    resolver: zodResolver(bookingUpdateSchema) as any, // Type inference issue with zodResolver and complex Zod schemas
     mode: 'onChange', // Track changes as user types/interacts
-    defaultValues: {
-      booking_id: bookingId,
-    },
+    defaultValues: {},
   })
-
-  // Track form dirty state - use isDirty from react-hook-form
-  const hasChanges = isDirty
 
   // Fetch booking
   const bookingQuery = useQuery({
@@ -231,24 +224,11 @@ export default function BookingCheckoutPage() {
     staleTime: 30_000,
   })
 
-  // Fetch existing flight log if it exists
-  const flightLogQuery = useQuery({
-    queryKey: ["flightLog", bookingId],
-    enabled: !!bookingId,
-    queryFn: async () => {
-      const result = await fetchJson<{ flight_log: FlightLogWithRelations | null }>(`/api/flight-logs?booking_id=${bookingId}`)
-      // API returns { flight_log: null } when no flight log exists (not a 404)
-      return result
-    },
-    staleTime: 30_000,
-  })
-
-  // Extract booking and flight log data
+  // Extract booking data (now contains all flight log fields)
   const booking = bookingQuery.data?.booking ?? null
-  const existingFlightLog = flightLogQuery.data?.flight_log ?? null
 
-  // Get lesson_id from flight log or booking for options query
-  const selectedLessonId = existingFlightLog?.lesson_id || booking?.lesson_id
+  // Get lesson_id from booking for options query
+  const selectedLessonId = booking?.lesson_id
 
   const optionsQuery = useQuery({
     queryKey: ["bookingOptions", selectedLessonId],
@@ -263,6 +243,19 @@ export default function BookingCheckoutPage() {
   })
 
   const options = optionsQuery.data ?? null
+
+  // Get selected aircraft ID from form
+  const selectedAircraftId = watch("checked_out_aircraft_id") || booking?.checked_out_aircraft_id || booking?.aircraft_id
+
+  // Fetch selected aircraft details to get current meter readings
+  const aircraftQuery = useQuery({
+    queryKey: ["aircraft", selectedAircraftId],
+    queryFn: () => fetchJson<{ aircraft: { id: string; registration: string; current_tach: number; current_hobbs: number } }>(`/api/aircraft/${selectedAircraftId}`),
+    enabled: !!selectedAircraftId,
+    staleTime: 30_000,
+  })
+
+  const selectedAircraft = aircraftQuery.data?.aircraft ?? null
 
   // Helper function to normalize date strings to a format Zod accepts
   const normalizeDateString = (value: string | null | undefined): string | null => {
@@ -351,89 +344,83 @@ export default function BookingCheckoutPage() {
   
   // Use a ref to track if we're currently initializing (prevents effects from running during init)
   const isInitializingRef = React.useRef(false)
+
+  // One-time sync flags: first sync should NOT mark the form dirty.
+  const didSyncActualStartRef = React.useRef(false)
+  const didSyncActualEndRef = React.useRef(false)
+  const didSyncEtaRef = React.useRef(false)
+
+  // Some date defaults are applied programmatically (not user intent) — suppress dirty once.
+  const suppressNextActualEndDirtyRef = React.useRef(false)
+
+  // Match booking detail page behavior: banner strictly follows RHF dirty state.
+  const hasChanges = isDirty
   
-  // Debug: Log form state (remove in production)
-  React.useEffect(() => {
-    console.log('🔍 Form state changed:', { 
-      isDirty, 
-      hasChanges,
-      isInitialized,
-      isInitializing: isInitializingRef.current,
-      windowWidth: typeof window !== 'undefined' ? window.innerWidth : 'N/A',
-      isMobile,
-      formValues: watch()
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDirty, hasChanges, isInitialized, isMobile])
 
-  // Debug: Log on every render to see if component is updating
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-    console.log('🔄 Component render - hasChanges:', hasChanges, 'isDirty:', isDirty)
-  }
 
-  // Track initialization key to reload form when flight log changes
+  // Track initialization key to reload form when booking changes
   const lastInitializedKey = React.useRef<string | null>(null)
   
-  // Populate form when booking/flight log loads (reload when flight log ID changes)
+  // Populate form when booking loads
   React.useEffect(() => {
     if (!booking) return
     
-    // Create a unique key for this booking/flight log combination
-    const flightLogId = existingFlightLog?.id || 'none'
-    const initializationKey = `${bookingId}-${flightLogId}`
+    // Create a unique key for this booking
+    const initializationKey = bookingId
     
-    // Check if we've already initialized for this specific flight log
+    // Check if we've already initialized for this booking
     if (lastInitializedKey.current === initializationKey) {
-      return // Already initialized for this flight log
+      return // Already initialized for this booking
     }
     
     // Mark that we're initializing - do this FIRST before any state changes
     isInitializingRef.current = true
     lastInitializedKey.current = initializationKey
-
-    // Mark that we're initializing - do this FIRST before any state changes
-    isInitializingRef.current = true
+    // Reset one-time sync flags for this initialization cycle
+    didSyncActualStartRef.current = false
+    didSyncActualEndRef.current = false
+    didSyncEtaRef.current = false
+    suppressNextActualEndDirtyRef.current = false
     
-    // Calculate date/time values first
-    const actualStart = existingFlightLog?.actual_start 
-      ? parseDateTime(existingFlightLog.actual_start)
+    // Calculate date/time values first (use booking fields directly)
+    const actualStart = booking.actual_start 
+      ? parseDateTime(booking.actual_start)
       : parseDateTime(booking.start_time)
     
-    const actualEnd = existingFlightLog?.actual_end 
-      ? parseDateTime(existingFlightLog.actual_end)
-      : booking.end_time && !existingFlightLog
+    const actualEnd = booking.actual_end 
+      ? parseDateTime(booking.actual_end)
+      : booking.end_time
         ? parseDateTime(booking.end_time)
         : { date: undefined, time: "" }
     
-    const eta = existingFlightLog?.eta 
-      ? parseDateTime(existingFlightLog.eta)
+    const eta = booking.eta 
+      ? parseDateTime(booking.eta)
       : parseDateTime(booking.end_time)
 
     // Reset form with initial values - normalize date strings to ensure they're in the correct format
     const initialValues = {
-      booking_id: bookingId,
-      checked_out_aircraft_id: existingFlightLog?.checked_out_aircraft_id || booking.aircraft_id || null,
-      checked_out_instructor_id: existingFlightLog?.checked_out_instructor_id || booking.instructor_id || null,
-      actual_start: normalizeDateString(existingFlightLog?.actual_start || booking.start_time || null),
-      actual_end: normalizeDateString(existingFlightLog?.actual_end || null),
-      eta: normalizeDateString(existingFlightLog?.eta || booking.end_time || null),
-      fuel_on_board: existingFlightLog?.fuel_on_board || null,
-      passengers: existingFlightLog?.passengers || null,
-      route: existingFlightLog?.route || null,
-      briefing_completed: existingFlightLog?.briefing_completed ?? false,
-      authorization_completed: existingFlightLog?.authorization_completed ?? false,
-      flight_remarks: existingFlightLog?.flight_remarks || null,
-      // Flight log fields (now stored in flight_logs table)
-      flight_type_id: existingFlightLog?.flight_type_id || booking.flight_type_id || null,
-      lesson_id: existingFlightLog?.lesson_id || booking.lesson_id || null,
-      description: existingFlightLog?.description || null,
-      remarks: existingFlightLog?.remarks || booking.remarks || null,
+      checked_out_aircraft_id: booking.checked_out_aircraft_id || booking.aircraft_id || null,
+      checked_out_instructor_id: booking.checked_out_instructor_id || booking.instructor_id || null,
+      actual_start: normalizeDateString(booking.actual_start || booking.start_time || null),
+      actual_end: normalizeDateString(booking.actual_end || null),
+      eta: normalizeDateString(booking.eta || booking.end_time || null),
+      fuel_on_board: booking.fuel_on_board || null,
+      passengers: booking.passengers || null,
+      route: booking.route || null,
+      briefing_completed: booking.briefing_completed ?? false,
+      authorization_completed: booking.authorization_completed ?? false,
+      flight_remarks: booking.flight_remarks || null,
+      // Flight log fields (now in bookings table)
+      flight_type_id: booking.flight_type_id || null,
+      lesson_id: booking.lesson_id || null,
+      remarks: booking.remarks || null,
       // Booking fields
       purpose: booking.purpose || "",
     }
     
     // Reset form to establish defaults (this clears dirty state)
-    reset(initialValues, { keepDirty: false, keepDefaultValues: true })
+    // IMPORTANT: do NOT keepDefaultValues, otherwise RHF compares against stale defaults and marks dirty.
+    reset(initialValues, { keepDirty: false })
     
     // Set date/time state AFTER reset - use a microtask to ensure reset completes first
     Promise.resolve().then(() => {
@@ -453,23 +440,24 @@ export default function BookingCheckoutPage() {
         isInitializingRef.current = false
       }, 200)
     })
-  }, [booking, existingFlightLog, bookingId, reset])
+  }, [booking, bookingId, reset])
 
-  // Auto-set end date to start date if end date is not set (only after initialization and if no existing flight log with actual_end)
+  // Auto-set end date to start date if end date is not set (only after initialization)
   // Don't run during initialization or undo operations
   React.useEffect(() => {
     if (isInitializingRef.current) return // Don't auto-set during initialization or undo
     if (!isInitialized) return // Wait for initialization
     if (!actualStartDate) return // Need a start date
     if (actualEndDate) return // Already has an end date
-    if (existingFlightLog?.actual_end) return // Don't override if there's an existing actual_end
+    if (booking?.actual_end) return // Don't override if booking already has actual_end
     
     // Only auto-set if we don't have booking.end_time to use
-    // If booking.end_time exists and no existingFlightLog, we should use that (handled in initialization)
-    if (!existingFlightLog && booking?.end_time) return // Use booking.end_time instead
-    
+    if (booking?.end_time) return // Use booking.end_time instead
+
+    // This is a programmatic default, not a user edit
+    suppressNextActualEndDirtyRef.current = true
     setActualEndDate(actualStartDate)
-  }, [isInitialized, actualStartDate, actualEndDate, existingFlightLog, booking?.end_time])
+  }, [isInitialized, actualStartDate, actualEndDate, booking?.end_time, booking?.actual_end])
 
   // Update form values when date/time changes (only after initialization to avoid marking as dirty during initial load)
   React.useEffect(() => {
@@ -483,8 +471,12 @@ export default function BookingCheckoutPage() {
     
     // Only update if value actually changed (prevents marking as dirty when value matches default)
     if (currentValue !== newValue) {
-      setValue("actual_start", newValue, { shouldDirty: true, shouldTouch: true })
+      const shouldDirty = didSyncActualStartRef.current
+      setValue("actual_start", newValue, { shouldDirty, shouldTouch: shouldDirty })
     }
+
+    // After the first eligible run, future changes should be considered user edits.
+    didSyncActualStartRef.current = true
   }, [actualStartDate, actualStartTime, setValue, isInitialized, watch])
 
   React.useEffect(() => {
@@ -498,8 +490,14 @@ export default function BookingCheckoutPage() {
     
     // Only update if value actually changed (prevents marking as dirty when value matches default)
     if (currentValue !== newValue) {
-      setValue("actual_end", newValue, { shouldDirty: true, shouldTouch: true })
+      const shouldDirty =
+        didSyncActualEndRef.current && !suppressNextActualEndDirtyRef.current
+      setValue("actual_end", newValue, { shouldDirty, shouldTouch: shouldDirty })
     }
+
+    // Clear one-time suppression (if it was set)
+    suppressNextActualEndDirtyRef.current = false
+    didSyncActualEndRef.current = true
   }, [actualEndDate, actualEndTime, setValue, isInitialized, watch])
 
   React.useEffect(() => {
@@ -513,8 +511,11 @@ export default function BookingCheckoutPage() {
     
     // Only update if value actually changed (prevents marking as dirty when value matches default)
     if (currentValue !== newValue) {
-      setValue("eta", newValue, { shouldDirty: true, shouldTouch: true })
+      const shouldDirty = didSyncEtaRef.current
+      setValue("eta", newValue, { shouldDirty, shouldTouch: shouldDirty })
     }
+
+    didSyncEtaRef.current = true
   }, [etaDate, etaTime, setValue, isInitialized, watch])
 
   const checkoutMutation = useMutation({
@@ -523,13 +524,9 @@ export default function BookingCheckoutPage() {
       // Use the same normalizeDateString function for consistency
       const cleanDateField = normalizeDateString
       
-      // Separate booking fields from flight log fields
-      // Note: flight_type_id, lesson_id, description, remarks are now flight log fields, not booking fields
-      const { purpose, ...flightLogData } = data
-      
       // Set actual_end to booking's end_time if not already set
-      // This ensures the flight log has an end time when submitted, using the booking's scheduled end time
-      let actualEndValue = flightLogData.actual_end
+      // This ensures the booking has an end time when submitted, using the scheduled end time
+      let actualEndValue = data.actual_end
       if (!actualEndValue || actualEndValue === null || actualEndValue === '') {
         // If actual_end is not set, use the booking's end_time
         if (booking?.end_time) {
@@ -540,57 +537,119 @@ export default function BookingCheckoutPage() {
         }
       }
       
-      // Clean date fields in flightLogData
-      const cleanedFlightLogData = {
-        ...flightLogData,
-        actual_start: cleanDateField(flightLogData.actual_start),
+      // Get the selected aircraft ID (from form or booking)
+      const checkedOutAircraftId = data.checked_out_aircraft_id || booking?.checked_out_aircraft_id || booking?.aircraft_id
+      
+      // Fetch aircraft to get current meter readings if not already fetched
+      let aircraftCurrentTach: number | null = null
+      let aircraftCurrentHobbs: number | null = null
+      
+      if (checkedOutAircraftId) {
+        try {
+          const aircraftData = await fetchJson<{ aircraft: { current_tach: number; current_hobbs: number } }>(`/api/aircraft/${checkedOutAircraftId}`)
+          aircraftCurrentTach = aircraftData.aircraft.current_tach
+          aircraftCurrentHobbs = aircraftData.aircraft.current_hobbs
+        } catch (err) {
+          console.error('Failed to fetch aircraft meter readings:', err)
+        }
+      }
+      
+      // Prepare booking update with all flight log fields
+      const bookingUpdate: Record<string, unknown> = {
+        // Booking fields
+        ...(data.purpose !== undefined && { purpose: data.purpose }),
+        // Set booking status to 'flying' when checking out
+        status: 'flying',
+        // Flight log fields (now part of bookings table)
+        ...(data.checked_out_aircraft_id !== undefined && { checked_out_aircraft_id: data.checked_out_aircraft_id }),
+        ...(data.checked_out_instructor_id !== undefined && { checked_out_instructor_id: data.checked_out_instructor_id }),
+        actual_start: cleanDateField(data.actual_start),
         actual_end: cleanDateField(actualEndValue),
-        eta: cleanDateField(flightLogData.eta),
+        ...(data.eta !== undefined && { eta: cleanDateField(data.eta) }),
+        // Set tach_start and hobbs_start from aircraft's current values if not already set in form
+        // Always set these values when checking out if aircraft is selected
+        hobbs_start: data.hobbs_start !== undefined ? data.hobbs_start : (aircraftCurrentHobbs !== null ? aircraftCurrentHobbs : booking?.hobbs_start ?? null),
+        ...(data.hobbs_end !== undefined && { hobbs_end: data.hobbs_end }),
+        tach_start: data.tach_start !== undefined ? data.tach_start : (aircraftCurrentTach !== null ? aircraftCurrentTach : booking?.tach_start ?? null),
+        ...(data.tach_end !== undefined && { tach_end: data.tach_end }),
+        ...(data.flight_time_hobbs !== undefined && { flight_time_hobbs: data.flight_time_hobbs }),
+        ...(data.flight_time_tach !== undefined && { flight_time_tach: data.flight_time_tach }),
+        ...(data.flight_time !== undefined && { flight_time: data.flight_time }),
+        ...(data.fuel_on_board !== undefined && { fuel_on_board: data.fuel_on_board }),
+        ...(data.passengers !== undefined && { passengers: data.passengers }),
+        ...(data.route !== undefined && { route: data.route }),
+        ...(data.equipment !== undefined && { equipment: data.equipment }),
+        ...(data.briefing_completed !== undefined && { briefing_completed: data.briefing_completed }),
+        ...(data.authorization_completed !== undefined && { authorization_completed: data.authorization_completed }),
+        ...(data.flight_remarks !== undefined && { flight_remarks: data.flight_remarks }),
+        ...(data.solo_end_hobbs !== undefined && { solo_end_hobbs: data.solo_end_hobbs }),
+        ...(data.dual_time !== undefined && { dual_time: data.dual_time }),
+        ...(data.solo_time !== undefined && { solo_time: data.solo_time }),
+        ...(data.total_hours_start !== undefined && { total_hours_start: data.total_hours_start }),
+        ...(data.total_hours_end !== undefined && { total_hours_end: data.total_hours_end }),
+        ...(data.flight_type_id !== undefined && { flight_type_id: data.flight_type_id }),
+        ...(data.lesson_id !== undefined && { lesson_id: data.lesson_id }),
+        ...(data.remarks !== undefined && { remarks: data.remarks }),
       }
       
-      // Debug: Log the data being sent (remove in production)
-      if (typeof window !== 'undefined') {
-        console.log('Submitting flight log data:', {
-          original: {
-            actual_start: flightLogData.actual_start,
-            actual_end: flightLogData.actual_end,
-            eta: flightLogData.eta,
-          },
-          cleaned: {
-            actual_start: cleanedFlightLogData.actual_start,
-            actual_end: cleanedFlightLogData.actual_end,
-            eta: cleanedFlightLogData.eta,
-          },
-          fullData: cleanedFlightLogData
-        })
-      }
-      
-      // Update booking - only update purpose and set status to 'flying'
-      const bookingUpdate: Record<string, unknown> = {}
-      if (purpose !== undefined) bookingUpdate.purpose = purpose
-      
-      // Set booking status to 'flying' when creating/updating flight log
-      bookingUpdate.status = 'flying'
-      
-      // Update booking (always update status, and purpose if present)
-      await fetchJson<{ booking: BookingWithRelations }>(`/api/bookings/${bookingId}`, {
+      // Update booking directly (includes all flight log fields)
+      const bookingResult = await fetchJson<{ booking: BookingWithRelations }>(`/api/bookings/${bookingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bookingUpdate),
       })
       
-      // Create/update flight log (includes flight_type_id, lesson_id, description, remarks)
-      return fetchJson<{ flight_log: FlightLogWithRelations }>(`/api/flight-logs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cleanedFlightLogData),
-      })
+      // Update aircraft current_tach and current_hobbs from booking's tach_start and hobbs_start
+      // Use the updated booking values (from bookingResult) since they reflect what was just saved
+      const updatedCheckedOutAircraftId = bookingResult.booking.checked_out_aircraft_id || bookingResult.booking.aircraft_id
+      
+      if (updatedCheckedOutAircraftId) {
+        const aircraftUpdate: Record<string, unknown> = {}
+        
+        // Set current_tach from booking's tach_start (use updated booking value)
+        // This ensures the aircraft's current_tach matches the booking's start tach
+        const tachStartValue = bookingResult.booking.tach_start
+        if (tachStartValue !== undefined && tachStartValue !== null) {
+          aircraftUpdate.current_tach = tachStartValue
+        }
+        
+        // Set current_hobbs from booking's hobbs_start (use updated booking value)
+        // This ensures the aircraft's current_hobbs matches the booking's start hobbs
+        const hobbsStartValue = bookingResult.booking.hobbs_start
+        if (hobbsStartValue !== undefined && hobbsStartValue !== null) {
+          aircraftUpdate.current_hobbs = hobbsStartValue
+        }
+        
+        // Update aircraft if we have at least one value to update
+        if (Object.keys(aircraftUpdate).length > 0) {
+          try {
+            await fetchJson(`/api/aircraft/${updatedCheckedOutAircraftId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(aircraftUpdate),
+            })
+          } catch (aircraftError) {
+            // Log error but don't fail the checkout - aircraft update is secondary
+            console.error('Failed to update aircraft meter readings:', aircraftError)
+            // Still show success for booking update
+          }
+        } else {
+          // Log if we couldn't update because values weren't available
+          console.warn('Could not update aircraft meter readings: booking tach_start or hobbs_start not available', {
+            tachStartValue,
+            hobbsStartValue,
+            bookingId: bookingResult.booking.id,
+            bookingUpdate: bookingUpdate
+          })
+        }
+      }
+      
+      return bookingResult
     },
     onSuccess: async (result) => {
-      queryClient.setQueryData(["flightLog", bookingId], { flight_log: result.flight_log })
       await queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
       await queryClient.invalidateQueries({ queryKey: ["bookings"] })
-      toast.success(existingFlightLog ? "Flight log updated successfully" : "Flight log created successfully")
+      toast.success("Booking updated successfully")
       // Don't redirect - stay on checkout page so user can continue editing
     },
     onError: (error) => {
@@ -612,19 +671,19 @@ export default function BookingCheckoutPage() {
     isInitializingRef.current = true
     
     // Use the same logic as initialization to determine what the "original" values should be
-    const actualStart = existingFlightLog?.actual_start 
-      ? parseDateTime(existingFlightLog.actual_start)
+    const actualStart = booking.actual_start 
+      ? parseDateTime(booking.actual_start)
       : parseDateTime(booking.start_time)
     
-    // Match the initialization logic: use booking.end_time if no existing flight log
-    const actualEnd = existingFlightLog?.actual_end 
-      ? parseDateTime(existingFlightLog.actual_end)
-      : booking.end_time && !existingFlightLog
-        ? parseDateTime(booking.end_time) // Match initialization: prepopulate with booking end_time if no existing flight log
+    // Match the initialization logic: use booking.end_time if no actual_end
+    const actualEnd = booking.actual_end 
+      ? parseDateTime(booking.actual_end)
+      : booking.end_time
+        ? parseDateTime(booking.end_time)
         : { date: undefined, time: "" }
     
-    const eta = existingFlightLog?.eta 
-      ? parseDateTime(existingFlightLog.eta)
+    const eta = booking.eta 
+      ? parseDateTime(booking.eta)
       : parseDateTime(booking.end_time)
 
     // Set date/time state first
@@ -637,28 +696,27 @@ export default function BookingCheckoutPage() {
 
     // Reset form to original values (same as initialization)
     const originalValues = {
-      booking_id: bookingId,
-      checked_out_aircraft_id: existingFlightLog?.checked_out_aircraft_id || booking.aircraft_id || null,
-      checked_out_instructor_id: existingFlightLog?.checked_out_instructor_id || booking.instructor_id || null,
-      actual_start: existingFlightLog?.actual_start || booking.start_time || null,
-      actual_end: existingFlightLog?.actual_end || null, // Form value should be null if no existing flight log
-      eta: existingFlightLog?.eta || booking.end_time || null,
-      fuel_on_board: existingFlightLog?.fuel_on_board || null,
-      passengers: existingFlightLog?.passengers || null,
-      route: existingFlightLog?.route || null,
-      briefing_completed: existingFlightLog?.briefing_completed ?? false,
-      authorization_completed: existingFlightLog?.authorization_completed ?? false,
-      flight_remarks: existingFlightLog?.flight_remarks || null,
-      // Flight log fields (now stored in flight_logs table)
-      flight_type_id: existingFlightLog?.flight_type_id || booking.flight_type_id || null,
-      lesson_id: existingFlightLog?.lesson_id || booking.lesson_id || null,
-      description: existingFlightLog?.description || null,
-      remarks: existingFlightLog?.remarks || booking.remarks || null,
+      checked_out_aircraft_id: booking.checked_out_aircraft_id || booking.aircraft_id || null,
+      checked_out_instructor_id: booking.checked_out_instructor_id || booking.instructor_id || null,
+      actual_start: normalizeDateString(booking.actual_start || booking.start_time || null),
+      actual_end: normalizeDateString(booking.actual_end || null),
+      eta: normalizeDateString(booking.eta || booking.end_time || null),
+      fuel_on_board: booking.fuel_on_board || null,
+      passengers: booking.passengers || null,
+      route: booking.route || null,
+      briefing_completed: booking.briefing_completed ?? false,
+      authorization_completed: booking.authorization_completed ?? false,
+      flight_remarks: booking.flight_remarks || null,
+      // Flight log fields (now in bookings table)
+      flight_type_id: booking.flight_type_id || null,
+      lesson_id: booking.lesson_id || null,
+      remarks: booking.remarks || null,
       // Booking fields
       purpose: booking.purpose || "",
     }
     
-    reset(originalValues, { keepDirty: false, keepDefaultValues: true })
+    // IMPORTANT: do NOT keepDefaultValues, otherwise RHF compares against stale defaults and marks dirty.
+    reset(originalValues, { keepDirty: false })
     
     // Clear the initialization flag after a brief delay
     setTimeout(() => {
@@ -670,11 +728,10 @@ export default function BookingCheckoutPage() {
 
   const isAdminOrInstructor = role === 'owner' || role === 'admin' || role === 'instructor'
 
-  const isLoading = bookingQuery.isLoading || optionsQuery.isLoading || flightLogQuery.isLoading
+  const isLoading = bookingQuery.isLoading || optionsQuery.isLoading
   const isError = bookingQuery.isError
 
   if (isLoading) {
-    console.log('⏳ Component is loading...')
     return (
       <SidebarProvider
         style={{
@@ -694,7 +751,6 @@ export default function BookingCheckoutPage() {
   }
 
   if (isError || !booking) {
-    console.log('❌ Component error or no booking - isError:', isError, 'booking:', booking)
     return (
       <SidebarProvider
         style={{
@@ -757,7 +813,6 @@ export default function BookingCheckoutPage() {
     ? [booking.instructor.first_name, booking.instructor.last_name].filter(Boolean).join(" ") || booking.instructor.user?.email || "—"
     : "—"
 
-  console.log('✅ Component ready to render - hasChanges:', hasChanges, 'isDirty:', isDirty, 'studentName:', studentName, 'isMobile:', isMobile, 'sidebarLeft:', sidebarLeft)
 
   return (
     <>
@@ -788,19 +843,28 @@ export default function BookingCheckoutPage() {
 
                 {/* Title Row */}
                 <div className="mb-6 sm:mb-8">
-                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight text-foreground">
-                    Flight Checkout
-                  </h1>
-                  <p className="mt-3 text-base sm:text-lg text-muted-foreground">
-                    Convert booking to flight log for {studentName}
-                  </p>
+                  <div className="flex items-center justify-between gap-4">
+                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight text-foreground">
+                      Flight Checkout
+                    </h1>
+                    <Badge 
+                      className="bg-purple-600 text-white border-purple-700 hover:bg-purple-700 px-4 py-2 text-base font-semibold shadow-lg"
+                      variant="default"
+                      style={{
+                        animation: 'subtle-pulse 3s ease-in-out infinite'
+                      }}
+                    >
+                      <IconPlane className="h-5 w-5" />
+                      Flying
+                    </Badge>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Main Content */}
             <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 ${
-              isMobile ? "pt-8 pb-24" : "pt-10 pb-8"
+              isMobile ? "pt-8 pb-24" : "pt-10 pb-28"
             }`}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                 {/* Left Column: Flight Log Form */}
@@ -814,6 +878,9 @@ export default function BookingCheckoutPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-6 space-y-6">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Please fill out all the details for this flight, including actual flight times, meter readings, and any other relevant information. All fields marked with required indicators must be completed before checking out.
+                      </p>
                       <form onSubmit={handleFormSubmit}>
                         <FieldSet className="w-full max-w-full">
                           <FieldGroup className="w-full max-w-full">
@@ -976,6 +1043,22 @@ export default function BookingCheckoutPage() {
                                       {booking.aircraft
                                         ? `${booking.aircraft.registration} - ${booking.aircraft.manufacturer} ${booking.aircraft.type}`
                                         : "—"}
+                                    </div>
+                                  )}
+                                  {/* Display aircraft meter readings that will be used */}
+                                  {selectedAircraft && (
+                                    <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                                      <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">
+                                        Aircraft Meter Readings (will be used as start values):
+                                      </p>
+                                      <div className="flex gap-4 text-xs text-blue-700 dark:text-blue-300">
+                                        <span>
+                                          <span className="font-semibold">Tach:</span> {selectedAircraft.current_tach?.toFixed(1) ?? '—'}
+                                        </span>
+                                        <span>
+                                          <span className="font-semibold">Hobbs:</span> {selectedAircraft.current_hobbs?.toFixed(1) ?? '—'}
+                                        </span>
+                                      </div>
                                     </div>
                                   )}
                                 </Field>
@@ -1224,32 +1307,19 @@ export default function BookingCheckoutPage() {
 
                             {/* Checklists */}
                             <FieldSet className="p-6 rounded-xl w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
-                              <div className="mb-3 flex items-center gap-2 w-full">
+                              <div className="flex items-center gap-2 w-full">
                                 <IconFileText className="h-4 w-4 shrink-0" />
                                 <FieldLegend className="text-base font-medium break-words">Checklists</FieldLegend>
                               </div>
-                              <FieldDescription>
-                                Confirm completion of required checklists before flight.
-                              </FieldDescription>
-                              <FieldGroup className="mt-4">
+                              <FieldGroup className="mt-2">
                                 <Field orientation="horizontal">
-                                  <Checkbox
+                                  <Switch
                                     id="briefing_completed"
                                     checked={watch("briefing_completed") ?? false}
-                                    onCheckedChange={(checked) => setValue("briefing_completed", checked === true, { shouldDirty: true })}
+                                    onCheckedChange={(checked) => setValue("briefing_completed", checked, { shouldDirty: true })}
                                   />
                                   <FieldContent>
                                     <FieldLabel htmlFor="briefing_completed">Briefing Completed</FieldLabel>
-                                  </FieldContent>
-                                </Field>
-                                <Field orientation="horizontal">
-                                  <Checkbox
-                                    id="authorization_completed"
-                                    checked={watch("authorization_completed") ?? false}
-                                    onCheckedChange={(checked) => setValue("authorization_completed", checked === true, { shouldDirty: true })}
-                                  />
-                                  <FieldContent>
-                                    <FieldLabel htmlFor="authorization_completed">Authorization Completed</FieldLabel>
                                   </FieldContent>
                                 </Field>
                               </FieldGroup>
@@ -1270,23 +1340,6 @@ export default function BookingCheckoutPage() {
                               />
                               <FieldError errors={errors.flight_remarks ? [{ message: errors.flight_remarks.message }] : undefined} />
                             </Field>
-
-                            {/* Submit Button */}
-                            <div className={`flex items-center gap-3 pt-4 border-t border-border/30 ${
-                              isMobile ? "flex-col" : "justify-end"
-                            }`}>
-                              <Button
-                                type="submit"
-                                size="lg"
-                                disabled={checkoutMutation.isPending}
-                                className={`bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-11 ${
-                                  isMobile ? "w-full px-8" : "px-8"
-                                }`}
-                              >
-                                <IconPlane className="h-5 w-5 mr-2" />
-                                {checkoutMutation.isPending ? "Checking Out..." : "Check Out"}
-                              </Button>
-                            </div>
                           </FieldGroup>
                         </FieldSet>
                       </form>
@@ -1376,30 +1429,11 @@ export default function BookingCheckoutPage() {
       </SidebarInset>
     </SidebarProvider>
     
-    {/* Debug indicator - remove in production */}
-    {process.env.NODE_ENV === 'development' && (
-      <div className="fixed top-20 right-4 bg-yellow-100 border-2 border-yellow-600 text-yellow-900 px-4 py-3 rounded-lg text-xs font-mono z-[10000] shadow-lg">
-        <div className="font-bold mb-1">Debug Info:</div>
-        <div>hasChanges: <span className={hasChanges ? 'text-green-700 font-bold' : 'text-red-700'}>{hasChanges ? 'TRUE' : 'FALSE'}</span></div>
-        <div>isDirty: <span className={isDirty ? 'text-green-700 font-bold' : 'text-red-700'}>{isDirty ? 'TRUE' : 'FALSE'}</span></div>
-        <div>isInitialized: {isInitialized ? 'TRUE' : 'FALSE'}</div>
-        <div>width: {typeof window !== 'undefined' ? window.innerWidth : 'N/A'}px</div>
-        <div>isMobile: {isMobile ? 'TRUE' : 'FALSE'}</div>
-        <div className="mt-2 text-xs text-yellow-700">Banner should show when hasChanges = TRUE</div>
-      </div>
-    )}
-    
-    {/* Sticky Bottom Bar - Save Changes - Always show in dev, or when hasChanges is true */}
+    {/* Sticky Bottom Bar - Save Changes & Check Out */}
     <div 
-      className={`fixed border-t shadow-xl ${
-        hasChanges 
-          ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800' 
-          : process.env.NODE_ENV === 'development'
-          ? 'bg-red-200 border-red-600'
-          : 'hidden'
-      }`}
+      className="fixed border-t shadow-xl bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800"
       role="banner"
-      aria-label="Save changes"
+      aria-label="Save changes and checkout"
       style={{ 
         position: 'fixed',
         bottom: 0,
@@ -1419,39 +1453,46 @@ export default function BookingCheckoutPage() {
         display: 'block',
       }}
     >
-      {!hasChanges && process.env.NODE_ENV === 'development' && (
-        <div className="text-center py-4 text-sm text-red-900 font-bold">
-          🔴 DEBUG: Banner is visible but hasChanges is FALSE - make a form change to see buttons
-          <br />
-          <span className="text-xs font-normal">hasChanges: {hasChanges ? 'TRUE' : 'FALSE'} | isDirty: {isDirty ? 'TRUE' : 'FALSE'}</span>
-        </div>
-      )}
-      {hasChanges && (
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
           <div className="flex items-center justify-end gap-4">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handleUndo}
-              disabled={checkoutMutation.isPending}
-              className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
-            >
-              <IconRotateClockwise className="h-4 w-4 mr-2" />
-              Undo Changes
-            </Button>
-            <Button
-              size="lg"
-              onClick={handleFormSubmit}
-              disabled={checkoutMutation.isPending}
-              className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
-            >
-              <IconDeviceFloppy className="h-4 w-4 mr-2" />
-              {checkoutMutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
+            {hasChanges && (
+              <>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleUndo}
+                  disabled={checkoutMutation.isPending}
+                  className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+                >
+                  <IconRotateClockwise className="h-4 w-4 mr-2" />
+                  Undo Changes
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={handleFormSubmit}
+                  disabled={checkoutMutation.isPending}
+                  className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+                >
+                  <IconDeviceFloppy className="h-4 w-4 mr-2" />
+                  {checkoutMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </>
+            )}
+            {/* Only show Check Out button if booking status is 'confirmed' */}
+            {booking?.status === 'confirmed' && (
+              <Button
+                size="lg"
+                onClick={handleFormSubmit}
+                disabled={checkoutMutation.isPending}
+                className={`h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+              >
+                <IconPlane className="h-4 w-4 mr-2" />
+                {checkoutMutation.isPending ? "Checking Out..." : "Check Out"}
+              </Button>
+            )}
           </div>
         </div>
-      )}
-    </div>
+      </div>
     </>
   )
 }

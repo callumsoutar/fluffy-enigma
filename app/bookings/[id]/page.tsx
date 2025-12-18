@@ -523,7 +523,8 @@ export default function BookingDetailPage() {
 
   const handleCheckFlightIn = () => {
     if (!booking) return
-    statusUpdateMutation.mutate('complete')
+    // Route to check-in page instead of just updating status
+    router.push(`/bookings/${bookingId}/checkin`)
   }
 
   const handleUndo = () => {
@@ -768,7 +769,7 @@ export default function BookingDetailPage() {
 
             {/* Main Content with Generous Padding */}
             <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 ${
-              isMobile ? "pt-8 pb-24" : "pt-10 pb-8"
+              isMobile ? "pt-8 pb-24" : "pt-10 pb-28"
             }`}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                 {/* Left Column: Booking Details */}

@@ -115,3 +115,39 @@ export const flightLogCheckoutSchema = z.object({
 })
 
 export type FlightLogFormData = z.infer<typeof flightLogCheckoutSchema>
+
+// Schema for check-in form (post-flight data capture)
+// Focuses on meter readings and finalizing flight details
+export const flightLogCheckinSchema = z.object({
+  booking_id: uuidSchema, // booking_id is required
+  // Meter readings (primary focus for check-in)
+  hobbs_start: numericSchema,
+  hobbs_end: numericSchema,
+  tach_start: numericSchema,
+  tach_end: numericSchema,
+  // Calculated flight times (can be auto-calculated from meter readings)
+  flight_time_hobbs: numericSchema,
+  flight_time_tach: numericSchema,
+  flight_time: numericSchema,
+  // Flight log fields that can be edited during check-in
+  checked_out_aircraft_id: uuidSchema.optional().nullable(),
+  checked_out_instructor_id: uuidSchema.optional().nullable(),
+  actual_start: dateSchema,
+  actual_end: dateSchema,
+  flight_type_id: uuidSchema.optional().nullable(),
+  lesson_id: uuidSchema.optional().nullable(),
+  description: z.string().max(2000).optional().nullable(),
+  remarks: z.string().max(2000).optional().nullable(),
+  fuel_on_board: z.coerce.number().int().min(0).optional().nullable(),
+  passengers: z.string().max(500).optional().nullable(),
+  route: z.string().max(500).optional().nullable(),
+  flight_remarks: z.string().max(2000).optional().nullable(),
+  // Additional time tracking fields
+  solo_end_hobbs: numericSchema,
+  dual_time: numericSchema,
+  solo_time: numericSchema,
+  total_hours_start: numericSchema,
+  total_hours_end: numericSchema,
+})
+
+export type FlightLogCheckinFormData = z.infer<typeof flightLogCheckinSchema>

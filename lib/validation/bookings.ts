@@ -7,8 +7,38 @@ import { z } from 'zod'
 // UUID validation helper
 const uuidSchema = z.string().uuid('Invalid UUID format')
 
-// Date validation (ISO datetime string)
-const dateSchema = z.string().datetime('Invalid date format')
+// Date validation (accepts ISO datetime string or YYYY-MM-DDTHH:mm format)
+// Transforms short format to full ISO format for database compatibility
+const dateSchema = z.string()
+  .refine(
+    (val) => {
+      // Reject empty strings (they should be undefined/omitted instead)
+      if (val === '') return false
+      // Accept full ISO datetime: 2024-01-01T12:00:00Z or 2024-01-01T12:00:00+00:00
+      if (z.string().datetime().safeParse(val).success) {
+        return true
+      }
+      // Accept short format: 2024-01-01T12:00 (YYYY-MM-DDTHH:mm)
+      const shortFormatRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
+      if (shortFormatRegex.test(val)) {
+        return true
+      }
+      return false
+    },
+    { message: 'Invalid date format. Expected ISO datetime (e.g., 2024-01-01T12:00:00Z) or short format (e.g., 2024-01-01T12:00)' }
+  )
+  .transform((val) => {
+    // If it's already a full ISO datetime, return as-is
+    if (z.string().datetime().safeParse(val).success) {
+      return val
+    }
+    // If it's short format (YYYY-MM-DDTHH:mm), append :00 for seconds and Z for UTC
+    const shortFormatRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
+    if (shortFormatRegex.test(val)) {
+      return `${val}:00Z`
+    }
+    return val
+  })
 
 // Booking status enum
 export const bookingStatusSchema = z.enum([
@@ -59,13 +89,19 @@ export const bookingIdSchema = uuidSchema
 
 // PATCH request body schema
 export const bookingUpdateSchema = z.object({
-  start_time: dateSchema.optional(),
-  end_time: dateSchema.optional(),
+  start_time: z.preprocess(
+    (val) => val === '' ? undefined : val,
+    dateSchema.optional()
+  ),
+  end_time: z.preprocess(
+    (val) => val === '' ? undefined : val,
+    dateSchema.optional()
+  ),
   aircraft_id: uuidSchema.optional(),
-  user_id: uuidSchema.nullable().optional(),
-  instructor_id: uuidSchema.nullable().optional(),
-  flight_type_id: uuidSchema.nullable().optional(),
-  lesson_id: uuidSchema.nullable().optional(),
+  user_id: z.union([uuidSchema, z.null()]).optional(),
+  instructor_id: z.union([uuidSchema, z.null()]).optional(),
+  flight_type_id: z.union([uuidSchema, z.null()]).optional(),
+  lesson_id: z.union([uuidSchema, z.null()]).optional(),
   booking_type: bookingTypeSchema.optional(),
   purpose: z.string().min(1, 'Purpose is required').max(1000, 'Purpose too long').optional(),
   remarks: z.string().max(2000, 'Remarks too long').nullable().optional(),

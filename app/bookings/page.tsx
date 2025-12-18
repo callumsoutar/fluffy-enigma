@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BookingsTable } from "@/components/bookings/bookings-table"
-import type { BookingWithRelations, BookingsFilter } from "@/lib/types/bookings"
+import type { BookingWithRelations, BookingsFilter, BookingStatus, BookingType } from "@/lib/types/bookings"
 
 // Fetch bookings from API
 async function fetchBookings(filters?: BookingsFilter): Promise<BookingWithRelations[]> {
@@ -62,79 +62,137 @@ function getTodayRange() {
 }
 
 export default function BookingsPage() {
-  const [activeTab, setActiveTab] = React.useState("today")
+  const [activeTab, setActiveTab] = React.useState("all")
   const [mounted, setMounted] = React.useState(false)
+  const [filters, setFilters] = React.useState<BookingsFilter>({})
 
   // Prevent hydration mismatch by only calculating dates after mount
   React.useEffect(() => {
     setMounted(true)
   }, [])
 
+  // Build filters based on active tab and user filters
+  // When searching, ignore tab filters to search across all bookings
+  const queryFilters = React.useMemo(() => {
+    const today = getTodayRange()
+    const baseFilters: BookingsFilter = { ...filters }
+
+    // If there's a search query, search across all bookings (ignore tab filters)
+    // Otherwise, apply tab-specific filters
+    if (!filters.search) {
+      switch (activeTab) {
+        case "today":
+          baseFilters.start_date = today.start
+          baseFilters.end_date = today.end
+          break
+        case "flying":
+          baseFilters.status = ["flying"]
+          break
+        case "unconfirmed":
+          baseFilters.status = ["unconfirmed"]
+          break
+        case "all":
+          // No filters for "all" tab
+          break
+      }
+    }
+    // When searching, don't apply tab filters - search across all bookings
+
+    return baseFilters
+  }, [activeTab, filters])
+
   const {
     data: allBookings = [],
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["bookings"],
-    queryFn: () => fetchBookings(),
+    queryKey: ["bookings", queryFilters],
+    queryFn: () => fetchBookings(queryFilters),
     staleTime: 30_000,
   })
 
-
   // Calculate tab counts (memoized to prevent recalculation)
+  // For accurate counts, we need to fetch all bookings without tab filters
+  // but with search filter if present
+  const countsFilters: BookingsFilter = filters.search ? { search: filters.search } : {}
+  const {
+    data: allBookingsForCounts = [],
+  } = useQuery({
+    queryKey: ["bookings", "counts", countsFilters],
+    queryFn: () => fetchBookings(countsFilters),
+    staleTime: 30_000,
+  })
+
   const tabCounts = React.useMemo(() => {
     if (!mounted || isLoading) {
-      return { today: 0, flying: 0, unconfirmed: 0 }
+      return { all: 0, today: 0, flying: 0, unconfirmed: 0 }
     }
 
     const today = getTodayRange()
     return {
-      today: allBookings.filter((b) => {
+      all: allBookingsForCounts.length,
+      today: allBookingsForCounts.filter((b) => {
         const startTime = new Date(b.start_time)
         return (
           startTime >= new Date(today.start) &&
           startTime < new Date(today.end)
         )
       }).length,
-      flying: allBookings.filter((b) => b.status === "flying").length,
-      unconfirmed: allBookings.filter((b) => b.status === "unconfirmed").length,
+      flying: allBookingsForCounts.filter((b) => b.status === "flying").length,
+      unconfirmed: allBookingsForCounts.filter((b) => b.status === "unconfirmed").length,
     }
-  }, [allBookings, isLoading, mounted])
+  }, [allBookingsForCounts, isLoading, mounted])
 
-  // Filter bookings based on active tab
+  // Filter bookings based on active tab (already filtered by API, but keep for consistency)
   const filteredBookings = React.useMemo(() => {
     if (isLoading || !mounted) return []
+    return allBookings
+  }, [allBookings, isLoading, mounted])
 
-    const today = getTodayRange()
-
-    switch (activeTab) {
-      case "today":
-        return allBookings.filter((booking) => {
-          const startTime = new Date(booking.start_time)
-          return (
-            startTime >= new Date(today.start) &&
-            startTime < new Date(today.end)
-          )
-        })
-      case "flying":
-        return allBookings.filter((booking) => booking.status === "flying")
-      case "unconfirmed":
-        return allBookings.filter((booking) => booking.status === "unconfirmed")
-      default:
-        return allBookings
-    }
-  }, [allBookings, activeTab, isLoading, mounted])
-
-  // Handle filter changes (for future API integration)
-  const handleFiltersChange = React.useCallback((filters: {
+  // Handle filter changes from table component
+  const handleFiltersChange = React.useCallback((tableFilters: {
     search?: string
-    status?: string[]
-    booking_type?: string[]
+    status?: BookingStatus[]
+    booking_type?: BookingType[]
   }) => {
-    // For now, filtering is done client-side
-    // In the future, you can refetch from API with these filters
-    console.log('Filters changed:', filters)
-  }, [])
+    setFilters((prev) => {
+      const newFilters: BookingsFilter = { ...prev }
+      
+      // Update search - remove property if undefined/empty
+      if (tableFilters.search) {
+        newFilters.search = tableFilters.search
+      } else {
+        delete newFilters.search
+      }
+      
+      // Update booking_type
+      if (tableFilters.booking_type) {
+        newFilters.booking_type = tableFilters.booking_type
+      } else {
+        delete newFilters.booking_type
+      }
+      
+      // Handle status filter based on whether we're searching
+      if (tableFilters.search) {
+        // When searching, allow status filter to work independently of tabs
+        if (tableFilters.status) {
+          newFilters.status = tableFilters.status
+        } else {
+          delete newFilters.status
+        }
+      } else {
+        // When not searching, respect tab filters (flying/unconfirmed tabs set status)
+        if (activeTab !== "flying" && activeTab !== "unconfirmed" && tableFilters.status) {
+          newFilters.status = tableFilters.status
+        } else if (activeTab === "flying" || activeTab === "unconfirmed") {
+          // Clear status filter when in a tab that sets it (will be set by queryFilters)
+          delete newFilters.status
+        }
+      }
+      
+      return newFilters
+    })
+  }, [activeTab])
 
   return (
     <SidebarProvider
@@ -162,6 +220,9 @@ export default function BookingsPage() {
 
                   <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList>
+                      <TabsTrigger value="all">
+                        All ({tabCounts.all})
+                      </TabsTrigger>
                       <TabsTrigger value="today">
                         Today ({tabCounts.today})
                       </TabsTrigger>
@@ -172,6 +233,22 @@ export default function BookingsPage() {
                         Unconfirmed ({tabCounts.unconfirmed})
                       </TabsTrigger>
                     </TabsList>
+                    <TabsContent value="all" className="mt-4">
+                      {isLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                          <div className="text-muted-foreground">Loading bookings...</div>
+                        </div>
+                      ) : isError ? (
+                        <div className="flex items-center justify-center py-12">
+                          <div className="text-muted-foreground">Failed to load bookings.</div>
+                        </div>
+                      ) : (
+                        <BookingsTable
+                          bookings={filteredBookings}
+                          onFiltersChange={handleFiltersChange}
+                        />
+                      )}
+                    </TabsContent>
                     <TabsContent value="today" className="mt-4">
                       {isLoading ? (
                         <div className="flex items-center justify-center py-12">

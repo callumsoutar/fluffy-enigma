@@ -106,7 +106,8 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
     watch,
     setValue,
   } = useForm<AircraftFormValues>({
-    resolver: zodResolver(aircraftSchema) as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(aircraftSchema) as any, // Type inference issue with zodResolver and z.coerce.number()
     defaultValues: {
       manufacturer: aircraft.manufacturer || "",
       type: aircraft.type || "",

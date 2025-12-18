@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -95,6 +95,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ChevronDownIcon } from "lucide-react"
 import type { BookingWithRelations, BookingStatus, BookingType } from "@/lib/types/bookings"
 import { useAuth } from "@/contexts/auth-context"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
@@ -247,8 +248,10 @@ function formatAuditValue(value: unknown): string {
 
 export default function BookingDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const { role } = useAuth()
   const bookingId = params.id as string
+  const isMobile = useIsMobile()
 
   const queryClient = useQueryClient()
 
@@ -434,7 +437,8 @@ export default function BookingDetailPage() {
 
   const handleCheckFlightOut = () => {
     if (!booking) return
-    statusUpdateMutation.mutate('flying')
+    // Route to checkout page instead of just updating status
+    router.push(`/bookings/${bookingId}/checkout`)
   }
 
   const handleCheckFlightIn = () => {
@@ -671,25 +675,27 @@ export default function BookingDetailPage() {
             </div>
 
             {/* Main Content with Generous Padding */}
-            <div className="flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-8">
+            <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pb-8 ${
+              isMobile ? "pb-24" : "py-8"
+            }`}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Left Column: Booking Details */}
                 <div className="lg:col-span-2 space-y-6">
                   <Card className="shadow-sm border border-border/50 bg-card">
                     <CardHeader className="pb-6 border-b border-border/20">
-                      <div className="flex items-center justify-between">
+                      <div className={`flex ${isMobile ? "flex-col gap-4" : "items-center justify-between"}`}>
                         <CardTitle className="flex items-center gap-3 text-2xl font-bold text-foreground">
                           <IconCalendar className="h-6 w-6 text-foreground" />
                           Booking Details
                         </CardTitle>
                         {hasChanges && (
-                          <div className="flex items-center gap-3">
+                          <div className={`flex items-center gap-3 ${isMobile ? "w-full" : ""}`}>
                             <Button
                               variant="outline"
                               size="default"
                               onClick={handleUndo}
                               disabled={updateMutation.isPending}
-                              className="border-border/50 hover:bg-accent/80 h-10 px-5"
+                              className={`border-border/50 hover:bg-accent/80 h-10 px-5 ${isMobile ? "flex-1" : ""}`}
                             >
                               <IconRotateClockwise className="h-4 w-4 mr-2" />
                               Undo Changes
@@ -698,7 +704,7 @@ export default function BookingDetailPage() {
                               size="default"
                               onClick={handleSubmit(onSubmit)}
                               disabled={updateMutation.isPending}
-                              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-10 px-5"
+                              className={`bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-10 px-5 ${isMobile ? "flex-1" : ""}`}
                             >
                               <IconDeviceFloppy className="h-4 w-4 mr-2" />
                               {updateMutation.isPending ? "Saving..." : "Save"}
@@ -1254,6 +1260,35 @@ export default function BookingDetailPage() {
               </Card>
             </div>
           </div>
+          
+          {/* Sticky Bottom Bar for Mobile - Save Changes */}
+          {isMobile && hasChanges && (
+            <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg">
+              <div className="px-4 py-3 safe-area-inset-bottom">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={handleUndo}
+                    disabled={updateMutation.isPending}
+                    className="flex-1 h-11 border border-slate-300/60 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-sm"
+                  >
+                    <IconRotateClockwise className="h-4 w-4 mr-2" />
+                    Undo Changes
+                  </Button>
+                  <Button
+                    size="default"
+                    onClick={handleSubmit(onSubmit)}
+                    disabled={updateMutation.isPending}
+                    className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm hover:shadow-md transition-all"
+                  >
+                    <IconDeviceFloppy className="h-4 w-4 mr-2" />
+                    {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </SidebarInset>
     </SidebarProvider>

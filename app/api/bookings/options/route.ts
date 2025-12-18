@@ -5,10 +5,13 @@ import { createClient } from '@/lib/supabase/server'
  * GET /api/bookings/options
  * 
  * Fetch dropdown options for booking form
- * (aircraft, members, instructors, flight types)
+ * (aircraft, members, instructors, flight types, lessons)
  * Requires authentication
+ * 
+ * Query params:
+ * - lesson_id: Include this lesson in results even if inactive
  */
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -19,6 +22,25 @@ export async function GET() {
       { status: 401 }
     )
   }
+
+  // Get query params
+  const { searchParams } = new URL(request.url)
+  const includeLessonId = searchParams.get('lesson_id')
+
+  // Build lessons query - include active lessons, and optionally include a specific lesson even if inactive
+  let lessonsQuery = supabase
+    .from('lessons')
+    .select('id, name, description')
+  
+  if (includeLessonId) {
+    // Include active lessons OR the specified lesson (even if inactive)
+    lessonsQuery = lessonsQuery.or(`is_active.eq.true,id.eq.${includeLessonId}`)
+  } else {
+    // Only include active lessons
+    lessonsQuery = lessonsQuery.eq('is_active', true)
+  }
+  
+  lessonsQuery = lessonsQuery.order('order')
 
   // Fetch all options in parallel
   const [aircraftResult, membersResult, instructorsResult, flightTypesResult, lessonsResult] = await Promise.all([
@@ -60,11 +82,7 @@ export async function GET() {
       .order('name'),
     
     // Lessons
-    supabase
-      .from('lessons')
-      .select('id, name, description')
-      .eq('is_active', true)
-      .order('order'),
+    lessonsQuery,
   ])
 
   return NextResponse.json({

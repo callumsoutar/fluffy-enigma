@@ -407,6 +407,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
+  const [debouncedSearch, setDebouncedSearch] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
   const [typeFilter, setTypeFilter] = React.useState<string>("all")
 
@@ -415,7 +416,17 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
     setMounted(true)
   }, [])
 
-  // Apply status and type filters
+  // Debounce search input to avoid too many API calls
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(globalFilter)
+    }, 300) // 300ms debounce
+
+    return () => clearTimeout(timer)
+  }, [globalFilter])
+
+  // Apply status and type filters client-side (for quick filtering on already-loaded data)
+  // Note: Search filter is handled server-side via onFiltersChange callback
   const filteredBookings = React.useMemo(() => {
     let filtered = bookings
 
@@ -427,28 +438,8 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
       filtered = filtered.filter((b) => b.booking_type === typeFilter)
     }
 
-    // Apply global search filter
-    if (globalFilter) {
-      const searchLower = globalFilter.toLowerCase()
-      filtered = filtered.filter((booking) => {
-        const aircraftMatch = booking.aircraft?.registration?.toLowerCase().includes(searchLower) ||
-                             booking.aircraft?.type?.toLowerCase().includes(searchLower) ||
-                             booking.aircraft?.model?.toLowerCase().includes(searchLower)
-        
-        const studentMatch = booking.student?.first_name?.toLowerCase().includes(searchLower) ||
-                            booking.student?.last_name?.toLowerCase().includes(searchLower) ||
-                            booking.student?.email?.toLowerCase().includes(searchLower)
-        
-        const instructorMatch = booking.instructor?.first_name?.toLowerCase().includes(searchLower) ||
-                               booking.instructor?.last_name?.toLowerCase().includes(searchLower) ||
-                               booking.instructor?.user?.email?.toLowerCase().includes(searchLower)
-
-        return aircraftMatch || studentMatch || instructorMatch
-      })
-    }
-
     return filtered
-  }, [bookings, statusFilter, typeFilter, globalFilter])
+  }, [bookings, statusFilter, typeFilter])
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -473,16 +464,16 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
     },
   })
 
-  // Notify parent of filter changes
+  // Notify parent of filter changes (using debounced search)
   React.useEffect(() => {
     if (onFiltersChange) {
       onFiltersChange({
-        search: globalFilter || undefined,
+        search: debouncedSearch || undefined,
         status: statusFilter !== "all" ? [statusFilter as BookingStatus] : undefined,
         booking_type: typeFilter !== "all" ? [typeFilter as BookingType] : undefined,
       })
     }
-  }, [globalFilter, statusFilter, typeFilter, onFiltersChange])
+  }, [debouncedSearch, statusFilter, typeFilter, onFiltersChange])
 
   return (
     <div className="space-y-4">

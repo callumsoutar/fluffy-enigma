@@ -129,24 +129,43 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
   const [componentToDelete, setComponentToDelete] = useState<ComponentWithComputed | null>(null)
 
   useEffect(() => {
-    if (aircraft.id) {
-      setLoading(true)
-      setError(null)
+    if (!aircraft.id) return
 
-      Promise.all([
-        fetch(`/api/aircraft-components?aircraft_id=${aircraft.id}`).then(res => res.json()),
-        fetch(`/api/aircraft/${aircraft.id}`).then(res => res.json())
-      ])
-        .then(([componentsData, aircraftData]) => {
+    let cancelled = false
+
+    // Set loading state asynchronously to avoid synchronous setState in effect
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        setLoading(true)
+        setError(null)
+      }
+    })
+
+    Promise.all([
+      fetch(`/api/aircraft-components?aircraft_id=${aircraft.id}`).then(res => res.json()),
+      fetch(`/api/aircraft/${aircraft.id}`).then(res => res.json())
+    ])
+      .then(([componentsData, aircraftData]) => {
+        if (!cancelled) {
           setComponents(Array.isArray(componentsData) ? componentsData : [])
           if (aircraftData.aircraft && aircraftData.aircraft.total_hours) {
             setCurrentHours(Number(aircraftData.aircraft.total_hours))
           }
-        })
-        .catch(() => {
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
           setError("Failed to fetch data")
-        })
-        .finally(() => setLoading(false))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
     }
   }, [aircraft.id])
 

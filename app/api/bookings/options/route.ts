@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/server'
  * (aircraft, members, instructors, flight types)
  * Requires authentication
  */
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

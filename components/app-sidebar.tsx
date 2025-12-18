@@ -78,7 +78,6 @@ const navigationConfig: NavSection[] = [
           title: "Bookings",
         url: "/bookings",
           icon: IconBook,
-          isActive: true,
         roles: ['owner', 'admin', 'instructor', 'member', 'student'],
         },
       ],
@@ -207,6 +206,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         label: section.label,
         items: section.items
           .filter(item => item.roles.includes(roleToUse))
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           .map(({ roles, ...item }) => item), // Remove roles property
       }))
       .filter(section => section.items.length > 0) // Remove empty sections
@@ -221,6 +221,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     
     return secondaryNavItems
       .filter(item => item.roles.includes(roleToUse))
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       .map(({ roles, ...item }) => item) // Remove roles property
   }, [effectiveRole, cachedRole, mounted])
 

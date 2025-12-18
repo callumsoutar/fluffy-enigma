@@ -80,11 +80,6 @@ export default function BookingsPage() {
     staleTime: 30_000,
   })
 
-  // Memoize today's range to prevent recalculation on every render
-  const todayRange = React.useMemo(() => {
-    if (!mounted) return { start: "", end: "" }
-    return getTodayRange()
-  }, [mounted])
 
   // Calculate tab counts (memoized to prevent recalculation)
   const tabCounts = React.useMemo(() => {

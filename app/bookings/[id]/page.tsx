@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -15,9 +15,6 @@ import {
   IconSchool,
   IconFileText,
   IconAlertTriangle,
-  IconCheck,
-  IconX,
-  IconHistory,
   IconDeviceFloppy,
   IconRotateClockwise,
   IconChevronDown,
@@ -27,6 +24,7 @@ import {
   IconDotsVertical,
   IconEye,
   IconTrash,
+  IconCheck,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -44,7 +42,6 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -93,10 +90,8 @@ function formatTimeForDisplay(time: string): string {
   return `${displayHour}:${minutes} ${ampm}`
 }
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Label } from "@/components/ui/label"
 import { ChevronDownIcon } from "lucide-react"
 import type { BookingWithRelations, BookingStatus, BookingType } from "@/lib/types/bookings"
 import { useAuth } from "@/contexts/auth-context"
@@ -187,15 +182,6 @@ function getStatusLabel(status: BookingStatus) {
   }
 }
 
-function getBookingTypeLabel(type: BookingType) {
-  switch (type) {
-    case "flight": return "Flight"
-    case "groundwork": return "Ground Work"
-    case "maintenance": return "Maintenance"
-    case "other": return "Other"
-    default: return type
-  }
-}
 
 function getErrorMessage(err: unknown) {
   if (err instanceof Error) return err.message
@@ -559,12 +545,13 @@ export default function BookingDetailPage() {
               <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
                 {/* Top Row: Back Button and Status Badge */}
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <Button variant="ghost" size="sm" asChild className="-ml-2 hover:bg-accent/80">
-                    <Link href="/bookings">
-                      <IconArrowLeft className="h-4 w-4 mr-2" />
-                      Back
-                    </Link>
-                  </Button>
+                  <Link
+                    href="/bookings"
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <IconArrowLeft className="h-4 w-4" />
+                    Back to Bookings
+                  </Link>
                   <Badge 
                     variant={getStatusBadgeVariant(booking.status)} 
                     className={`text-xs sm:text-sm px-3 py-1.5 sm:px-4 sm:py-2 font-semibold shadow-sm ${
@@ -876,16 +863,15 @@ export default function BookingDetailPage() {
                                       aria-expanded={memberSearchOpen}
                                       className="w-full justify-between border-border/50 bg-background hover:bg-accent/50 transition-colors h-10"
                                     >
-                                      {watch("user_id") ? (
-                                        (() => {
-                                          const selectedMember = options.members.find(m => m.id === watch("user_id"))
-                                          return selectedMember
-                                            ? [selectedMember.first_name, selectedMember.last_name].filter(Boolean).join(" ") || selectedMember.email
-                                            : "Select Member"
-                                        })()
-                                      ) : (
-                                        "Select Member"
-                                      )}
+                                      {(() => {
+                                        // eslint-disable-next-line react-hooks/incompatible-library
+                                        const userId = watch("user_id")
+                                        if (!userId) return "Select Member"
+                                        const selectedMember = options.members.find(m => m.id === userId)
+                                        return selectedMember
+                                          ? [selectedMember.first_name, selectedMember.last_name].filter(Boolean).join(" ") || selectedMember.email
+                                          : "Select Member"
+                                      })()}
                                       <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                   </PopoverTrigger>

@@ -8,14 +8,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { userHasAnyRole } from '@/lib/auth/roles';
-import type { UserRole } from '@/lib/types/roles';
 
 /**
  * GET /api/example-protected
  * 
  * Example endpoint that requires owner, admin, or instructor role
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

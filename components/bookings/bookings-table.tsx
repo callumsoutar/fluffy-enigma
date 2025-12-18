@@ -450,6 +450,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
     return filtered
   }, [bookings, statusFilter, typeFilter, globalFilter])
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: filteredBookings,
     columns,

@@ -1,8 +1,90 @@
-import { type NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { updateSession } from "@/lib/supabase/middleware"
+import { createServerClient } from "@supabase/ssr"
+import { isRoleAllowedForRoute } from "@/lib/auth/route-permissions"
+import type { UserRole } from "@/lib/types/roles"
+import { isValidRole } from "@/lib/types/roles"
 
 export async function middleware(request: NextRequest) {
-  return await updateSession(request)
+  // First, update session (handles authentication)
+  const response = await updateSession(request)
+  
+  // Get the pathname
+  const pathname = request.nextUrl.pathname
+  
+  // Create supabase client to check user role
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll() {
+          // Cookies handled by updateSession
+        },
+      },
+    }
+  )
+  
+  // Get user and check role
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (user) {
+    // Get role from JWT claims (fast) or database
+    let role: UserRole | null = null
+    
+    // Check JWT claims first
+    const roleFromClaims = user.user_metadata?.role as string | undefined
+    if (roleFromClaims && isValidRole(roleFromClaims)) {
+      role = roleFromClaims
+    } else {
+      // Fallback to database lookup using RPC function
+      const { data: roleName } = await supabase.rpc('get_user_role', {
+        user_id: user.id
+      })
+      
+      if (roleName && isValidRole(roleName)) {
+        role = roleName
+      } else {
+        // If RPC fails, try direct query with join
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select(`
+            role_id,
+            roles!inner (
+              name
+            )
+          `)
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .single()
+        
+        if (roleData && roleData.roles) {
+          // Supabase returns joined relations as arrays
+          const roles = Array.isArray(roleData.roles) ? roleData.roles : [roleData.roles]
+          const roleObj = roles[0] as { name: string } | undefined
+          if (roleObj?.name && isValidRole(roleObj.name)) {
+            role = roleObj.name
+          }
+        }
+      }
+    }
+    
+    // Check if role is allowed for this route
+    const isAllowed = isRoleAllowedForRoute(role, pathname)
+    
+    if (!isAllowed) {
+      // User is logged in but doesn't have permission
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      url.searchParams.set('error', 'unauthorized')
+      return NextResponse.redirect(url)
+    }
+  }
+  
+  return response
 }
 
 export const config = {

@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { type Icon } from "@tabler/icons-react"
 
 import {
@@ -36,11 +37,14 @@ export function NavMain({
               {section.items.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton 
+                    asChild
                     tooltip={item.title}
                     isActive={item.isActive}
                   >
-                    {item.icon && <item.icon />}
-                    <span>{item.title}</span>
+                    <Link href={item.url}>
+                      {item.icon && <item.icon />}
+                      <span>{item.title}</span>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

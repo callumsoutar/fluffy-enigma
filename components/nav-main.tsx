@@ -42,8 +42,8 @@ export function NavMain({
                     isActive={item.isActive}
                   >
                     <Link href={item.url}>
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
+                    {item.icon && <item.icon />}
+                    <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

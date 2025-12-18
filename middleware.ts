@@ -76,7 +76,15 @@ export async function middleware(request: NextRequest) {
     const isAllowed = isRoleAllowedForRoute(role, pathname)
     
     if (!isAllowed) {
-      // User is logged in but doesn't have permission
+      // API routes should return 403, page routes should redirect
+      if (pathname.startsWith('/api/')) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      
+      // Page routes redirect
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       url.searchParams.set('error', 'unauthorized')

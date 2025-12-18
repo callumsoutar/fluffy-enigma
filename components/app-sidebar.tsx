@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import {
-  IconChartBar,
   IconHome,
   IconCalendar,
   IconBook,
@@ -61,127 +60,169 @@ interface NavSection {
 }
 
 const navigationConfig: NavSection[] = [
-  {
-    items: [
-      {
-        title: "Dashboard",
+    {
+      items: [
+        {
+          title: "Dashboard",
         url: "/dashboard",
-        icon: IconHome,
+          icon: IconHome,
         roles: ['owner', 'admin', 'instructor', 'member', 'student'],
-      },
-      {
-        title: "Scheduler",
+        },
+        {
+          title: "Scheduler",
         url: "/scheduler",
-        icon: IconCalendar,
+          icon: IconCalendar,
         roles: ['owner', 'admin', 'instructor', 'member', 'student'],
-      },
-      {
-        title: "Bookings",
+        },
+        {
+          title: "Bookings",
         url: "/bookings",
-        icon: IconBook,
-        isActive: true,
+          icon: IconBook,
+          isActive: true,
         roles: ['owner', 'admin', 'instructor', 'member', 'student'],
-      },
-    ],
-  },
-  {
-    label: "Resources",
-    items: [
-      {
-        title: "Aircraft",
+        },
+      ],
+    },
+    {
+      label: "Resources",
+      items: [
+        {
+          title: "Aircraft",
         url: "/aircraft",
-        icon: IconPlane,
+          icon: IconPlane,
         roles: ['owner', 'admin', 'instructor'],
-      },
-      {
-        title: "Members",
+        },
+        {
+          title: "Members",
         url: "/members",
-        icon: IconUsers,
+          icon: IconUsers,
         roles: ['owner', 'admin', 'instructor'],
-      },
-      {
-        title: "Staff",
+        },
+        {
+          title: "Staff",
         url: "/staff",
-        icon: IconUserCog,
+          icon: IconUserCog,
         roles: ['owner', 'admin'],
-      },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      {
-        title: "Invoicing",
+        },
+      ],
+    },
+    {
+      label: "Operations",
+      items: [
+        {
+          title: "Invoicing",
         url: "/invoicing",
-        icon: IconFileInvoice,
+          icon: IconFileInvoice,
         roles: ['owner', 'admin', 'instructor'],
-      },
-      {
-        title: "Training",
+        },
+        {
+          title: "Training",
         url: "/training",
-        icon: IconSchool,
+          icon: IconSchool,
         roles: ['owner', 'admin', 'instructor'],
-      },
-      {
-        title: "Equipment",
+        },
+        {
+          title: "Equipment",
         url: "/equipment",
-        icon: IconTool,
+          icon: IconTool,
         roles: ['owner', 'admin', 'instructor'],
-      },
-    ],
-  },
-  {
-    label: "Management",
-    items: [
-      {
-        title: "Tasks",
+        },
+      ],
+    },
+    {
+      label: "Management",
+      items: [
+        {
+          title: "Tasks",
         url: "/tasks",
-        icon: IconCheckbox,
+          icon: IconCheckbox,
         roles: ['owner', 'admin', 'instructor'],
-      },
-      {
-        title: "Reports",
+        },
+        {
+          title: "Reports",
         url: "/reports",
-        icon: IconReport,
+          icon: IconReport,
         roles: ['owner', 'admin', 'instructor'],
-      },
-    ],
-  },
+        },
+      ],
+    },
 ]
 
 const secondaryNavItems: NavItem[] = [
-  {
-    title: "Settings",
+    {
+      title: "Settings",
     url: "/settings",
-    icon: IconSettings,
+      icon: IconSettings,
     roles: ['owner', 'admin', 'instructor', 'member', 'student'],
-  },
+    },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, role, loading } = useAuth()
+  const [mounted, setMounted] = React.useState(false)
+  const [cachedRole, setCachedRole] = React.useState<UserRole | null>(null)
+  
+  // Load cached role from localStorage after mount (prevents hydration mismatch)
+  React.useEffect(() => {
+    setMounted(true)
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('user_role')
+      if (stored) {
+        setCachedRole(stored as UserRole)
+      }
+    }
+  }, [])
+  
+  // Update cached role when we have a valid role
+  React.useEffect(() => {
+    if (role) {
+      setCachedRole(role)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user_role', role)
+      }
+    } else if (user === null && mounted) {
+      // Clear cache on sign out (only after mount)
+      setCachedRole(null)
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user_role')
+      }
+    }
+  }, [role, user, mounted])
+  
+  // Use current role, or cached role if loading, or null
+  // Only use cached role after mount to prevent hydration mismatch
+  const effectiveRole = role || (loading && mounted ? cachedRole : null)
 
   // Filter navigation items based on user role
+  // Use effectiveRole to prevent navigation from disappearing during refresh
   const filteredNavMain = React.useMemo(() => {
-    if (!role) return []
+    // During SSR or before mount, return empty to prevent hydration mismatch
+    if (!mounted) return []
+    
+    const roleToUse = effectiveRole || cachedRole
+    if (!roleToUse) return []
     
     return navigationConfig
       .map(section => ({
         label: section.label,
         items: section.items
-          .filter(item => item.roles.includes(role))
+          .filter(item => item.roles.includes(roleToUse))
           .map(({ roles, ...item }) => item), // Remove roles property
       }))
       .filter(section => section.items.length > 0) // Remove empty sections
-  }, [role])
+  }, [effectiveRole, cachedRole, mounted])
 
   const filteredNavSecondary = React.useMemo(() => {
-    if (!role) return []
+    // During SSR or before mount, return empty to prevent hydration mismatch
+    if (!mounted) return []
+    
+    const roleToUse = effectiveRole || cachedRole
+    if (!roleToUse) return []
     
     return secondaryNavItems
-      .filter(item => item.roles.includes(role))
+      .filter(item => item.roles.includes(roleToUse))
       .map(({ roles, ...item }) => item) // Remove roles property
-  }, [role])
+  }, [effectiveRole, cachedRole, mounted])
 
   const userData = React.useMemo(() => {
     if (!user) {
@@ -209,7 +250,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [user])
 
-  if (loading) {
+  // Only show loading state on initial load (when we have no cached role)
+  // During refresh, keep showing the navigation with cached role
+  // Also show loading during SSR/before mount to prevent hydration mismatch
+  const isInitialLoad = (!mounted) || (loading && !cachedRole && !role)
+
+  // Show loading state during SSR, initial load, or before mount
+  if (isInitialLoad) {
     return (
       <Sidebar collapsible="offcanvas" {...props}>
         <SidebarHeader>
@@ -228,8 +275,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
-          <NavMain sections={filteredNavMain} />
-          <NavSecondary items={filteredNavSecondary} className="mt-auto" />
+          <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+            Loading navigation...
+          </div>
         </SidebarContent>
         <SidebarFooter>
           <div className="px-2 py-4 text-sm text-muted-foreground text-center">

@@ -34,6 +34,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (roleFromClaims && isValidRole(roleFromClaims)) {
         setRole(roleFromClaims)
+        // Cache in localStorage for persistence across refreshes
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('user_role', roleFromClaims)
+        }
         return
       }
       
@@ -44,6 +48,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (!rpcError && roleName && isValidRole(roleName)) {
         setRole(roleName)
+        // Cache in localStorage for persistence across refreshes
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('user_role', roleName)
+        }
         return
       }
       
@@ -66,19 +74,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const roleObj = roles[0] as { name: string } | undefined
         if (roleObj?.name && isValidRole(roleObj.name)) {
           setRole(roleObj.name)
+          // Cache in localStorage for persistence across refreshes
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('user_role', roleObj.name)
+          }
         } else {
           setRole(null)
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('user_role')
+          }
         }
       } else {
         setRole(null)
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('user_role')
+        }
       }
     } catch (error) {
       console.error("Error fetching user role:", error)
       setRole(null)
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user_role')
+      }
     }
   }, [supabase])
 
   const refreshUser = React.useCallback(async () => {
+    // Try to get cached role first to prevent navigation from disappearing
+    let cachedRole: UserRole | null = null
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('user_role')
+      if (stored && isValidRole(stored)) {
+        cachedRole = stored as UserRole
+        setRole(cachedRole) // Set immediately to prevent UI flicker
+      }
+    }
+    
+    setLoading(true)
     try {
       const {
         data: { user },
@@ -89,43 +121,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await fetchUserRole(user.id)
       } else {
         setRole(null)
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('user_role')
+        }
       }
     } catch (error) {
       console.error("Error refreshing user:", error)
       setUser(null)
       setRole(null)
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user_role')
+      }
     } finally {
       setLoading(false)
     }
   }, [supabase, fetchUserRole])
 
   React.useEffect(() => {
-    refreshUser()
+    let mounted = true
+
+    const initializeAuth = async () => {
+      await refreshUser()
+    }
+
+    initializeAuth()
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return
+      
+      // Only set loading for actual auth state changes (sign in/out), not for token refreshes
+      // This prevents navigation from disappearing on page refresh
+      const isSignIn = _event === 'SIGNED_IN'
+      const isSignOut = _event === 'SIGNED_OUT'
+      
+      if (isSignIn || isSignOut) {
+        setLoading(true)
+      }
+      
       setUser(session?.user ?? null)
       
       if (session?.user) {
         await fetchUserRole(session.user.id)
       } else {
         setRole(null)
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('user_role')
+        }
       }
       
+      if (isSignIn || isSignOut) {
       setLoading(false)
+      }
     })
 
     return () => {
+      mounted = false
       subscription.unsubscribe()
     }
-  }, [supabase, refreshUser, fetchUserRole])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run on mount - refreshUser and fetchUserRole are stable callbacks
 
   const signOut = React.useCallback(async () => {
     try {
       await supabase.auth.signOut()
       setUser(null)
       setRole(null)
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user_role')
+      }
       router.push("/login")
       router.refresh()
     } catch (error) {

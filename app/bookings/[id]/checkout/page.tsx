@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import {
-  IconArrowLeft,
   IconClock,
   IconPlane,
   IconSchool,
@@ -27,7 +26,7 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { BookingHeader } from "@/components/bookings/booking-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Field,
@@ -829,43 +828,31 @@ export default function BookingCheckoutPage() {
         <div className="flex flex-1 flex-col bg-muted/30">
           <div className="flex flex-1 flex-col">
             {/* Header Section */}
-            <div className="border-b border-border/40 bg-gradient-to-br from-slate-50 via-blue-50/30 to-background dark:from-slate-900 dark:via-slate-800/50 dark:to-background">
-              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-                {/* Top Row: Back Button */}
-                <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <Link
-                    href={`/bookings/${bookingId}`}
-                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <IconArrowLeft className="h-4 w-4" />
-                    Back to Booking
-                  </Link>
-                </div>
-
-                {/* Title Row */}
-                <div className="mb-6 sm:mb-8">
-                  <div className="flex items-center justify-between gap-4">
-                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight text-foreground">
-                      Flight Checkout
-                    </h1>
-                    <Badge 
-                      className="bg-purple-600 text-white border-purple-700 hover:bg-purple-700 px-4 py-2 text-base font-semibold shadow-lg"
-                      variant="default"
-                      style={{
-                        animation: 'subtle-pulse 3s ease-in-out infinite'
-                      }}
-                    >
-                      <IconPlane className="h-5 w-5" />
-                      Flying
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {booking && (
+              <BookingHeader
+                status={booking.status}
+                title="Flight Checkout"
+                backHref={`/bookings/${bookingId}`}
+                backLabel="Back to Booking"
+              />
+            )}
 
             {/* Main Content */}
+            {/* Calculate bottom padding based on sticky bar height on mobile:
+                - 3 stacked buttons (hasChanges + confirmed): ~208px (144px buttons + 32px gaps + 32px padding)
+                - 2 stacked buttons (hasChanges only): ~144px (96px buttons + 16px gap + 32px padding)  
+                - 1 button (Check Out only): ~80px (48px button + 32px padding)
+                Add extra padding (40-50px) for comfortable scrolling */}
             <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 ${
-              isMobile ? "pt-8 pb-24" : "pt-10 pb-28"
+              isMobile 
+                ? hasChanges && booking?.status === 'confirmed'
+                  ? "pt-8 pb-[260px]" // 3 stacked buttons: 208px + 52px extra
+                  : hasChanges
+                    ? "pt-8 pb-[200px]" // 2 stacked buttons: 144px + 56px extra
+                    : booking?.status === 'confirmed'
+                      ? "pt-8 pb-[140px]" // 1 button: 80px + 60px extra
+                      : "pt-8 pb-24" // Fallback: no buttons or minimal
+                : "pt-10 pb-28"
             }`}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                 {/* Left Column: Flight Log Form */}
@@ -1466,7 +1453,15 @@ export default function BookingCheckoutPage() {
       }}
     >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-          <div className="flex items-center justify-end gap-4">
+          {/* On mobile: stack vertically when all 3 buttons are visible, otherwise horizontal */}
+          {/* On desktop: always horizontal */}
+          <div className={`flex items-center gap-4 ${
+            isMobile && hasChanges && booking?.status === 'confirmed' 
+              ? 'flex-col' 
+              : isMobile 
+                ? 'flex-col sm:flex-row sm:justify-end' 
+                : 'flex-row justify-end'
+          }`}>
             {hasChanges && (
               <>
                 <Button
@@ -1474,7 +1469,13 @@ export default function BookingCheckoutPage() {
                   size="lg"
                   onClick={handleUndo}
                   disabled={checkoutMutation.isPending}
-                  className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+                  className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${
+                    isMobile && hasChanges && booking?.status === 'confirmed'
+                      ? 'w-full'
+                      : isMobile
+                        ? 'w-full sm:w-auto sm:flex-1 sm:max-w-[200px]'
+                        : 'px-8 min-w-[160px]'
+                  }`}
                 >
                   <IconRotateClockwise className="h-4 w-4 mr-2" />
                   Undo Changes
@@ -1483,7 +1484,13 @@ export default function BookingCheckoutPage() {
                   size="lg"
                   onClick={handleFormSubmit}
                   disabled={checkoutMutation.isPending}
-                  className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+                  className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${
+                    isMobile && hasChanges && booking?.status === 'confirmed'
+                      ? 'w-full'
+                      : isMobile
+                        ? 'w-full sm:w-auto sm:flex-1 sm:max-w-[200px]'
+                        : 'px-8 min-w-[160px]'
+                  }`}
                 >
                   <IconDeviceFloppy className="h-4 w-4 mr-2" />
                   {checkoutMutation.isPending ? "Saving..." : "Save Changes"}
@@ -1496,7 +1503,13 @@ export default function BookingCheckoutPage() {
                 size="lg"
                 onClick={handleFormSubmit}
                 disabled={checkoutMutation.isPending}
-                className={`h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+                className={`h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg hover:shadow-xl transition-all ${
+                  isMobile && hasChanges && booking?.status === 'confirmed'
+                    ? 'w-full'
+                    : isMobile
+                      ? 'w-full sm:w-auto sm:flex-1 sm:max-w-[200px]'
+                      : 'px-8 min-w-[160px]'
+                }`}
               >
                 <IconPlane className="h-4 w-4 mr-2" />
                 {checkoutMutation.isPending ? "Checking Out..." : "Check Out"}

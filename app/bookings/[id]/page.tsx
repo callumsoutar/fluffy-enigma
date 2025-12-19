@@ -25,6 +25,9 @@ import {
   IconEye,
   IconTrash,
   IconCheck,
+  IconPhone,
+  IconMessage,
+  IconPlus,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -612,6 +615,27 @@ export default function BookingDetailPage() {
     ? [booking.instructor.first_name, booking.instructor.last_name].filter(Boolean).join(" ") || booking.instructor.user?.email || "—"
     : "—"
 
+  // Format date for display
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "—"
+    const date = new Date(dateString)
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+  }
+
+  // Format time range for display
+  const formatTimeRange = (start: string | null, end: string | null) => {
+    if (!start || !end) return "—"
+    const startDate = new Date(start)
+    const endDate = new Date(end)
+    const startTime = formatTimeForDisplay(`${String(startDate.getHours()).padStart(2, "0")}:${String(startDate.getMinutes()).padStart(2, "0")}`)
+    const endTime = formatTimeForDisplay(`${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`)
+    return `${startTime} → ${endTime}`
+  }
 
   return (
     <SidebarProvider
@@ -625,7 +649,797 @@ export default function BookingDetailPage() {
         <SiteHeader />
         <div className="flex flex-1 flex-col bg-muted/30">
           <div className="flex flex-1 flex-col">
-            {/* Header Section with Enhanced Design */}
+            {/* Mobile Header Section */}
+            {isMobile ? (
+              <>
+              {/* Mobile Header - Read Only Display */}
+              <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+                <div className="px-4 py-4 space-y-4">
+                  {/* Back Button */}
+                  <Link
+                    href="/bookings"
+                    className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-3"
+                  >
+                    <IconArrowLeft className="h-4 w-4" />
+                    Back
+                  </Link>
+
+                  {/* Reservation Number with Status Badge */}
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400 flex-1">
+                      Reservation #{booking.id.slice(0, 8).toUpperCase()}
+                    </h1>
+                    <Badge 
+                      variant={getStatusBadgeVariant(booking.status)} 
+                      className={`text-xs px-3 py-1 font-medium ${
+                        booking.status === 'flying' 
+                          ? 'bg-blue-600 text-white border-blue-700' 
+                          : booking.status === 'confirmed'
+                          ? 'bg-green-600 text-white border-green-700'
+                          : booking.status === 'unconfirmed'
+                          ? 'bg-amber-500 text-white border-amber-600'
+                          : ''
+                      }`}
+                    >
+                      {getStatusLabel(booking.status)}
+                    </Badge>
+                  </div>
+
+                  {/* Date, Time, Aircraft with Icons */}
+                  <div className="space-y-2.5 mb-4">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                      <IconCalendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">
+                        {formatDate(booking.start_time)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                      <IconClock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">
+                        {formatTimeRange(booking.start_time, booking.end_time)}
+                      </span>
+                    </div>
+                    {booking.aircraft && (
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                        <IconPlane className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-foreground">
+                          {booking.aircraft.registration} {booking.aircraft.type && `(${booking.aircraft.type})`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Flight Type */}
+                  {booking.flight_type && (
+                    <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                      <div className="text-base font-semibold text-foreground">
+                        {booking.flight_type.name}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Training Section */}
+                  {booking.lesson && (
+                    <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Training</div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">{booking.lesson.name}</div>
+                        <Badge variant="outline" className="text-xs border-gray-300 dark:border-gray-700">
+                          <IconCalendar className="h-3 w-3 mr-1" />
+                          Scheduled
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Mobile Editable Content */}
+              <div className={`bg-muted/30 min-h-screen ${
+                hasChanges && isAdminOrInstructor && booking.status === 'confirmed'
+                  ? 'pb-[280px]' // 3 stacked buttons
+                  : hasChanges && isAdminOrInstructor
+                    ? 'pb-[200px]' // 2 stacked buttons (save + status)
+                    : isAdminOrInstructor && booking.status === 'confirmed'
+                      ? 'pb-[140px]' // 1 button (check out)
+                      : 'pb-24' // Fallback
+              }`}>
+                <div className="px-4 py-6 space-y-4">
+                  <form onSubmit={handleSubmit(onSubmit)}>
+                    <FieldGroup className="space-y-4">
+                      {/* Participants Section */}
+                      <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                        <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
+                          <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                            <IconUsers className="h-4 w-4 text-muted-foreground" />
+                            Participants
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                          {/* Instructor Card - Read Only */}
+                          {instructorName !== "—" && (
+                            <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3 flex-1">
+                                  <IconUser className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Instructor</div>
+                                    <div className="text-sm font-semibold text-foreground truncate">{instructorName}</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 ml-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                                    onClick={() => {
+                                      const email = booking.instructor?.user?.email
+                                      if (email) {
+                                        window.location.href = `mailto:${email}`
+                                      } else {
+                                        toast.info("Email not available")
+                                      }
+                                    }}
+                                  >
+                                    <IconPhone className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                                    onClick={() => {
+                                      const email = booking.instructor?.user?.email
+                                      if (email) {
+                                        window.location.href = `mailto:${email}`
+                                      } else {
+                                        toast.info("Email not available")
+                                      }
+                                    }}
+                                  >
+                                    <IconMessage className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Customer Card - Read Only */}
+                          {studentName !== "—" && (
+                            <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3 flex-1">
+                                  <IconUser className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Customer</div>
+                                    <div className="text-sm font-semibold text-foreground truncate">{studentName}</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 ml-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                                    onClick={() => {
+                                      const email = booking.student?.email
+                                      if (email) {
+                                        window.location.href = `mailto:${email}`
+                                      } else {
+                                        toast.info("Email not available")
+                                      }
+                                    }}
+                                  >
+                                    <IconPhone className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                                    onClick={() => {
+                                      const email = booking.student?.email
+                                      if (email) {
+                                        window.location.href = `mailto:${email}`
+                                      } else {
+                                        toast.info("Email not available")
+                                      }
+                                    }}
+                                  >
+                                    <IconMessage className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {/* Visual Separator - Booking Info to Edit Form */}
+                      {isAdminOrInstructor && (
+                        <div className="relative py-6">
+                          <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-dashed border-gray-300 dark:border-gray-700"></div>
+                          </div>
+                          <div className="relative flex justify-center">
+                            <div className="bg-white dark:bg-gray-900 px-4 py-2 border border-gray-200 dark:border-gray-800 rounded-md">
+                              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                <IconFileText className="h-3.5 w-3.5" />
+                                Edit Booking Information
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Scheduled Times Section */}
+                      <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                        <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
+                          <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                            <IconClock className="h-4 w-4 text-muted-foreground" />
+                            Scheduled Times
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                          <Field>
+                            <FieldLabel className="text-sm font-semibold text-foreground mb-2">Start Time</FieldLabel>
+                            <div className="flex gap-2 items-end">
+                              <div className="flex-1">
+                                <Popover open={openStartDate} onOpenChange={setOpenStartDate}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className="w-full justify-between font-normal border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
+                                    >
+                                      {startDate
+                                        ? startDate.toLocaleDateString("en-US", {
+                                            day: "2-digit",
+                                            month: "short",
+                                            year: "numeric",
+                                          })
+                                        : "Select date"}
+                                      <ChevronDownIcon className="h-4 w-4" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                                    <Calendar
+                                      mode="single"
+                                      selected={startDate}
+                                      captionLayout="dropdown"
+                                      onSelect={(date) => {
+                                        setStartDate(date)
+                                        setOpenStartDate(false)
+                                        if (date && !endDate) {
+                                          setEndDate(date)
+                                        }
+                                      }}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                              <div className="w-28">
+                                <Select
+                                  value={startTime || "none"}
+                                  onValueChange={(value) => setStartTime(value === "none" ? "" : value)}
+                                >
+                                  <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
+                                    <SelectValue placeholder="Time">
+                                      {startTime ? formatTimeForDisplay(startTime) : "Time"}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent className="max-h-[200px]">
+                                    <SelectItem value="none">Select time</SelectItem>
+                                    {TIME_OPTIONS.map((time) => (
+                                      <SelectItem key={time} value={time}>
+                                        {formatTimeForDisplay(time)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            {errors.start_time && (
+                              <p className="text-sm text-destructive mt-1.5">{errors.start_time.message}</p>
+                            )}
+                          </Field>
+                          <Field>
+                            <FieldLabel className="text-sm font-semibold text-foreground mb-2">End Time</FieldLabel>
+                            <div className="flex gap-2 items-end">
+                              <div className="flex-1">
+                                <Popover open={openEndDate} onOpenChange={setOpenEndDate}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className="w-full justify-between font-normal border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
+                                    >
+                                      {endDate
+                                        ? endDate.toLocaleDateString("en-US", {
+                                            day: "2-digit",
+                                            month: "short",
+                                            year: "numeric",
+                                          })
+                                        : "Select date"}
+                                      <ChevronDownIcon className="h-4 w-4" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                                    <Calendar
+                                      mode="single"
+                                      selected={endDate}
+                                      captionLayout="dropdown"
+                                      onSelect={(date) => {
+                                        setEndDate(date)
+                                        setOpenEndDate(false)
+                                      }}
+                                      disabled={startDate ? { before: startDate } : undefined}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                              <div className="w-28">
+                                <Select
+                                  value={endTime || "none"}
+                                  onValueChange={(value) => setEndTime(value === "none" ? "" : value)}
+                                >
+                                  <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
+                                    <SelectValue placeholder="Time">
+                                      {endTime ? formatTimeForDisplay(endTime) : "Time"}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent className="max-h-[200px]">
+                                    <SelectItem value="none">Select time</SelectItem>
+                                    {TIME_OPTIONS.map((time) => (
+                                      <SelectItem key={time} value={time}>
+                                        {formatTimeForDisplay(time)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            {errors.end_time && (
+                              <p className="text-sm text-destructive mt-1.5">{errors.end_time.message}</p>
+                            )}
+                          </Field>
+                        </CardContent>
+                      </Card>
+
+                      {/* Booking Details Section */}
+                      <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                        <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
+                          <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                            <IconPlane className="h-4 w-4 text-muted-foreground" />
+                            Booking Details
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                          {/* Member Field */}
+                          {isAdminOrInstructor && (
+                            <Field>
+                              <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <IconUser className="h-4 w-4 text-primary" />
+                                Member
+                              </FieldLabel>
+                              {options ? (
+                                <Popover open={memberSearchOpen} onOpenChange={setMemberSearchOpen}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      aria-expanded={memberSearchOpen}
+                                      className="w-full justify-between border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
+                                    >
+                                      {(() => {
+                                        const userId = watch("user_id")
+                                        if (!userId) return "Select Member"
+                                        const selectedMember = options.members.find(m => m.id === userId)
+                                        return selectedMember
+                                          ? [selectedMember.first_name, selectedMember.last_name].filter(Boolean).join(" ") || selectedMember.email
+                                          : "Select Member"
+                                      })()}
+                                      <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                    <Command>
+                                      <CommandInput placeholder="Search members..." />
+                                      <CommandList className="max-h-[300px]">
+                                        <CommandEmpty>No members found.</CommandEmpty>
+                                        <CommandGroup>
+                                          <CommandItem
+                                            value="none"
+                                            onSelect={() => {
+                                              setValue("user_id", null, { shouldDirty: true })
+                                              setMemberSearchOpen(false)
+                                            }}
+                                          >
+                                            No member selected
+                                          </CommandItem>
+                                          {options.members.map((member) => {
+                                            const displayName = [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email
+                                            return (
+                                              <CommandItem
+                                                key={member.id}
+                                                value={`${displayName} ${member.email}`}
+                                                onSelect={() => {
+                                                  setValue("user_id", member.id, { shouldDirty: true })
+                                                  setMemberSearchOpen(false)
+                                                }}
+                                              >
+                                                {displayName}
+                                                {member.email && (
+                                                  <span className="ml-2 text-xs text-muted-foreground">
+                                                    ({member.email})
+                                                  </span>
+                                                )}
+                                              </CommandItem>
+                                            )
+                                          })}
+                                        </CommandGroup>
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
+                              ) : (
+                                <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {studentName}
+                                </div>
+                              )}
+                            </Field>
+                          )}
+
+                          {/* Instructor Field */}
+                          {isAdminOrInstructor && (
+                            <Field>
+                              <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <IconSchool className="h-4 w-4 text-primary" />
+                                Instructor
+                              </FieldLabel>
+                              {options ? (
+                                <Select
+                                  value={watch("instructor_id") || "none"}
+                                  onValueChange={(value) => setValue("instructor_id", value === "none" ? null : value, { shouldDirty: true })}
+                                >
+                                  <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
+                                    <SelectValue placeholder="Select Instructor" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No instructor</SelectItem>
+                                    {options.instructors.map((instructor) => {
+                                      const name = [instructor.first_name, instructor.last_name]
+                                        .filter(Boolean)
+                                        .join(" ") || instructor.user?.email || "Unknown"
+                                      return (
+                                        <SelectItem key={instructor.id} value={instructor.id}>
+                                          {name}
+                                        </SelectItem>
+                                      )
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {instructorName !== "—" ? instructorName : "—"}
+                                </div>
+                              )}
+                            </Field>
+                          )}
+
+                          <Field>
+                            <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                              <IconPlane className="h-4 w-4 text-primary" />
+                              Aircraft
+                            </FieldLabel>
+                            {options ? (
+                              <Select
+                                value={watch("aircraft_id")}
+                                onValueChange={(value) => setValue("aircraft_id", value, { shouldDirty: true })}
+                              >
+                                <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
+                                  <SelectValue placeholder="Select Aircraft" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {options.aircraft.map((aircraft) => (
+                                    <SelectItem key={aircraft.id} value={aircraft.id}>
+                                      {aircraft.registration} - {aircraft.manufacturer} {aircraft.type} {aircraft.model && `(${aircraft.model})`}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {booking.aircraft
+                                  ? `${booking.aircraft.registration} - ${booking.aircraft.manufacturer} ${booking.aircraft.type}`
+                                  : "—"}
+                              </div>
+                            )}
+                          </Field>
+
+                          <Field>
+                            <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                              <IconClock className="h-4 w-4" />
+                              Flight Type
+                            </FieldLabel>
+                            {options ? (
+                              <Select
+                                value={watch("flight_type_id") || "none"}
+                                onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
+                              >
+                                <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
+                                  <SelectValue placeholder="Select Flight Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No flight type</SelectItem>
+                                  {options.flightTypes.map((ft) => (
+                                    <SelectItem key={ft.id} value={ft.id}>
+                                      {ft.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {booking.flight_type?.name || "—"}
+                              </div>
+                            )}
+                          </Field>
+
+                          <Field>
+                            <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                              <IconCalendar className="h-4 w-4" />
+                              Booking Type
+                            </FieldLabel>
+                            <Select
+                              value={watch("booking_type")}
+                              onValueChange={(value) => setValue("booking_type", value as BookingType, { shouldDirty: true })}
+                            >
+                              <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="flight">Flight</SelectItem>
+                                <SelectItem value="groundwork">Ground Work</SelectItem>
+                                <SelectItem value="maintenance">Maintenance</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </Field>
+
+                          <Field>
+                            <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                              <IconBook className="h-4 w-4" />
+                              Lesson
+                            </FieldLabel>
+                            {options ? (
+                              <Select
+                                value={watch("lesson_id") || "none"}
+                                onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
+                              >
+                                <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
+                                  <SelectValue placeholder="Select Lesson" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No lesson selected</SelectItem>
+                                  {options.lessons.map((lesson) => (
+                                    <SelectItem key={lesson.id} value={lesson.id}>
+                                      {lesson.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {booking.lesson_id ? "Lesson selected" : "No lesson selected"}
+                              </div>
+                            )}
+                          </Field>
+
+                          <Field>
+                            <FieldLabel className="text-sm font-semibold text-foreground">Description</FieldLabel>
+                            <Textarea
+                              {...register("purpose")}
+                              placeholder="Enter booking description"
+                              className="min-h-[100px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus-visible:ring-primary/20"
+                            />
+                            {errors.purpose && (
+                              <p className="text-sm text-destructive mt-1">{errors.purpose.message}</p>
+                            )}
+                          </Field>
+
+                          <Field>
+                            <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                              <IconAlertTriangle className="h-4 w-4" />
+                              Operational Remarks
+                            </FieldLabel>
+                            <Textarea
+                              {...register("remarks")}
+                              placeholder="Enter operational remarks or warnings"
+                              className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 min-h-[100px] focus-visible:ring-amber-500/20"
+                            />
+                          </Field>
+                        </CardContent>
+                      </Card>
+
+                      {/* Training Section */}
+                      {(booking.flight_type || booking.lesson) && (
+                        <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                          <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                                <IconSchool className="h-4 w-4 text-muted-foreground" />
+                                Training
+                              </CardTitle>
+                              {isAdminOrInstructor && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                                  onClick={() => {
+                                    // TODO: Implement add training functionality
+                                    toast.info("Add training functionality to be implemented")
+                                  }}
+                                >
+                                  <IconPlus className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-4 space-y-3">
+                            {booking.flight_type && (
+                              <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                                <div className="text-sm font-medium text-foreground">{booking.flight_type.name}</div>
+                              </div>
+                            )}
+                            {booking.lesson && (
+                              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                                <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">{booking.lesson.name}</div>
+                                <Badge variant="outline" className="text-xs border-gray-300 dark:border-gray-700">
+                                  <IconCalendar className="h-3 w-3 mr-1" />
+                                  Scheduled
+                                </Badge>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </FieldGroup>
+                  </form>
+                </div>
+              </div>
+
+              {/* Mobile Fixed Bottom Action Buttons */}
+              {isMobile && (
+                <div 
+                  className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl z-50"
+                  style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+                >
+                  <div className={`px-4 py-3 flex items-center gap-3 ${
+                    hasChanges && isAdminOrInstructor && booking.status === 'confirmed'
+                      ? 'flex-col'
+                      : 'flex-row'
+                  }`}>
+                    {/* Save Changes Bar - Show when form is dirty */}
+                    {hasChanges && isAdminOrInstructor && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          onClick={handleUndo}
+                          disabled={updateMutation.isPending}
+                          className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${
+                            hasChanges && booking.status === 'confirmed'
+                              ? 'w-full'
+                              : 'flex-1'
+                          }`}
+                        >
+                          <IconRotateClockwise className="h-4 w-4 mr-2" />
+                          Undo Changes
+                        </Button>
+                        <Button
+                          size="lg"
+                          onClick={handleSubmit(onSubmit)}
+                          disabled={updateMutation.isPending}
+                          className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${
+                            hasChanges && booking.status === 'confirmed'
+                              ? 'w-full'
+                              : 'flex-1'
+                          }`}
+                        >
+                          <IconDeviceFloppy className="h-4 w-4 mr-2" />
+                          {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                        </Button>
+                      </>
+                    )}
+                    
+                    {/* Conditional Status Buttons */}
+                    {isAdminOrInstructor && (
+                      <>
+                        {booking.status === 'unconfirmed' && (
+                          <Button 
+                            size="lg" 
+                            className="bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all h-12 flex-1 px-6 text-base font-semibold"
+                            onClick={handleConfirmBooking}
+                            disabled={statusUpdateMutation.isPending}
+                          >
+                            <IconCheck className="h-5 w-5 mr-2" />
+                            {statusUpdateMutation.isPending ? "Confirming..." : "Confirm"}
+                          </Button>
+                        )}
+                        {booking.status === 'confirmed' && (
+                          <Button 
+                            size="lg" 
+                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all h-12 flex-1 px-6 text-base font-semibold"
+                            onClick={handleCheckFlightOut}
+                            disabled={statusUpdateMutation.isPending}
+                          >
+                            <IconPlane className="h-5 w-5 mr-2" />
+                            {statusUpdateMutation.isPending ? "Checking..." : "Check Out"}
+                          </Button>
+                        )}
+                        {booking.status === 'flying' && (
+                          <Button 
+                            size="lg" 
+                            className="bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all h-12 flex-1 px-6 text-base font-semibold"
+                            onClick={handleCheckFlightIn}
+                            disabled={statusUpdateMutation.isPending}
+                          >
+                            <IconCheck className="h-5 w-5 mr-2" />
+                            {statusUpdateMutation.isPending ? "Checking..." : "Check In"}
+                          </Button>
+                        )}
+                        
+                        {/* Options Menu Button */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="lg" 
+                              className="border-border/50 hover:bg-accent/80 h-12 w-12 p-0"
+                            >
+                              <IconDotsVertical className="h-5 w-5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent 
+                            align="end"
+                            className="w-56 rounded-xl shadow-lg border border-border/50 bg-card p-2 mb-2"
+                          >
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                // TODO: Implement print checkout sheet functionality
+                                toast.info("Print checkout sheet functionality to be implemented")
+                              }}
+                              className="rounded-lg px-4 py-3 cursor-pointer focus:bg-muted/50 transition-colors my-0.5"
+                            >
+                              <IconFileText className="h-4 w-4 mr-3 text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Print Checkout Sheet</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                // TODO: Implement other options
+                                toast.info("Additional options to be implemented")
+                              }}
+                              className="rounded-lg px-4 py-3 cursor-pointer focus:bg-muted/50 transition-colors my-0.5"
+                            >
+                              <IconEye className="h-4 w-4 mr-3 text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">View Details</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                // TODO: Implement cancel booking
+                                toast.info("Cancel booking functionality to be implemented")
+                              }}
+                              className="rounded-lg px-4 py-3 cursor-pointer focus:bg-red-50 dark:focus:bg-red-950/30 transition-colors my-0.5"
+                            >
+                              <IconTrash className="h-4 w-4 mr-3 text-red-600 dark:text-red-400 flex-shrink-0" />
+                              <span className="text-sm font-medium text-red-600 dark:text-red-400">Cancel Booking</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+              </>
+            ) : (
+              /* Desktop Header Section */
             <div className="border-b border-border/40 bg-gradient-to-br from-slate-50 via-blue-50/30 to-background dark:from-slate-900 dark:via-slate-800/50 dark:to-background">
               <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
                 {/* Top Row: Back Button and Status Badge */}
@@ -660,56 +1474,41 @@ export default function BookingDetailPage() {
                   </h1>
                 </div>
 
-                {/* Action Buttons Row */}
+                {/* Desktop Action Buttons Row */}
                 {isAdminOrInstructor && (
-                  <div className="flex flex-row items-center gap-3 sm:gap-4">
+                  <div className="flex flex-row items-center gap-3 sm:gap-4 mt-6">
                     {/* Conditional Status Buttons */}
                     {booking.status === 'unconfirmed' && (
                       <Button 
                         size="lg" 
-                        className="bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all h-12 sm:h-11 flex-1 sm:flex-initial px-6 sm:px-8 text-base font-semibold"
+                        className="bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all h-11 flex-initial px-8 text-base font-semibold"
                         onClick={handleConfirmBooking}
                         disabled={statusUpdateMutation.isPending}
                       >
                         <IconCheck className="h-5 w-5 mr-2" />
-                        <span className="hidden sm:inline">
                           {statusUpdateMutation.isPending ? "Confirming..." : "Confirm Booking"}
-                        </span>
-                        <span className="sm:hidden">
-                          {statusUpdateMutation.isPending ? "Confirming..." : "Confirm"}
-                        </span>
                       </Button>
                     )}
                     {booking.status === 'confirmed' && (
                       <Button 
                         size="lg" 
-                        className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all h-12 sm:h-11 flex-1 sm:flex-initial px-6 sm:px-8 text-base font-semibold"
+                        className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all h-11 flex-initial px-8 text-base font-semibold"
                         onClick={handleCheckFlightOut}
                         disabled={statusUpdateMutation.isPending}
                       >
                         <IconPlane className="h-5 w-5 mr-2" />
-                        <span className="hidden sm:inline">
                           {statusUpdateMutation.isPending ? "Checking Out..." : "Check Flight Out"}
-                        </span>
-                        <span className="sm:hidden">
-                          {statusUpdateMutation.isPending ? "Checking..." : "Check Out"}
-                        </span>
                       </Button>
                     )}
                     {booking.status === 'flying' && (
                       <Button 
                         size="lg" 
-                        className="bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all h-12 sm:h-11 flex-1 sm:flex-initial px-6 sm:px-8 text-base font-semibold"
+                        className="bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all h-11 flex-initial px-8 text-base font-semibold"
                         onClick={handleCheckFlightIn}
                         disabled={statusUpdateMutation.isPending}
                       >
                         <IconCheck className="h-5 w-5 mr-2" />
-                        <span className="hidden sm:inline">
                           {statusUpdateMutation.isPending ? "Checking In..." : "Check Flight In"}
-                        </span>
-                        <span className="sm:hidden">
-                          {statusUpdateMutation.isPending ? "Checking..." : "Check In"}
-                        </span>
                       </Button>
                     )}
                     
@@ -719,7 +1518,7 @@ export default function BookingDetailPage() {
                         <Button 
                           variant="outline" 
                           size="lg" 
-                          className="border-border/50 hover:bg-accent/80 h-12 sm:h-11 flex-1 sm:flex-initial px-6 sm:px-8 text-base font-medium rounded-lg"
+                          className="border-border/50 hover:bg-accent/80 h-11 flex-initial px-8 text-base font-medium rounded-lg"
                         >
                           <IconDotsVertical className="h-5 w-5 mr-2" />
                           Options
@@ -727,8 +1526,8 @@ export default function BookingDetailPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent 
-                        align={isMobile ? "center" : "end"}
-                        className={`${isMobile ? "w-[calc(100vw-2rem)]" : "w-56"} rounded-xl shadow-lg border border-border/50 bg-card p-2`}
+                        align="end"
+                        className="w-56 rounded-xl shadow-lg border border-border/50 bg-card p-2"
                       >
                         <DropdownMenuItem 
                           onClick={() => {
@@ -766,11 +1565,11 @@ export default function BookingDetailPage() {
                 )}
               </div>
             </div>
+            )}
 
-            {/* Main Content with Generous Padding */}
-            <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 ${
-              isMobile ? "pt-8 pb-24" : "pt-10 pb-28"
-            }`}>
+            {/* Main Content with Generous Padding - Hidden on Mobile */}
+            {!isMobile && (
+            <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 pt-10 pb-28`}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                 {/* Left Column: Booking Details */}
                 <div className="lg:col-span-2 space-y-6">
@@ -1326,6 +2125,7 @@ export default function BookingDetailPage() {
                 )}
               </Card>
             </div>
+            )}
           </div>
           
           {/* Sticky Bottom Bar - Save Changes */}

@@ -597,52 +597,46 @@ export default function BookingCheckinPage() {
                 <div className="lg:col-span-2 space-y-6 lg:space-y-8">
                   {/* Flight Details Form */}
                   <Card className="bg-card shadow-md border border-border/50 rounded-xl">
-                    <CardHeader className="pb-6 border-b border-border/20">
-                      <CardTitle className="flex items-center gap-3 text-2xl font-bold text-foreground">
-                        <IconPlane className="h-6 w-6 text-foreground" />
-                        Flight Details
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-6 space-y-6">
+                    <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                       <form onSubmit={handleFormSubmit}>
                         <FieldSet className="w-full max-w-full">
                           <FieldGroup className="w-full max-w-full">
                             {/* Meter Readings Section */}
-                            <FieldSet className="p-3 gap-3 rounded-lg w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
-                              <FieldGroup className="gap-3">
+                            <FieldSet className="p-4 sm:p-3 gap-4 sm:gap-3 rounded-lg w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
+                              <FieldGroup className="gap-4 sm:gap-3">
                                 {/* Tacho Meter */}
-                                <FieldSet className="gap-2">
-                                  <div className="flex items-center justify-between mb-1.5">
-                                    <FieldLegend className="flex items-center gap-1.5 text-sm font-semibold">
-                                      <IconPlane className="h-3.5 w-3.5" />
+                                <FieldSet className="gap-3 sm:gap-2">
+                                  <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                    <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                      <IconPlane className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                                       Tacho Meter
                                     </FieldLegend>
-                                    <div className="text-xs font-medium text-muted-foreground">
+                                    <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
                                       {displayedTachHours > 0 ? `${displayedTachHours.toFixed(1)}h` : "0.0h"}
                                     </div>
                                   </div>
-                                  <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                    <Field data-invalid={!!errors.tach_start} className="gap-1">
-                                      <FieldLabel htmlFor="tach_start" className="text-xs">Start Tacho</FieldLabel>
+                                  <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                    <Field data-invalid={!!errors.tach_start} className="gap-2 sm:gap-1">
+                                      <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
                                       <Input
                                         id="tach_start"
                                         type="number"
                                         step="0.1"
                                         {...register("tach_start", { valueAsNumber: true })}
-                                        className="h-9 sm:h-10 px-3 text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+                                        className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
                                         placeholder="8752.2"
                                         aria-invalid={!!errors.tach_start}
                                       />
                                       <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
                                     </Field>
-                                    <Field data-invalid={!!errors.tach_end} className="gap-1">
-                                      <FieldLabel htmlFor="tach_end" className="text-xs">End Tacho</FieldLabel>
+                                    <Field data-invalid={!!errors.tach_end} className="gap-2 sm:gap-1">
+                                      <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
                                       <Input
                                         id="tach_end"
                                         type="number"
                                         step="0.1"
                                         {...register("tach_end", { valueAsNumber: true })}
-                                        className="h-9 sm:h-10 px-3 text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+                                        className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
                                         placeholder="8754.5"
                                         aria-invalid={!!errors.tach_end}
                                       />
@@ -652,38 +646,38 @@ export default function BookingCheckinPage() {
                                 </FieldSet>
 
                                 {/* Hobbs Meter */}
-                                <FieldSet className="gap-2">
-                                  <div className="flex items-center justify-between mb-1.5">
-                                    <FieldLegend className="flex items-center gap-1.5 text-sm font-semibold">
-                                      <IconClock className="h-3.5 w-3.5" />
+                                <FieldSet className="gap-3 sm:gap-2">
+                                  <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                    <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                      <IconClock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                                       Hobbs Meter
                                     </FieldLegend>
-                                    <div className="text-xs font-medium text-muted-foreground">
+                                    <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
                                       {displayedHobbsHours > 0 ? `${displayedHobbsHours.toFixed(1)}h` : "0.0h"}
                                     </div>
                                   </div>
-                                  <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                    <Field data-invalid={!!errors.hobbs_start} className="gap-1">
-                                      <FieldLabel htmlFor="hobbs_start" className="text-xs">Start Hobbs</FieldLabel>
+                                  <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                    <Field data-invalid={!!errors.hobbs_start} className="gap-2 sm:gap-1">
+                                      <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
                                       <Input
                                         id="hobbs_start"
                                         type="number"
                                         step="0.1"
                                         {...register("hobbs_start", { valueAsNumber: true })}
-                                        className="h-9 sm:h-10 px-3 text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+                                        className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
                                         placeholder="8752.2"
                                         aria-invalid={!!errors.hobbs_start}
                                       />
                                       <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
                                     </Field>
-                                    <Field data-invalid={!!errors.hobbs_end} className="gap-1">
-                                      <FieldLabel htmlFor="hobbs_end" className="text-xs">End Hobbs</FieldLabel>
+                                    <Field data-invalid={!!errors.hobbs_end} className="gap-2 sm:gap-1">
+                                      <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
                                       <Input
                                         id="hobbs_end"
                                         type="number"
                                         step="0.1"
                                         {...register("hobbs_end", { valueAsNumber: true })}
-                                        className="h-9 sm:h-10 px-3 text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+                                        className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
                                         placeholder="8754.5"
                                         aria-invalid={!!errors.hobbs_end}
                                       />
@@ -699,7 +693,7 @@ export default function BookingCheckinPage() {
                                     size="lg"
                                     onClick={handleFormSubmit}
                                     disabled={checkinMutation.isPending}
-                                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-11"
+                                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-12 sm:h-11 text-base sm:text-sm font-semibold"
                                   >
                                     <IconFileText className="h-5 w-5 mr-2" />
                                     {checkinMutation.isPending ? "Calculating..." : "Calculate Flight Charges"}
@@ -710,10 +704,10 @@ export default function BookingCheckinPage() {
 
                             {/* Flight Information */}
                             <FieldSet>
-                              <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <Field data-invalid={!!errors.flight_type_id}>
-                                  <FieldLabel htmlFor="flight_type_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
-                                    <IconClock className="h-4 w-4 text-primary" />
+                              <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                                <Field data-invalid={!!errors.flight_type_id} className="gap-2 sm:gap-1.5">
+                                  <FieldLabel htmlFor="flight_type_id" className="flex items-center gap-2 text-base sm:text-sm font-medium text-foreground">
+                                    <IconClock className="h-5 w-5 sm:h-4 sm:w-4 text-primary" />
                                     Flight Type
                                   </FieldLabel>
                                   {options ? (
@@ -721,7 +715,7 @@ export default function BookingCheckinPage() {
                                       value={watch("flight_type_id") || "none"}
                                       onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
-                                      <SelectTrigger id="flight_type_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800" aria-invalid={!!errors.flight_type_id}>
+                                      <SelectTrigger id="flight_type_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20" aria-invalid={!!errors.flight_type_id}>
                                         <SelectValue placeholder="Select Flight Type" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -734,7 +728,7 @@ export default function BookingCheckinPage() {
                                       </SelectContent>
                                     </Select>
                                   ) : (
-                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
                                       {booking.flight_type?.name || "—"}
                                     </div>
                                   )}
@@ -743,9 +737,9 @@ export default function BookingCheckinPage() {
                                   )}
                                 </Field>
 
-                                <Field>
-                                  <FieldLabel htmlFor="checked_out_instructor_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
-                                    <IconSchool className="h-4 w-4 text-foreground" />
+                                <Field className="gap-2 sm:gap-1.5">
+                                  <FieldLabel htmlFor="checked_out_instructor_id" className="flex items-center gap-2 text-base sm:text-sm font-medium text-foreground">
+                                    <IconSchool className="h-5 w-5 sm:h-4 sm:w-4 text-foreground" />
                                     Instructor
                                   </FieldLabel>
                                   {isAdminOrInstructor && options ? (
@@ -753,7 +747,7 @@ export default function BookingCheckinPage() {
                                       value={watch("checked_out_instructor_id") || "none"}
                                       onValueChange={(value) => setValue("checked_out_instructor_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
-                                      <SelectTrigger id="checked_out_instructor_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
+                                      <SelectTrigger id="checked_out_instructor_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20">
                                         <SelectValue placeholder="Select Instructor" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -771,7 +765,7 @@ export default function BookingCheckinPage() {
                                       </SelectContent>
                                     </Select>
                                   ) : (
-                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
                                       {instructorName}
                                     </div>
                                   )}

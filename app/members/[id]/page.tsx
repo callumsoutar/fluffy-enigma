@@ -45,6 +45,7 @@ import type { MemberWithRelations } from "@/lib/types/members"
 import { MemberPilotDetails } from "@/components/members/member-pilot-details"
 import { MemberContactDetails } from "@/components/members/member-contact-details"
 import { MemberMemberships } from "@/components/members/member-memberships"
+import { MemberAccountTab } from "@/components/members/member-account-tab"
 
 async function fetchMember(id: string): Promise<MemberWithRelations> {
   const response = await fetch(`/api/members/${id}`)
@@ -441,10 +442,7 @@ export default function MemberDetailPage() {
                         </Tabs.Content>
 
                         <Tabs.Content value="account">
-                          <div>
-                            <h2 className="text-lg font-semibold mb-4">Account</h2>
-                            <p className="text-muted-foreground">Account information coming soon...</p>
-                          </div>
+                          <MemberAccountTab memberId={memberId} member={member} />
                         </Tabs.Content>
 
                         <Tabs.Content value="flights">

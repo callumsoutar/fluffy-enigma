@@ -110,9 +110,12 @@ export async function GET(request: NextRequest) {
    * To ensure the statement reflects reality, we include those transaction credits *only when*
    * they are not already linked from invoice_payments.transaction_id (to avoid double counting).
    */
+  type PaymentWithTransactionId = {
+    transaction_id?: string | null
+  }
   const paymentTransactionIds = new Set(
     (payments ?? [])
-      .map((p) => (p as any)?.transaction_id as string | null | undefined)
+      .map((p) => (p as PaymentWithTransactionId)?.transaction_id)
       .filter((id): id is string => typeof id === 'string' && id.length > 0)
   )
 
@@ -151,9 +154,14 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  type PaymentWithInvoice = {
+    invoice?: Array<{
+      invoice_number: string | null
+    }> | null
+  }
   for (const pay of payments ?? []) {
     const amount = toNumber(pay.amount)
-    const invoiceNumber = (pay as any)?.invoice?.invoice_number as string | null | undefined
+    const invoiceNumber = (pay as PaymentWithInvoice)?.invoice?.[0]?.invoice_number ?? null
     const paymentReference = pay.payment_reference ?? null
     const refBits = [
       'PAY',
@@ -172,11 +180,14 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  type TransactionWithMetadata = {
+    metadata?: Record<string, unknown> | null
+  }
   for (const tx of legacyCredits ?? []) {
     // Skip credits already represented by invoice_payments.
     if (paymentTransactionIds.has(tx.id)) continue
 
-    const meta = (tx as any)?.metadata as Record<string, unknown> | null | undefined
+    const meta = (tx as TransactionWithMetadata)?.metadata ?? null
     const invoiceNumber = typeof meta?.invoice_number === 'string' ? meta.invoice_number : null
     const paymentNumber = typeof meta?.payment_number === 'string' ? meta.payment_number : null
     const txKind = typeof meta?.transaction_type === 'string' ? meta.transaction_type : null
@@ -249,7 +260,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to compute outstanding balance' }, { status: 500 })
   }
 
-  const outstandingBalance = (outstandingRows ?? []).reduce((acc, row) => acc + toNumber((row as any).balance_due), 0)
+  type InvoiceRow = {
+    balance_due: number | null
+    status: string
+  }
+  const outstandingBalance = (outstandingRows ?? []).reduce((acc, row) => acc + toNumber((row as InvoiceRow).balance_due), 0)
 
   const payload: AccountStatementResponse = {
     statement,

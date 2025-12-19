@@ -63,7 +63,9 @@ function CommandDialog({
 function CommandInput({
   className,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Input>) {
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>,
+ref: React.ForwardedRef<React.ElementRef<typeof CommandPrimitive.Input>>
+) {
   return (
     <div
       data-slot="command-input-wrapper"
@@ -71,6 +73,7 @@ function CommandInput({
     >
       <SearchIcon className="size-4 shrink-0 opacity-50" />
       <CommandPrimitive.Input
+        ref={ref}
         data-slot="command-input"
         className={cn(
           "placeholder:text-muted-foreground flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
@@ -81,6 +84,9 @@ function CommandInput({
     </div>
   )
 }
+
+const ForwardedCommandInput = React.forwardRef(CommandInput)
+ForwardedCommandInput.displayName = "CommandInput"
 
 function CommandList({
   className,
@@ -174,7 +180,7 @@ function CommandShortcut({
 export {
   Command,
   CommandDialog,
-  CommandInput,
+  ForwardedCommandInput as CommandInput,
   CommandList,
   CommandEmpty,
   CommandGroup,

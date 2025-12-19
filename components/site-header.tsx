@@ -7,10 +7,37 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { IconPlaneDeparture } from "@tabler/icons-react"
+import { useAuth } from "@/contexts/auth-context"
+
+function getUserInitials(name: string, email: string): string {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/)
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    }
+    return name.substring(0, 2).toUpperCase()
+  }
+  if (email) {
+    return email.substring(0, 2).toUpperCase()
+  }
+  return "U"
+}
 
 export function SiteHeader() {
   const isMobile = useIsMobile()
   const { toggleSidebar } = useSidebar()
+  const { user } = useAuth()
+  
+  const userName = user
+    ? user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.email?.split("@")[0] ||
+      "User"
+    : "Guest"
+  
+  const userEmail = user?.email || ""
+  const userAvatar = user?.user_metadata?.avatar_url || ""
+  const userInitials = getUserInitials(userName, userEmail)
   
   return (
     <header className={`flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height) ${
@@ -37,8 +64,10 @@ export function SiteHeader() {
             </div>
             <div className="flex items-center">
               <Avatar className="h-8 w-8">
-                <AvatarImage src="/avatars/callum.jpg" alt="Callum Soutar" />
-                <AvatarFallback className="bg-slate-700/80 text-slate-100">CS</AvatarFallback>
+                <AvatarImage src={userAvatar} alt={userName} />
+                <AvatarFallback className="bg-slate-700/80 text-slate-100">
+                  {userInitials}
+                </AvatarFallback>
               </Avatar>
             </div>
           </>
@@ -52,10 +81,10 @@ export function SiteHeader() {
             />
             <div className="ml-auto flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Hello,</span>
-              <span className="text-sm font-medium">Callum Soutar</span>
+              <span className="text-sm font-medium">{userName}</span>
               <Avatar className="h-8 w-8">
-                <AvatarImage src="/avatars/callum.jpg" alt="Callum Soutar" />
-                <AvatarFallback>CS</AvatarFallback>
+                <AvatarImage src={userAvatar} alt={userName} />
+                <AvatarFallback>{userInitials}</AvatarFallback>
               </Avatar>
             </div>
           </>

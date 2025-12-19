@@ -111,9 +111,9 @@ const navigationConfig: NavSection[] = [
       items: [
         {
           title: "Invoicing",
-        url: "/invoicing",
+          url: "/invoices",
           icon: IconFileInvoice,
-        roles: ['owner', 'admin', 'instructor'],
+          roles: ['owner', 'admin', 'instructor'],
         },
         {
           title: "Training",

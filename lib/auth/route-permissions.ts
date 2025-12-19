@@ -39,7 +39,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   { path: '/members', allowedRoles: ['owner', 'admin', 'instructor'] },
   { path: '/training', allowedRoles: ['owner', 'admin', 'instructor'] },
   { path: '/equipment', allowedRoles: ['owner', 'admin', 'instructor'] },
-  { path: '/invoicing', allowedRoles: ['owner', 'admin', 'instructor'] },
+  { path: '/invoices', allowedRoles: ['owner', 'admin', 'instructor'] },
   { path: '/tasks', allowedRoles: ['owner', 'admin', 'instructor'] },
   
   // Member and above

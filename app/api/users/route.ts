@@ -1,0 +1,81 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { userHasAnyRole } from '@/lib/auth/roles'
+
+/**
+ * GET /api/users
+ * 
+ * Fetch users for selection (e.g., in invoice member select)
+ * Requires authentication and instructor/admin/owner role
+ * 
+ * Query parameters:
+ * - search: string - Search in first_name, last_name, email
+ * - id: string - Get specific user by ID
+ */
+export async function GET(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Check authentication
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    )
+  }
+
+  // Check authorization - only instructors, admins, and owners can view users
+  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  if (!hasAccess) {
+    return NextResponse.json(
+      { error: 'Forbidden: Insufficient permissions' },
+      { status: 403 }
+    )
+  }
+
+  // Get query parameters
+  const searchParams = request.nextUrl.searchParams
+  const search = searchParams.get('search')
+  const userId = searchParams.get('id')
+
+  // Build query
+  let query = supabase
+    .from('users')
+    .select('id, first_name, last_name, email')
+    .eq('is_active', true)
+    .order('first_name', { ascending: true })
+    .order('last_name', { ascending: true })
+
+  // Filter by specific user ID if provided
+  if (userId) {
+    query = query.eq('id', userId)
+  }
+
+  // Execute query
+  const { data: users, error } = await query
+
+  if (error) {
+    console.error('Error fetching users:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch users' },
+      { status: 500 }
+    )
+  }
+
+  // Apply search filter in memory
+  let filteredUsers = users || []
+
+  if (search) {
+    const searchLower = search.toLowerCase()
+    filteredUsers = filteredUsers.filter((u) => {
+      const firstNameMatch = u.first_name?.toLowerCase().includes(searchLower)
+      const lastNameMatch = u.last_name?.toLowerCase().includes(searchLower)
+      const emailMatch = u.email?.toLowerCase().includes(searchLower)
+      return firstNameMatch || lastNameMatch || emailMatch
+    })
+  }
+
+  return NextResponse.json({
+    users: filteredUsers,
+  })
+}

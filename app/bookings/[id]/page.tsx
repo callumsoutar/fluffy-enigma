@@ -27,7 +27,6 @@ import {
   IconCheck,
   IconPhone,
   IconMessage,
-  IconPlus,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -1256,49 +1255,6 @@ export default function BookingDetailPage() {
                           </Field>
                         </CardContent>
                       </Card>
-
-                      {/* Training Section */}
-                      {(booking.flight_type || booking.lesson) && (
-                        <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
-                          <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                                <IconSchool className="h-4 w-4 text-muted-foreground" />
-                                Training
-                              </CardTitle>
-                              {isAdminOrInstructor && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
-                                  onClick={() => {
-                                    // TODO: Implement add training functionality
-                                    toast.info("Add training functionality to be implemented")
-                                  }}
-                                >
-                                  <IconPlus className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </CardHeader>
-                          <CardContent className="pt-4 space-y-3">
-                            {booking.flight_type && (
-                              <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
-                                <div className="text-sm font-medium text-foreground">{booking.flight_type.name}</div>
-                              </div>
-                            )}
-                            {booking.lesson && (
-                              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
-                                <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">{booking.lesson.name}</div>
-                                <Badge variant="outline" className="text-xs border-gray-300 dark:border-gray-700">
-                                  <IconCalendar className="h-3 w-3 mr-1" />
-                                  Scheduled
-                                </Badge>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      )}
                     </FieldGroup>
                   </form>
                 </div>

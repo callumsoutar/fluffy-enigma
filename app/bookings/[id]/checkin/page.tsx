@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -11,8 +11,6 @@ import {
   IconPlane,
   IconSchool,
   IconFileText,
-  IconDeviceFloppy,
-  IconRotateClockwise,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -26,6 +24,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
   Field,
   FieldError,
   FieldGroup,
@@ -34,6 +40,7 @@ import {
   FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -44,6 +51,8 @@ import {
 import type { BookingWithRelations } from "@/lib/types/bookings"
 import { bookingUpdateSchema } from "@/lib/validation/bookings"
 import { z } from "zod"
+import { useOrganizationTaxRate } from "@/hooks/use-tax-rate"
+import { InvoiceCalculations, roundToTwoDecimals } from "@/lib/invoice-calculations"
 
 type FlightLogCheckinFormData = z.infer<typeof bookingUpdateSchema>
 import { useAuth } from "@/contexts/auth-context"
@@ -68,7 +77,7 @@ interface BookingOptions {
   aircraft: Array<{ id: string; registration: string; type: string; model: string | null; manufacturer: string | null }>
   members: Array<{ id: string; first_name: string | null; last_name: string | null; email: string }>
   instructors: Array<{ id: string; first_name: string | null; last_name: string | null; user: { id: string; email: string } | null }>
-  flightTypes: Array<{ id: string; name: string }>
+  flightTypes: Array<{ id: string; name: string; instruction_type: 'trial' | 'dual' | 'solo' | null }>
   lessons: Array<{ id: string; name: string; description: string | null }>
 }
 
@@ -80,102 +89,66 @@ function getErrorMessage(err: unknown) {
 
 // Calculate flight hours from meter readings
 function calculateFlightHours(start: number | null | undefined, end: number | null | undefined): number {
-  if (!start || !end || end < start) return 0
+  if (start == null || end == null || end < start) return 0
   return parseFloat((end - start).toFixed(1))
+}
+
+type ChargeBasis = 'hobbs' | 'tacho' | 'airswitch'
+
+type ChargeRate = {
+  id: string
+  rate_per_hour: number | string
+  charge_hobbs: boolean
+  charge_tacho: boolean
+  charge_airswitch: boolean
+}
+
+type GeneratedInvoiceItem = {
+  chargeable_id: string | null
+  description: string
+  quantity: number
+  unit_price: number // tax-exclusive
+  tax_rate: number | null
+  notes?: string | null
+}
+
+type CalculatedInvoiceLine = GeneratedInvoiceItem & {
+  amount: number
+  tax_amount: number
+  rate_inclusive: number
+  line_total: number
+}
+
+function deriveChargeBasisFromFlags(rate: ChargeRate | null | undefined): ChargeBasis | null {
+  if (!rate) return null
+  // Prefer the canonical single-flag case, but tolerate bad data.
+  if (rate.charge_hobbs && !rate.charge_tacho && !rate.charge_airswitch) return 'hobbs'
+  if (rate.charge_tacho && !rate.charge_hobbs && !rate.charge_airswitch) return 'tacho'
+  if (rate.charge_airswitch && !rate.charge_hobbs && !rate.charge_tacho) return 'airswitch'
+
+  // Multiple flags (data issue): choose deterministic priority.
+  if (rate.charge_hobbs) return 'hobbs'
+  if (rate.charge_tacho) return 'tacho'
+  if (rate.charge_airswitch) return 'airswitch'
+  return null
 }
 
 export default function BookingCheckinPage() {
   const params = useParams()
+  const router = useRouter()
   const { role } = useAuth()
   const bookingId = params.id as string
   const isMobile = useIsMobile()
 
   const queryClient = useQueryClient()
+
+  const { taxRate: organizationTaxRate } = useOrganizationTaxRate()
+  const taxRate = organizationTaxRate ?? 0.15
   
-  // Track sidebar state for banner positioning - must be called before any conditional returns
-  const [sidebarLeft, setSidebarLeft] = React.useState(0)
-  
-  React.useEffect(() => {
-    if (isMobile) {
-      setSidebarLeft(0)
-      return
-    }
-
-    const updateSidebarPosition = () => {
-      // Find the sidebar gap element which shows the actual sidebar width
-      const sidebarGap = document.querySelector('[data-slot="sidebar-gap"]')
-      if (sidebarGap) {
-        const computedWidth = window.getComputedStyle(sidebarGap).width
-        const width = parseFloat(computedWidth) || 0
-        setSidebarLeft(width)
-        return
-      }
-
-      // Fallback: Check sidebar state from data attributes
-      const sidebar = document.querySelector('[data-slot="sidebar"]')
-      if (!sidebar) {
-        setSidebarLeft(0)
-        return
-      }
-
-      const state = sidebar.getAttribute('data-state')
-      const collapsible = sidebar.getAttribute('data-collapsible')
-      
-      // Calculate left offset based on sidebar state
-      if (state === 'collapsed') {
-        if (collapsible === 'icon') {
-          // Icon mode: use icon width (3rem = 48px)
-          setSidebarLeft(48)
-        } else {
-          // Offcanvas mode: sidebar is hidden
-          setSidebarLeft(0)
-        }
-      } else {
-        // Expanded: get actual width from CSS variable or computed style
-        const sidebarContainer = sidebar.querySelector('[data-slot="sidebar-container"]')
-        if (sidebarContainer) {
-          const computedWidth = window.getComputedStyle(sidebarContainer).width
-          const width = parseFloat(computedWidth) || 256
-          setSidebarLeft(width)
-        } else {
-          setSidebarLeft(256) // Fallback
-        }
-      }
-    }
-
-    // Initial check with a small delay to ensure DOM is ready
-    const timeoutId = setTimeout(updateSidebarPosition, 100)
-
-    // Watch for changes using MutationObserver
-    const observer = new MutationObserver(updateSidebarPosition)
-    const sidebarWrapper = document.querySelector('[data-slot="sidebar-wrapper"]')
-    if (sidebarWrapper) {
-      observer.observe(sidebarWrapper, {
-        attributes: true,
-        attributeFilter: ['data-state', 'data-collapsible'],
-        subtree: true,
-        childList: true,
-        attributeOldValue: false
-      })
-    }
-
-    // Also listen for resize in case sidebar width changes
-    window.addEventListener('resize', updateSidebarPosition)
-    // Listen for transition end in case sidebar is animating
-    window.addEventListener('transitionend', updateSidebarPosition)
-
-    return () => {
-      clearTimeout(timeoutId)
-      observer.disconnect()
-      window.removeEventListener('resize', updateSidebarPosition)
-      window.removeEventListener('transitionend', updateSidebarPosition)
-    }
-  }, [isMobile])
-
   const {
     register,
     handleSubmit,
-    formState: { errors, isDirty },
+    formState: { errors },
     reset,
     watch,
     setValue,
@@ -186,25 +159,20 @@ export default function BookingCheckinPage() {
     defaultValues: {},
   })
 
+  // Watch key check-in fields (used for live calculations + rate fetching)
+  const hobbsStart = watch("hobbs_start")
+  const hobbsEnd = watch("hobbs_end")
+  const tachStart = watch("tach_start")
+  const tachEnd = watch("tach_end")
+  const soloEndHobbs = watch("solo_end_hobbs")
+  const soloEndTach = watch("solo_end_tach")
+
   // Local state
-  const [isInitialized, setIsInitialized] = React.useState(false)
   
   // Use a ref to track if we're currently initializing
   const isInitializingRef = React.useRef(false)
 
-  // Track form dirty state - only show changes after initialization is complete
-  const [hasChanges, setHasChanges] = React.useState(false)
-  
-  React.useEffect(() => {
-    // Don't show banner during initialization
-    if (isInitializingRef.current || !isInitialized) {
-      setHasChanges(false)
-      return
-    }
-    
-    // Only show banner if form is actually dirty
-    setHasChanges(isDirty)
-  }, [isDirty, isInitialized])
+  // We keep this for future UX (e.g. warning before leaving), but there is no "sticky save" UI.
 
   // Fetch booking
   const bookingQuery = useQuery({
@@ -232,6 +200,469 @@ export default function BookingCheckinPage() {
   })
 
   const options = optionsQuery.data ?? null
+
+  // Approval is the immutable/locked state. A draft invoice may exist before approval.
+  const isApproved = !!booking?.checkin_approved_at
+  const checkinInvoiceId = booking?.checkin_invoice_id ?? null
+
+  const [draftCalculation, setDraftCalculation] = React.useState<null | {
+    signature: string
+    calculated_at: string
+    billing_basis: ChargeBasis
+    billing_hours: number
+    dual_time: number
+    solo_time: number
+    items: GeneratedInvoiceItem[]
+    lines: CalculatedInvoiceLine[]
+    totals: { subtotal: number; tax_total: number; total_amount: number }
+  }>(null)
+
+  const selectedAircraftId =
+    watch("checked_out_aircraft_id") ||
+    booking?.checked_out_aircraft_id ||
+    booking?.aircraft_id ||
+    null
+
+  const selectedInstructorId =
+    watch("checked_out_instructor_id") ||
+    booking?.checked_out_instructor_id ||
+    booking?.instructor_id ||
+    null
+
+  const selectedFlightTypeId = watch("flight_type_id") || booking?.flight_type_id || null
+
+  const selectedFlightType = React.useMemo(() => {
+    if (!selectedFlightTypeId) return null
+    const fromOptions = options?.flightTypes?.find((ft) => ft.id === selectedFlightTypeId) ?? null
+    return fromOptions ?? (booking?.flight_type ?? null)
+  }, [selectedFlightTypeId, options?.flightTypes, booking?.flight_type])
+
+  const instructionType = (selectedFlightType as { instruction_type?: 'trial' | 'dual' | 'solo' | null } | null)?.instruction_type ?? null
+
+  const [hasSoloAtEnd, setHasSoloAtEnd] = React.useState(false)
+  const lastSoloInitKey = React.useRef<string | null>(null)
+
+  React.useEffect(() => {
+    if (!booking) return
+    const key = `${booking.id}:${booking.solo_end_hobbs ?? '—'}:${booking.solo_end_tach ?? '—'}`
+    if (lastSoloInitKey.current === key) return
+    lastSoloInitKey.current = key
+    setHasSoloAtEnd(!!booking.solo_end_hobbs || !!booking.solo_end_tach)
+  }, [booking])
+
+  // Solo bookings never need a solo-end input; clear any legacy values.
+  React.useEffect(() => {
+    if (isInitializingRef.current) return
+    if (instructionType !== 'solo') return
+    if (hasSoloAtEnd) setHasSoloAtEnd(false)
+    if (soloEndHobbs != null) setValue("solo_end_hobbs", null, { shouldDirty: true })
+    if (soloEndTach != null) setValue("solo_end_tach", null, { shouldDirty: true })
+  }, [instructionType, hasSoloAtEnd, soloEndHobbs, soloEndTach, setValue])
+
+  const aircraftChargeRateQuery = useQuery({
+    queryKey: ["aircraftChargeRate", selectedAircraftId, selectedFlightTypeId],
+    enabled: !!selectedAircraftId && !!selectedFlightTypeId,
+    queryFn: async () =>
+      fetchJson<{ charge_rate: ChargeRate }>(
+        `/api/aircraft-charge-rates?aircraft_id=${selectedAircraftId}&flight_type_id=${selectedFlightTypeId}`
+      ),
+    staleTime: 5 * 60_000,
+  })
+
+  const instructorChargeRateQuery = useQuery({
+    queryKey: ["instructorChargeRate", selectedInstructorId, selectedFlightTypeId],
+    enabled: !!selectedInstructorId && !!selectedFlightTypeId,
+    queryFn: async () =>
+      fetchJson<{ charge_rate: ChargeRate }>(
+        `/api/instructor-charge-rates?instructor_id=${selectedInstructorId}&flight_type_id=${selectedFlightTypeId}`
+      ),
+    staleTime: 5 * 60_000,
+  })
+
+  const aircraftChargeRate = aircraftChargeRateQuery.data?.charge_rate ?? null
+  const instructorChargeRate = instructorChargeRateQuery.data?.charge_rate ?? null
+
+  const aircraftBillingBasis = React.useMemo(
+    () => deriveChargeBasisFromFlags(aircraftChargeRate),
+    [aircraftChargeRate]
+  )
+
+  // Enforce "no irrelevant solo-end inputs" based on billing basis
+  React.useEffect(() => {
+    if (isInitializingRef.current) return
+    if (!aircraftBillingBasis) return
+    if (aircraftBillingBasis === 'hobbs') {
+      if (soloEndTach != null) setValue("solo_end_tach", null, { shouldDirty: true })
+      return
+    }
+    if (aircraftBillingBasis === 'tacho') {
+      if (soloEndHobbs != null) setValue("solo_end_hobbs", null, { shouldDirty: true })
+      return
+    }
+  }, [aircraftBillingBasis, soloEndHobbs, soloEndTach, setValue])
+
+  // Total time uses the solo-end meter reading when a dual/trial flight ends with a solo portion.
+  const hobbsTotalHours = React.useMemo(() => {
+    const effectiveEnd =
+      instructionType !== 'solo' && hasSoloAtEnd && aircraftBillingBasis === 'hobbs'
+        ? soloEndHobbs
+        : hobbsEnd
+    return calculateFlightHours(hobbsStart, effectiveEnd)
+  }, [hobbsStart, hobbsEnd, soloEndHobbs, hasSoloAtEnd, aircraftBillingBasis, instructionType])
+
+  const tachTotalHours = React.useMemo(() => {
+    const effectiveEnd =
+      instructionType !== 'solo' && hasSoloAtEnd && aircraftBillingBasis === 'tacho'
+        ? soloEndTach
+        : tachEnd
+    return calculateFlightHours(tachStart, effectiveEnd)
+  }, [tachStart, tachEnd, soloEndTach, hasSoloAtEnd, aircraftBillingBasis, instructionType])
+
+  const splitTimes = React.useMemo(() => {
+    if (!aircraftBillingBasis || aircraftBillingBasis === 'airswitch') {
+      return { total: 0, dual: 0, solo: 0, error: null as string | null }
+    }
+
+    if (instructionType === 'solo') {
+      const total = aircraftBillingBasis === 'hobbs' ? hobbsTotalHours : tachTotalHours
+      return { total, dual: 0, solo: total, error: null }
+    }
+
+    const basisStart = aircraftBillingBasis === 'hobbs' ? hobbsStart : tachStart
+    const dualEnd = aircraftBillingBasis === 'hobbs' ? hobbsEnd : tachEnd
+    const finalEnd = aircraftBillingBasis === 'hobbs'
+      ? (hasSoloAtEnd ? soloEndHobbs : hobbsEnd)
+      : (hasSoloAtEnd ? soloEndTach : tachEnd)
+
+    if (hasSoloAtEnd) {
+      if (basisStart == null || dualEnd == null || finalEnd == null) {
+        return { total: 0, dual: 0, solo: 0, error: 'Solo split requires start, dual end, and solo end.' }
+      }
+      if (dualEnd < basisStart) return { total: 0, dual: 0, solo: 0, error: 'Dual end cannot be less than start.' }
+      if (finalEnd < dualEnd) return { total: 0, dual: 0, solo: 0, error: 'Solo end cannot be less than dual end.' }
+
+      const roundToTenth = (v: number) => parseFloat(v.toFixed(1))
+      const dual = roundToTenth(dualEnd - basisStart)
+      const solo = roundToTenth(finalEnd - dualEnd)
+      const total = roundToTenth(dual + solo)
+      return { total, dual, solo, error: null }
+    }
+
+    const total = aircraftBillingBasis === 'hobbs' ? hobbsTotalHours : tachTotalHours
+    return { total, dual: total, solo: 0, error: null }
+  }, [
+    aircraftBillingBasis,
+    instructionType,
+    hasSoloAtEnd,
+    hobbsStart,
+    hobbsEnd,
+    tachStart,
+    tachEnd,
+    soloEndHobbs,
+    soloEndTach,
+    hobbsTotalHours,
+    tachTotalHours,
+  ])
+
+  const billingHours = React.useMemo(() => {
+    if (!aircraftBillingBasis) return 0
+    if (aircraftBillingBasis === 'hobbs') return hobbsTotalHours
+    if (aircraftBillingBasis === 'tacho') return tachTotalHours
+    // UI does not support airswitch inputs; treat as unsupported configuration.
+    return 0
+  }, [aircraftBillingBasis, hobbsTotalHours, tachTotalHours])
+
+  const isAirswitchBillingUnsupported = aircraftBillingBasis === 'airswitch'
+
+  const aircraftRatePerHourExclTax = React.useMemo(() => {
+    if (!aircraftChargeRate) return null
+    const v = typeof aircraftChargeRate.rate_per_hour === 'string'
+      ? parseFloat(aircraftChargeRate.rate_per_hour)
+      : aircraftChargeRate.rate_per_hour
+    return Number.isFinite(v) ? v : null
+  }, [aircraftChargeRate])
+
+  const aircraftRatePerHourInclTax = React.useMemo(() => {
+    if (aircraftRatePerHourExclTax == null) return null
+    return roundToTwoDecimals(aircraftRatePerHourExclTax * (1 + taxRate))
+  }, [aircraftRatePerHourExclTax, taxRate])
+
+  const instructorRatePerHourExclTax = React.useMemo(() => {
+    if (!instructorChargeRate) return null
+    const v = typeof instructorChargeRate.rate_per_hour === 'string'
+      ? parseFloat(instructorChargeRate.rate_per_hour)
+      : instructorChargeRate.rate_per_hour
+    return Number.isFinite(v) ? v : null
+  }, [instructorChargeRate])
+
+  const instructorRatePerHourInclTax = React.useMemo(() => {
+    if (instructorRatePerHourExclTax == null) return null
+    return roundToTwoDecimals(instructorRatePerHourExclTax * (1 + taxRate))
+  }, [instructorRatePerHourExclTax, taxRate])
+
+  // Build invoice items on-demand (called on Save Draft Check-In / Approve),
+  // rather than dynamically recalculating totals while typing.
+  const buildDraftInvoiceItems = React.useCallback((): GeneratedInvoiceItem[] => {
+    if (!booking) return []
+    if (!aircraftChargeRate) return []
+    if (!aircraftBillingBasis) return []
+    if (aircraftBillingBasis === 'airswitch') return []
+    if (billingHours <= 0) return []
+
+    const aircraftRate = typeof aircraftChargeRate.rate_per_hour === 'string'
+      ? parseFloat(aircraftChargeRate.rate_per_hour)
+      : aircraftChargeRate.rate_per_hour
+
+    if (!Number.isFinite(aircraftRate) || aircraftRate <= 0) return []
+
+    const aircraftReg =
+      options?.aircraft?.find((a) => a.id === selectedAircraftId)?.registration ||
+      booking.aircraft?.registration ||
+      'Aircraft'
+
+    const items: GeneratedInvoiceItem[] = [
+      {
+        chargeable_id: null,
+        description: `Aircraft Hire (${aircraftReg})`,
+        quantity: billingHours,
+        unit_price: aircraftRate,
+        tax_rate: taxRate,
+        notes: `Booking ${booking.id}; basis=${aircraftBillingBasis}; total=${billingHours.toFixed(1)}h; dual=${splitTimes.dual.toFixed(1)}h; solo=${splitTimes.solo.toFixed(1)}h; hobbs=${hobbsStart ?? '—'}→${hobbsEnd ?? '—'}${soloEndHobbs != null ? `→${soloEndHobbs}` : ''}; tacho=${tachStart ?? '—'}→${tachEnd ?? '—'}${soloEndTach != null ? `→${soloEndTach}` : ''}`,
+      },
+    ]
+
+    if (selectedInstructorId && instructorChargeRate) {
+      const instructorBasis = deriveChargeBasisFromFlags(instructorChargeRate) || aircraftBillingBasis
+      const instructorHours = (() => {
+        if (instructionType === 'solo') return 0
+        // Deterministic rule: when splitting dual+solo, avoid mixed time sources.
+        // If bases differ, we cannot compute instructor dual time safely.
+        if (hasSoloAtEnd && instructorBasis !== aircraftBillingBasis) return 0
+        return splitTimes.dual
+      })()
+
+      if (instructorHours > 0) {
+        const instructorRate = typeof instructorChargeRate.rate_per_hour === 'string'
+          ? parseFloat(instructorChargeRate.rate_per_hour)
+          : instructorChargeRate.rate_per_hour
+
+        if (Number.isFinite(instructorRate) && instructorRate > 0) {
+          const instructorFromOptions = options?.instructors?.find((i) => i.id === selectedInstructorId) ?? null
+          const instructorDisplayName =
+            (instructorFromOptions
+              ? [instructorFromOptions.first_name, instructorFromOptions.last_name].filter(Boolean).join(" ") ||
+                instructorFromOptions.user?.email ||
+                "Instructor"
+              : booking.checked_out_instructor?.user?.email || booking.instructor?.user?.email || "Instructor")
+
+          items.push({
+            chargeable_id: null,
+            description: `Instructor Rate - (${instructorDisplayName})`,
+            quantity: instructorHours,
+            unit_price: instructorRate,
+            tax_rate: taxRate,
+            notes: `Booking ${booking.id}; basis=${instructorBasis}; instructor_id=${selectedInstructorId}; dual_time=${splitTimes.dual.toFixed(1)}h`,
+          })
+        }
+      }
+    }
+
+    return items
+  }, [
+    booking,
+    aircraftChargeRate,
+    aircraftBillingBasis,
+    billingHours,
+    taxRate,
+    hobbsStart,
+    hobbsEnd,
+    tachStart,
+    tachEnd,
+    soloEndHobbs,
+    soloEndTach,
+    splitTimes.dual,
+    splitTimes.solo,
+    instructionType,
+    hasSoloAtEnd,
+    selectedInstructorId,
+    instructorChargeRate,
+    selectedAircraftId,
+    options?.aircraft,
+    options?.instructors,
+  ])
+
+  const instructorBasisConflictForSoloSplit = React.useMemo(() => {
+    if (!selectedInstructorId || !instructorChargeRate) return false
+    if (!hasSoloAtEnd) return false
+    if (!aircraftBillingBasis || aircraftBillingBasis === 'airswitch') return false
+    const instructorBasis = deriveChargeBasisFromFlags(instructorChargeRate) || aircraftBillingBasis
+    return instructorBasis !== aircraftBillingBasis
+  }, [selectedInstructorId, instructorChargeRate, hasSoloAtEnd, aircraftBillingBasis])
+
+  const draftSignature = React.useMemo(() => {
+    return JSON.stringify({
+      booking_id: booking?.id ?? null,
+      checked_out_aircraft_id: selectedAircraftId,
+      checked_out_instructor_id: selectedInstructorId,
+      flight_type_id: selectedFlightTypeId,
+
+      hobbs_start: hobbsStart ?? null,
+      hobbs_end: hobbsEnd ?? null,
+      tach_start: tachStart ?? null,
+      tach_end: tachEnd ?? null,
+      solo_end_hobbs: hasSoloAtEnd ? (soloEndHobbs ?? null) : null,
+      solo_end_tach: hasSoloAtEnd ? (soloEndTach ?? null) : null,
+      hasSoloAtEnd,
+      instructionType,
+
+      aircraft_charge_rate: aircraftChargeRate ? {
+        id: aircraftChargeRate.id,
+        rate_per_hour: aircraftChargeRate.rate_per_hour,
+        charge_hobbs: aircraftChargeRate.charge_hobbs,
+        charge_tacho: aircraftChargeRate.charge_tacho,
+        charge_airswitch: aircraftChargeRate.charge_airswitch,
+      } : null,
+      instructor_charge_rate: instructorChargeRate ? {
+        id: instructorChargeRate.id,
+        rate_per_hour: instructorChargeRate.rate_per_hour,
+        charge_hobbs: instructorChargeRate.charge_hobbs,
+        charge_tacho: instructorChargeRate.charge_tacho,
+        charge_airswitch: instructorChargeRate.charge_airswitch,
+      } : null,
+
+      taxRate,
+    })
+  }, [
+    booking?.id,
+    selectedAircraftId,
+    selectedInstructorId,
+    selectedFlightTypeId,
+    hobbsStart,
+    hobbsEnd,
+    tachStart,
+    tachEnd,
+    soloEndHobbs,
+    soloEndTach,
+    hasSoloAtEnd,
+    instructionType,
+    aircraftChargeRate,
+    instructorChargeRate,
+    taxRate,
+  ])
+
+  const isDraftCalculated = !!draftCalculation
+  const isDraftStale = !!draftCalculation && draftCalculation.signature !== draftSignature
+
+  const updateDraftLine = React.useCallback((idx: number, patch: Partial<Pick<GeneratedInvoiceItem, "quantity" | "unit_price">>) => {
+    setDraftCalculation((prev) => {
+      if (!prev) return prev
+      if (idx < 0 || idx >= prev.items.length) return prev
+
+      const nextItems = prev.items.map((it, i) => {
+        if (i !== idx) return it
+        return {
+          ...it,
+          ...patch,
+        }
+      })
+
+      const nextLines: CalculatedInvoiceLine[] = nextItems.map((item) => {
+        const calculated = InvoiceCalculations.calculateItemAmounts({
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          tax_rate: item.tax_rate ?? taxRate,
+        })
+        return {
+          ...item,
+          amount: calculated.amount,
+          tax_amount: calculated.tax_amount,
+          rate_inclusive: calculated.rate_inclusive,
+          line_total: calculated.line_total,
+        }
+      })
+
+      const subtotal = roundToTwoDecimals(nextLines.reduce((sum, l) => sum + l.amount, 0))
+      const tax_total = roundToTwoDecimals(nextLines.reduce((sum, l) => sum + l.tax_amount, 0))
+      const total_amount = roundToTwoDecimals(nextLines.reduce((sum, l) => sum + l.line_total, 0))
+
+      return {
+        ...prev,
+        calculated_at: new Date().toISOString(),
+        items: nextItems,
+        lines: nextLines,
+        totals: { subtotal, tax_total, total_amount },
+      }
+    })
+  }, [taxRate])
+
+  const isDraftValidForApproval = React.useMemo(() => {
+    if (!draftCalculation) return false
+    if (draftCalculation.signature !== draftSignature) return false
+    if (draftCalculation.items.length === 0) return false
+    if (draftCalculation.items.some((i) => !Number.isFinite(i.quantity) || i.quantity <= 0)) return false
+    if (draftCalculation.items.some((i) => !Number.isFinite(i.unit_price) || i.unit_price < 0)) return false
+    if (!Number.isFinite(draftCalculation.totals.total_amount) || draftCalculation.totals.total_amount <= 0) return false
+    return true
+  }, [draftCalculation, draftSignature])
+
+  const calculateDraft = handleSubmit(() => {
+    if (!booking) throw new Error("Booking not loaded")
+    if (isApproved) throw new Error("Check-in already approved")
+
+    if (!selectedAircraftId) throw new Error("Aircraft is required")
+    if (!selectedFlightTypeId) throw new Error("Flight type is required")
+    if (!aircraftChargeRate) throw new Error("Aircraft rate not configured for this aircraft + flight type.")
+    if (!aircraftBillingBasis) throw new Error("No aircraft charge basis configured")
+    if (aircraftBillingBasis === 'airswitch') throw new Error("Aircraft is configured for airswitch billing; Hobbs/Tacho only in this UI.")
+    if (billingHours <= 0) throw new Error("Billing hours must be greater than zero")
+    if (splitTimes.error) throw new Error(splitTimes.error)
+    if (instructorBasisConflictForSoloSplit) throw new Error("Instructor charge basis conflicts with aircraft charge basis for a dual+solo split.")
+
+    const items = buildDraftInvoiceItems()
+    if (items.length === 0) throw new Error("No invoice items to calculate")
+
+    const lines: CalculatedInvoiceLine[] = items.map((item) => {
+      const calculated = InvoiceCalculations.calculateItemAmounts({
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        tax_rate: item.tax_rate ?? taxRate,
+      })
+      return {
+        ...item,
+        amount: calculated.amount,
+        tax_amount: calculated.tax_amount,
+        rate_inclusive: calculated.rate_inclusive,
+        line_total: calculated.line_total,
+      }
+    })
+
+    const subtotal = roundToTwoDecimals(lines.reduce((sum, l) => sum + l.amount, 0))
+    const tax_total = roundToTwoDecimals(lines.reduce((sum, l) => sum + l.tax_amount, 0))
+    const total_amount = roundToTwoDecimals(lines.reduce((sum, l) => sum + l.line_total, 0))
+
+    // Store derived billing fields in the form (browser only; no DB writes).
+    setValue("billing_basis", aircraftBillingBasis, { shouldDirty: false })
+    setValue("billing_hours", billingHours, { shouldDirty: false })
+    setValue("flight_time", billingHours, { shouldDirty: false })
+    if (splitTimes.total > 0 && !splitTimes.error) {
+      setValue("dual_time", splitTimes.dual, { shouldDirty: false })
+      setValue("solo_time", splitTimes.solo, { shouldDirty: false })
+    }
+
+    setDraftCalculation({
+      signature: draftSignature,
+      calculated_at: new Date().toISOString(),
+      billing_basis: aircraftBillingBasis,
+      billing_hours: billingHours,
+      dual_time: splitTimes.dual,
+      solo_time: splitTimes.solo,
+      items,
+      lines,
+      totals: { subtotal, tax_total, total_amount },
+    })
+
+    toast.success("Draft calculated (not saved)")
+  })
 
   // Helper function to normalize date strings to a format Zod accepts
   const normalizeDateString = (value: string | null | undefined): string | null => {
@@ -271,21 +702,12 @@ export default function BookingCheckinPage() {
     return trimmed
   }
 
-  // Watch meter readings for auto-calculation
-  const hobbsStart = watch("hobbs_start")
-  const hobbsEnd = watch("hobbs_end")
-  const tachStart = watch("tach_start")
-  const tachEnd = watch("tach_end")
-
   // Calculate flight hours from meter readings
   React.useEffect(() => {
     if (isInitializingRef.current) return
 
-    const hobbsHours = calculateFlightHours(hobbsStart, hobbsEnd)
-    const tachHours = calculateFlightHours(tachStart, tachEnd)
-    
-    // Use hobbs if available, otherwise tach, otherwise 0
-    const flightHours = hobbsHours > 0 ? hobbsHours : (tachHours > 0 ? tachHours : 0)
+    const hobbsHours = hobbsTotalHours
+    const tachHours = tachTotalHours
 
     if (hobbsHours > 0) {
       setValue("flight_time_hobbs", hobbsHours, { shouldDirty: false })
@@ -293,10 +715,12 @@ export default function BookingCheckinPage() {
     if (tachHours > 0) {
       setValue("flight_time_tach", tachHours, { shouldDirty: false })
     }
-    if (flightHours > 0) {
-      setValue("flight_time", flightHours, { shouldDirty: false })
+    // Persist the deterministic split times (no manual overrides)
+    if (splitTimes.total > 0 && !splitTimes.error) {
+      setValue("dual_time", splitTimes.dual, { shouldDirty: false })
+      setValue("solo_time", splitTimes.solo, { shouldDirty: false })
     }
-  }, [hobbsStart, hobbsEnd, tachStart, tachEnd, setValue])
+  }, [hobbsTotalHours, tachTotalHours, splitTimes.total, splitTimes.dual, splitTimes.solo, splitTimes.error, setValue])
 
   // Track initialization key to reload form when booking changes
   const lastInitializedKey = React.useRef<string | null>(null)
@@ -320,9 +744,14 @@ export default function BookingCheckinPage() {
       hobbs_end: booking.hobbs_end || null,
       tach_start: booking.tach_start || null,
       tach_end: booking.tach_end || null,
+      airswitch_start: booking.airswitch_start || null,
+      airswitch_end: booking.airswitch_end || null,
       flight_time_hobbs: booking.flight_time_hobbs || null,
       flight_time_tach: booking.flight_time_tach || null,
+      flight_time_airswitch: booking.flight_time_airswitch || null,
       flight_time: booking.flight_time || null,
+      billing_basis: booking.billing_basis || null,
+      billing_hours: booking.billing_hours || null,
       checked_out_aircraft_id: booking.checked_out_aircraft_id || booking.aircraft_id || null,
       checked_out_instructor_id: booking.checked_out_instructor_id || booking.instructor_id || null,
       actual_start: normalizeDateString(booking.actual_start || booking.start_time || null),
@@ -335,6 +764,7 @@ export default function BookingCheckinPage() {
       route: null,
       flight_remarks: null,
       solo_end_hobbs: booking.solo_end_hobbs || null,
+      solo_end_tach: booking.solo_end_tach || null,
       dual_time: booking.dual_time || null,
       solo_time: booking.solo_time || null,
       total_hours_start: booking.total_hours_start || null,
@@ -347,108 +777,92 @@ export default function BookingCheckinPage() {
     Promise.resolve().then(() => {
       // Small delay to ensure form state has settled
       setTimeout(() => {
-        setIsInitialized(true)
         isInitializingRef.current = false
-        // Force update hasChanges after initialization
-        setHasChanges(false)
+        // No sticky "dirty" banner; keep initialization lightweight.
       }, 300)
     })
   }, [booking, bookingId, reset])
 
+  const approveMutation = useMutation({
+    mutationFn: async () => {
+      if (!booking) throw new Error('Booking not loaded')
+      if (isApproved) throw new Error('Check-in already approved')
 
-  const checkinMutation = useMutation({
-    mutationFn: async (data: FlightLogCheckinFormData) => {
-      const cleanDateField = normalizeDateString
-      
-      // Calculate flight times if meter readings are provided
-      const hobbsHours = calculateFlightHours(data.hobbs_start, data.hobbs_end)
-      const tachHours = calculateFlightHours(data.tach_start, data.tach_end)
-      const flightHours = hobbsHours > 0 ? hobbsHours : (tachHours > 0 ? tachHours : 0)
+      if (!selectedAircraftId) throw new Error('Aircraft is required')
+      if (!selectedFlightTypeId) throw new Error('Flight type is required')
+      if (!aircraftBillingBasis) throw new Error('No aircraft charge basis configured')
+      if (billingHours <= 0) throw new Error('Billing hours must be greater than zero')
+      if (splitTimes.error) throw new Error(splitTimes.error)
+      if (instructorBasisConflictForSoloSplit) throw new Error('Instructor charge basis conflicts with aircraft charge basis for a dual+solo split.')
+      if (!draftCalculation) throw new Error('Please calculate flight charges before approving.')
+      if (draftCalculation.signature !== draftSignature) throw new Error('Flight charges are out of date. Recalculate before approving.')
+      if (draftCalculation.items.length === 0) throw new Error('No invoice items to approve')
 
-      // Prepare booking update with all flight log fields
-      const bookingUpdate: Record<string, unknown> = {
-        // Set booking status to 'complete' when checking in
-        status: 'complete',
-        // Flight log fields (now part of bookings table)
-        ...(data.checked_out_aircraft_id !== undefined && { checked_out_aircraft_id: data.checked_out_aircraft_id }),
-        ...(data.checked_out_instructor_id !== undefined && { checked_out_instructor_id: data.checked_out_instructor_id }),
-        actual_start: cleanDateField(data.actual_start),
-        actual_end: cleanDateField(data.actual_end),
-        hobbs_start: data.hobbs_start,
-        hobbs_end: data.hobbs_end,
-        tach_start: data.tach_start,
-        tach_end: data.tach_end,
-        flight_time_hobbs: hobbsHours > 0 ? hobbsHours : data.flight_time_hobbs,
-        flight_time_tach: tachHours > 0 ? tachHours : data.flight_time_tach,
-        flight_time: flightHours > 0 ? flightHours : data.flight_time,
-        ...(data.flight_type_id !== undefined && { flight_type_id: data.flight_type_id }),
-        ...(data.lesson_id !== undefined && { lesson_id: data.lesson_id }),
+      const dueDate = new Date()
+      dueDate.setDate(dueDate.getDate() + 7)
+
+      const payload = {
+        checked_out_aircraft_id: selectedAircraftId,
+        checked_out_instructor_id: selectedInstructorId,
+        flight_type_id: selectedFlightTypeId,
+
+        // Actual times are not captured in the UI; default to scheduled booking times.
+        actual_start: booking.start_time,
+        actual_end: booking.end_time,
+
+        hobbs_start: hobbsStart ?? null,
+        hobbs_end: hobbsEnd ?? null,
+        tach_start: tachStart ?? null,
+        tach_end: tachEnd ?? null,
+        airswitch_start: null,
+        airswitch_end: null,
+
+        flight_time_hobbs: hobbsTotalHours > 0 ? hobbsTotalHours : null,
+        flight_time_tach: tachTotalHours > 0 ? tachTotalHours : null,
+        flight_time_airswitch: null,
+
+        solo_end_hobbs: aircraftBillingBasis === 'hobbs' && hasSoloAtEnd ? (soloEndHobbs ?? null) : null,
+        solo_end_tach: aircraftBillingBasis === 'tacho' && hasSoloAtEnd ? (soloEndTach ?? null) : null,
+        dual_time: draftCalculation.dual_time > 0 ? draftCalculation.dual_time : null,
+        solo_time: draftCalculation.solo_time > 0 ? draftCalculation.solo_time : null,
+
+        billing_basis: draftCalculation.billing_basis,
+        billing_hours: draftCalculation.billing_hours,
+
+        tax_rate: taxRate,
+        due_date: dueDate.toISOString(),
+        reference: `Booking ${booking.id} check-in`,
+        notes: `Auto-generated from booking check-in.`,
+        items: draftCalculation.items.map((i) => ({
+          chargeable_id: i.chargeable_id,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+          tax_rate: i.tax_rate,
+          notes: i.notes ?? null,
+        })),
       }
-      
-      // Update booking directly (includes all flight log fields)
-      return fetchJson<{ booking: BookingWithRelations }>(`/api/bookings/${bookingId}`, {
-        method: "PATCH",
+
+      return fetchJson<{ invoice: { id: string } }>(`/api/bookings/${bookingId}/checkin/approve`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bookingUpdate),
+        body: JSON.stringify(payload),
       })
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
       await queryClient.invalidateQueries({ queryKey: ["bookings"] })
-      toast.success("Flight checked in successfully")
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] })
+      toast.success("Check-in approved and invoice created")
+      router.replace(`/invoices/${data.invoice.id}`)
     },
     onError: (error) => {
       toast.error(getErrorMessage(error))
     },
   })
 
-  const onSubmit = (data: FlightLogCheckinFormData) => {
-    checkinMutation.mutate(data)
-  }
-  
-  const handleFormSubmit = handleSubmit(onSubmit)
-
-  const handleUndo = () => {
-    if (!booking) return
-    
-    isInitializingRef.current = true
-    setHasChanges(false)
-
-    const originalValues: FlightLogCheckinFormData = {
-      hobbs_start: booking.hobbs_start || null,
-      hobbs_end: booking.hobbs_end || null,
-      tach_start: booking.tach_start || null,
-      tach_end: booking.tach_end || null,
-      flight_time_hobbs: booking.flight_time_hobbs || null,
-      flight_time_tach: booking.flight_time_tach || null,
-      flight_time: booking.flight_time || null,
-      checked_out_aircraft_id: booking.checked_out_aircraft_id || booking.aircraft_id || null,
-      checked_out_instructor_id: booking.checked_out_instructor_id || booking.instructor_id || null,
-      actual_start: normalizeDateString(booking.actual_start || booking.start_time || null),
-      actual_end: normalizeDateString(booking.actual_end || booking.end_time || null),
-      flight_type_id: booking.flight_type_id || null,
-      lesson_id: booking.lesson_id || null,
-      remarks: null,
-      fuel_on_board: null,
-      passengers: null,
-      route: null,
-      flight_remarks: null,
-      solo_end_hobbs: booking.solo_end_hobbs || null,
-      dual_time: booking.dual_time || null,
-      solo_time: booking.solo_time || null,
-      total_hours_start: booking.total_hours_start || null,
-      total_hours_end: booking.total_hours_end || null,
-    }
-    
-    reset(originalValues, { keepDirty: false, keepDefaultValues: false })
-    
-    setTimeout(() => {
-      isInitializingRef.current = false
-      setHasChanges(false)
-    }, 300)
-    
-    toast.info('Changes reverted')
-  }
+  // "Save Draft Check-In" is intentionally browser-only. It calculates and stores
+  // invoice data locally; nothing is persisted until approval.
 
   const isAdminOrInstructor = role === 'owner' || role === 'admin' || role === 'instructor'
 
@@ -543,6 +957,21 @@ export default function BookingCheckinPage() {
   const displayedHobbsHours = calculateFlightHours(hobbsStart, hobbsEnd)
   const displayedTachHours = calculateFlightHours(tachStart, tachEnd)
 
+  const aircraftRateMissing = !!selectedAircraftId && !!selectedFlightTypeId && aircraftChargeRateQuery.isFetched && !aircraftChargeRate
+  const instructorRateMissing = !!selectedInstructorId && !!selectedFlightTypeId && instructorChargeRateQuery.isFetched && !instructorChargeRate
+
+  const canApprove =
+    !isApproved &&
+    !!aircraftChargeRate &&
+    !!aircraftBillingBasis &&
+    !isAirswitchBillingUnsupported &&
+    billingHours > 0 &&
+    isDraftValidForApproval &&
+    !instructorRateMissing &&
+    !splitTimes.error &&
+    !instructorBasisConflictForSoloSplit &&
+    !approveMutation.isPending
+
   return (
     <>
     <SidebarProvider
@@ -598,105 +1027,307 @@ export default function BookingCheckinPage() {
                   {/* Flight Details Form */}
                   <Card className="bg-card shadow-md border border-border/50 rounded-xl">
                     <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-                      <form onSubmit={handleFormSubmit}>
+                      <form onSubmit={(e) => e.preventDefault()}>
                         <FieldSet className="w-full max-w-full">
                           <FieldGroup className="w-full max-w-full">
                             {/* Meter Readings Section */}
                             <FieldSet className="p-4 sm:p-3 gap-4 sm:gap-3 rounded-lg w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
                               <FieldGroup className="gap-4 sm:gap-3">
-                                {/* Tacho Meter */}
-                                <FieldSet className="gap-3 sm:gap-2">
-                                  <div className="flex items-center justify-between mb-2 sm:mb-1.5">
-                                    <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
-                                      <IconPlane className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                                      Tacho Meter
-                                    </FieldLegend>
-                                    <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
-                                      {displayedTachHours > 0 ? `${displayedTachHours.toFixed(1)}h` : "0.0h"}
-                                    </div>
+                                {/* Charging basis indicator */}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-sm font-semibold">
+                                    Charging basis:{' '}
+                                    <span className={aircraftBillingBasis === 'hobbs' || aircraftBillingBasis === 'tacho' ? 'text-primary' : 'text-destructive'}>
+                                      {aircraftBillingBasis ?? '—'}
+                                    </span>
                                   </div>
-                                  <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
-                                    <Field data-invalid={!!errors.tach_start} className="gap-2 sm:gap-1">
-                                      <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
-                                      <Input
-                                        id="tach_start"
-                                        type="number"
-                                        step="0.1"
-                                        {...register("tach_start", { valueAsNumber: true })}
-                                        className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                        placeholder="8752.2"
-                                        aria-invalid={!!errors.tach_start}
-                                      />
-                                      <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
-                                    </Field>
-                                    <Field data-invalid={!!errors.tach_end} className="gap-2 sm:gap-1">
-                                      <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
-                                      <Input
-                                        id="tach_end"
-                                        type="number"
-                                        step="0.1"
-                                        {...register("tach_end", { valueAsNumber: true })}
-                                        className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                        placeholder="8754.5"
-                                        aria-invalid={!!errors.tach_end}
-                                      />
-                                      <FieldError errors={errors.tach_end ? [{ message: errors.tach_end.message }] : undefined} />
-                                    </Field>
-                                  </FieldGroup>
-                                </FieldSet>
+                                  <div className="text-xs text-muted-foreground tabular-nums">
+                                    Hours used: {billingHours > 0 ? `${billingHours.toFixed(1)}h` : '—'}
+                                  </div>
+                                </div>
 
-                                {/* Hobbs Meter */}
-                                <FieldSet className="gap-3 sm:gap-2">
-                                  <div className="flex items-center justify-between mb-2 sm:mb-1.5">
-                                    <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
-                                      <IconClock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                                      Hobbs Meter
-                                    </FieldLegend>
-                                    <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
-                                      {displayedHobbsHours > 0 ? `${displayedHobbsHours.toFixed(1)}h` : "0.0h"}
-                                    </div>
-                                  </div>
-                                  <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
-                                    <Field data-invalid={!!errors.hobbs_start} className="gap-2 sm:gap-1">
-                                      <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
-                                      <Input
-                                        id="hobbs_start"
-                                        type="number"
-                                        step="0.1"
-                                        {...register("hobbs_start", { valueAsNumber: true })}
-                                        className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                        placeholder="8752.2"
-                                        aria-invalid={!!errors.hobbs_start}
-                                      />
-                                      <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
-                                    </Field>
-                                    <Field data-invalid={!!errors.hobbs_end} className="gap-2 sm:gap-1">
-                                      <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
-                                      <Input
-                                        id="hobbs_end"
-                                        type="number"
-                                        step="0.1"
-                                        {...register("hobbs_end", { valueAsNumber: true })}
-                                        className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                        placeholder="8754.5"
-                                        aria-invalid={!!errors.hobbs_end}
-                                      />
-                                      <FieldError errors={errors.hobbs_end ? [{ message: errors.hobbs_end.message }] : undefined} />
-                                    </Field>
-                                  </FieldGroup>
-                                </FieldSet>
-                                
+                                {/* Meter inputs: show active charging basis first */}
+                                {aircraftBillingBasis === 'hobbs' ? (
+                                  <>
+                                    {/* Hobbs Meter */}
+                                    <FieldSet className="gap-3 sm:gap-2">
+                                      <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                        <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                          <IconClock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                                          Hobbs Meter
+                                        </FieldLegend>
+                                        <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
+                                          {displayedHobbsHours > 0 ? `${displayedHobbsHours.toFixed(1)}h` : "0.0h"}
+                                        </div>
+                                      </div>
+                                      <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                        <Field data-invalid={!!errors.hobbs_start} className="gap-2 sm:gap-1">
+                                          <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
+                                          <Input
+                                            id="hobbs_start"
+                                            type="number"
+                                            step="0.1"
+                                            disabled={isApproved}
+                                            {...register("hobbs_start", { valueAsNumber: true })}
+                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                            placeholder="8752.2"
+                                            aria-invalid={!!errors.hobbs_start}
+                                          />
+                                          <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
+                                        </Field>
+                                        <Field data-invalid={!!errors.hobbs_end} className="gap-2 sm:gap-1">
+                                          <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
+                                          <Input
+                                            id="hobbs_end"
+                                            type="number"
+                                            step="0.1"
+                                            disabled={isApproved}
+                                            {...register("hobbs_end", { valueAsNumber: true })}
+                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                            placeholder="8754.5"
+                                            aria-invalid={!!errors.hobbs_end}
+                                          />
+                                          <FieldError errors={errors.hobbs_end ? [{ message: errors.hobbs_end.message }] : undefined} />
+                                        </Field>
+                                      </FieldGroup>
+
+                                      {/* Solo at end option - only for dual/trial flights */}
+                                      {(instructionType === 'dual' || instructionType === 'trial') && (
+                                        <div className="mt-3 space-y-2">
+                                          <div className="flex items-center justify-between">
+                                            <FieldLabel className="text-sm font-medium">Solo at end</FieldLabel>
+                                            <Switch
+                                              checked={hasSoloAtEnd}
+                                              disabled={isApproved}
+                                              onCheckedChange={(next) => {
+                                                setHasSoloAtEnd(next)
+                                                if (!next) {
+                                                  setValue("solo_end_hobbs", null, { shouldDirty: true })
+                                                  setValue("solo_end_tach", null, { shouldDirty: true })
+                                                }
+                                              }}
+                                            />
+                                          </div>
+
+                                          {hasSoloAtEnd && (
+                                            <Field data-invalid={!!splitTimes.error} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="solo_end_hobbs" className="text-sm sm:text-xs font-medium">Solo End Hobbs</FieldLabel>
+                                              <Input
+                                                id="solo_end_hobbs"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("solo_end_hobbs", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="e.g. 8755.0"
+                                              />
+                                            </Field>
+                                          )}
+
+                                          {splitTimes.error && (
+                                            <div className="text-sm text-destructive">{splitTimes.error}</div>
+                                          )}
+
+                                          {instructorBasisConflictForSoloSplit && (
+                                            <div className="text-sm text-destructive">
+                                              Instructor charge basis differs from aircraft basis. Dual+solo split requires matching bases to stay auditable.
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </FieldSet>
+
+                                    {/* Tacho Meter */}
+                                    <FieldSet className="gap-3 sm:gap-2">
+                                      <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                        <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                          <IconPlane className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                                          Tacho Meter
+                                        </FieldLegend>
+                                        <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
+                                          {displayedTachHours > 0 ? `${displayedTachHours.toFixed(1)}h` : "0.0h"}
+                                        </div>
+                                      </div>
+                                      <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                        <Field data-invalid={!!errors.tach_start} className="gap-2 sm:gap-1">
+                                          <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
+                                          <Input
+                                            id="tach_start"
+                                            type="number"
+                                            step="0.1"
+                                            disabled={isApproved}
+                                            {...register("tach_start", { valueAsNumber: true })}
+                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                            placeholder="8752.2"
+                                            aria-invalid={!!errors.tach_start}
+                                          />
+                                          <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
+                                        </Field>
+                                        <Field data-invalid={!!errors.tach_end} className="gap-2 sm:gap-1">
+                                          <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
+                                          <Input
+                                            id="tach_end"
+                                            type="number"
+                                            step="0.1"
+                                            disabled={isApproved}
+                                            {...register("tach_end", { valueAsNumber: true })}
+                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                            placeholder="8754.5"
+                                            aria-invalid={!!errors.tach_end}
+                                          />
+                                          <FieldError errors={errors.tach_end ? [{ message: errors.tach_end.message }] : undefined} />
+                                        </Field>
+                                      </FieldGroup>
+                                    </FieldSet>
+                                  </>
+                                ) : (
+                                  <>
+                                    {/* Tacho Meter */}
+                                    <FieldSet className="gap-3 sm:gap-2">
+                                      <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                        <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                          <IconPlane className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                                          Tacho Meter
+                                        </FieldLegend>
+                                        <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
+                                          {displayedTachHours > 0 ? `${displayedTachHours.toFixed(1)}h` : "0.0h"}
+                                        </div>
+                                      </div>
+                                      <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                        <Field data-invalid={!!errors.tach_start} className="gap-2 sm:gap-1">
+                                          <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
+                                          <Input
+                                            id="tach_start"
+                                            type="number"
+                                            step="0.1"
+                                            disabled={isApproved}
+                                            {...register("tach_start", { valueAsNumber: true })}
+                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                            placeholder="8752.2"
+                                            aria-invalid={!!errors.tach_start}
+                                          />
+                                          <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
+                                        </Field>
+                                        <Field data-invalid={!!errors.tach_end} className="gap-2 sm:gap-1">
+                                          <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
+                                          <Input
+                                            id="tach_end"
+                                            type="number"
+                                            step="0.1"
+                                            disabled={isApproved}
+                                            {...register("tach_end", { valueAsNumber: true })}
+                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                            placeholder="8754.5"
+                                            aria-invalid={!!errors.tach_end}
+                                          />
+                                          <FieldError errors={errors.tach_end ? [{ message: errors.tach_end.message }] : undefined} />
+                                        </Field>
+                                      </FieldGroup>
+
+                                      {/* Solo at end option - only for dual/trial flights */}
+                                      {(instructionType === 'dual' || instructionType === 'trial') && (
+                                        <div className="mt-3 space-y-2">
+                                          <div className="flex items-center justify-between">
+                                            <FieldLabel className="text-sm font-medium">Solo at end</FieldLabel>
+                                            <Switch
+                                              checked={hasSoloAtEnd}
+                                              disabled={isApproved}
+                                              onCheckedChange={(next) => {
+                                                setHasSoloAtEnd(next)
+                                                if (!next) {
+                                                  setValue("solo_end_hobbs", null, { shouldDirty: true })
+                                                  setValue("solo_end_tach", null, { shouldDirty: true })
+                                                }
+                                              }}
+                                            />
+                                          </div>
+
+                                          {hasSoloAtEnd && (
+                                            <Field data-invalid={!!splitTimes.error} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="solo_end_tach" className="text-sm sm:text-xs font-medium">Solo End Tacho</FieldLabel>
+                                              <Input
+                                                id="solo_end_tach"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("solo_end_tach", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="e.g. 8755.0"
+                                              />
+                                            </Field>
+                                          )}
+
+                                          {splitTimes.error && (
+                                            <div className="text-sm text-destructive">{splitTimes.error}</div>
+                                          )}
+
+                                          {instructorBasisConflictForSoloSplit && (
+                                            <div className="text-sm text-destructive">
+                                              Instructor charge basis differs from aircraft basis. Dual+solo split requires matching bases to stay auditable.
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </FieldSet>
+
+                                    {/* Hobbs Meter */}
+                                    <FieldSet className="gap-3 sm:gap-2">
+                                      <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                        <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                          <IconClock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                                          Hobbs Meter
+                                        </FieldLegend>
+                                        <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
+                                          {displayedHobbsHours > 0 ? `${displayedHobbsHours.toFixed(1)}h` : "0.0h"}
+                                        </div>
+                                      </div>
+                                      <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                        <Field data-invalid={!!errors.hobbs_start} className="gap-2 sm:gap-1">
+                                          <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
+                                          <Input
+                                            id="hobbs_start"
+                                            type="number"
+                                            step="0.1"
+                                            disabled={isApproved}
+                                            {...register("hobbs_start", { valueAsNumber: true })}
+                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                            placeholder="8752.2"
+                                            aria-invalid={!!errors.hobbs_start}
+                                          />
+                                          <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
+                                        </Field>
+                                        <Field data-invalid={!!errors.hobbs_end} className="gap-2 sm:gap-1">
+                                          <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
+                                          <Input
+                                            id="hobbs_end"
+                                            type="number"
+                                            step="0.1"
+                                            disabled={isApproved}
+                                            {...register("hobbs_end", { valueAsNumber: true })}
+                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                            placeholder="8754.5"
+                                            aria-invalid={!!errors.hobbs_end}
+                                          />
+                                          <FieldError errors={errors.hobbs_end ? [{ message: errors.hobbs_end.message }] : undefined} />
+                                        </Field>
+                                      </FieldGroup>
+                                    </FieldSet>
+                                  </>
+                                )}
+
                                 {/* Calculate Button */}
                                 <div className="pt-2">
                                   <Button
                                     type="button"
                                     size="lg"
-                                    onClick={handleFormSubmit}
-                                    disabled={checkinMutation.isPending}
+                                    onClick={() => {
+                                      void calculateDraft().catch((err) => toast.error(getErrorMessage(err)))
+                                    }}
+                                    disabled={isApproved}
                                     className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-12 sm:h-11 text-base sm:text-sm font-semibold"
                                   >
                                     <IconFileText className="h-5 w-5 mr-2" />
-                                    {checkinMutation.isPending ? "Calculating..." : "Calculate Flight Charges"}
+                                    {isDraftCalculated ? "Recalculate Flight Charges" : "Calculate Flight Charges"}
                                   </Button>
                                 </div>
                               </FieldGroup>
@@ -712,6 +1343,7 @@ export default function BookingCheckinPage() {
                                   </FieldLabel>
                                   {options ? (
                                     <Select
+                                      disabled={isApproved}
                                       value={watch("flight_type_id") || "none"}
                                       onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
@@ -735,6 +1367,17 @@ export default function BookingCheckinPage() {
                                   {errors.flight_type_id && (
                                     <p className="text-sm text-destructive mt-1">{errors.flight_type_id.message}</p>
                                   )}
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    {aircraftChargeRateQuery.isLoading ? (
+                                      <span>Loading aircraft rate…</span>
+                                    ) : aircraftRatePerHourInclTax != null ? (
+                                      <span className="tabular-nums">
+                                        Aircraft rate: <span className="font-medium text-foreground">${aircraftRatePerHourInclTax.toFixed(2)}</span>/hr (inc. tax)
+                                      </span>
+                                    ) : (
+                                      <span className="text-destructive">Aircraft rate not configured for this aircraft + flight type.</span>
+                                    )}
+                                  </div>
                                 </Field>
 
                                 <Field className="gap-2 sm:gap-1.5">
@@ -744,6 +1387,7 @@ export default function BookingCheckinPage() {
                                   </FieldLabel>
                                   {isAdminOrInstructor && options ? (
                                     <Select
+                                      disabled={isApproved}
                                       value={watch("checked_out_instructor_id") || "none"}
                                       onValueChange={(value) => setValue("checked_out_instructor_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
@@ -769,6 +1413,21 @@ export default function BookingCheckinPage() {
                                       {instructorName}
                                     </div>
                                   )}
+                                  {!!selectedInstructorId && (
+                                    <div className="mt-1 text-xs">
+                                      {instructorChargeRateQuery.isLoading ? (
+                                        <span className="text-muted-foreground">Loading instructor rate…</span>
+                                      ) : instructorRatePerHourInclTax != null ? (
+                                        <span className="text-muted-foreground tabular-nums">
+                                          Instructor rate: <span className="font-medium text-foreground">${instructorRatePerHourInclTax.toFixed(2)}</span>/hr (inc. tax)
+                                        </span>
+                                      ) : (
+                                        <span className="text-destructive">
+                                          Instructor rate not configured for this flight type.
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                 </Field>
                               </FieldGroup>
                             </FieldSet>
@@ -788,12 +1447,155 @@ export default function BookingCheckinPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-6">
-                      {/* Invoice Placeholder */}
-                      <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-                        <IconFileText className="h-16 w-16 text-muted-foreground/40 mb-4" />
-                        <p className="text-muted-foreground text-sm">
-                          No items yet. Calculate flight charges to begin.
-                        </p>
+                      <div className="space-y-6">
+                        {isApproved ? (
+                          <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                            <div className="font-semibold text-green-800">Check-in approved</div>
+                            <div className="mt-1 text-sm text-green-800/90">
+                              This check-in is locked and has been invoiced.
+                              {checkinInvoiceId && (
+                                <>
+                                  {' '}View invoice:{' '}
+                                  <Link className="underline font-medium" href={`/invoices/${checkinInvoiceId}`}>
+                                    {checkinInvoiceId}
+                                  </Link>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {(aircraftChargeRateQuery.isLoading || instructorChargeRateQuery.isLoading) && (
+                              <div className="text-sm text-muted-foreground">Loading charge rates…</div>
+                            )}
+
+                            {isAirswitchBillingUnsupported && (
+                              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                                This aircraft charge rate is configured to bill by <span className="font-semibold">airswitch</span>, but the check-in UI only supports Hobbs/Tacho.
+                                Update the rate configuration to Hobbs or Tacho to proceed.
+                              </div>
+                            )}
+
+                            {aircraftRateMissing && (
+                              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                                No aircraft charge rate configured for this aircraft + flight type.
+                              </div>
+                            )}
+
+                            {instructorRateMissing && (
+                              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                                An instructor is assigned, but no instructor charge rate is configured for this flight type.
+                                Approval is blocked to prevent underbilling.
+                              </div>
+                            )}
+
+                            {!isDraftCalculated ? null : isDraftStale ? (
+                              <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                                Draft is out of date. Recalculate flight charges before approving.
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border border-border/60 p-4">
+                                <div className="text-sm font-semibold mb-3">Invoice items</div>
+
+                                <div className="overflow-x-auto">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Description</TableHead>
+                                        <TableHead className="text-right w-[110px]">Qty (hrs)</TableHead>
+                                        <TableHead className="text-right w-[160px]">Rate (inc. tax)</TableHead>
+                                        <TableHead className="text-right w-[120px]">Line total</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {draftCalculation!.lines.map((line, idx) => (
+                                        <TableRow key={`${line.description}-${idx}`}>
+                                          <TableCell className="font-medium">
+                                            <div className="min-w-0 truncate">{line.description}</div>
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                            <Input
+                                              type="number"
+                                              step="0.1"
+                                              inputMode="decimal"
+                                              value={Number.isFinite(line.quantity) ? String(line.quantity) : ""}
+                                              onChange={(e) => {
+                                                const v = e.target.value === "" ? NaN : Number(e.target.value)
+                                                updateDraftLine(idx, { quantity: v })
+                                              }}
+                                              className="h-9 text-right tabular-nums"
+                                            />
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                            <div className="relative">
+                                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                              <Input
+                                                type="number"
+                                                step="0.01"
+                                                inputMode="decimal"
+                                                value={(() => {
+                                                  const effectiveTaxRate = (line.tax_rate ?? taxRate) || 0
+                                                  if (!Number.isFinite(line.unit_price)) return ""
+                                                  if (!Number.isFinite(effectiveTaxRate) || effectiveTaxRate <= 0) return String(line.unit_price)
+                                                  return String(roundToTwoDecimals(line.unit_price * (1 + effectiveTaxRate)))
+                                                })()}
+                                                onChange={(e) => {
+                                                  const effectiveTaxRate = (line.tax_rate ?? taxRate) || 0
+                                                  const vInc = e.target.value === "" ? NaN : Number(e.target.value)
+                                                  if (!Number.isFinite(vInc)) {
+                                                    updateDraftLine(idx, { unit_price: NaN })
+                                                    return
+                                                  }
+                                                  const divisor = 1 + (Number.isFinite(effectiveTaxRate) ? effectiveTaxRate : 0)
+                                                  const vEx = divisor <= 0 ? vInc : (vInc / divisor)
+                                                  updateDraftLine(idx, { unit_price: roundToTwoDecimals(vEx) })
+                                                }}
+                                                className="h-9 pl-7 text-right tabular-nums"
+                                              />
+                                            </div>
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums font-medium">
+                                            ${Number(line.line_total ?? 0).toFixed(2)}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+
+                                <div className="mt-4 border-t pt-4 space-y-2 text-sm">
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-muted-foreground">Subtotal</div>
+                                    <div className="tabular-nums font-medium">${draftCalculation!.totals.subtotal.toFixed(2)}</div>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-muted-foreground">Tax</div>
+                                    <div className="tabular-nums font-medium">${draftCalculation!.totals.tax_total.toFixed(2)}</div>
+                                  </div>
+                                  <div className="flex items-center justify-between border-t pt-2">
+                                    <div className="text-base font-semibold">Total</div>
+                                    <div className="text-lg font-semibold tabular-nums text-primary">
+                                      ${draftCalculation!.totals.total_amount.toFixed(2)}
+                                    </div>
+                                  </div>
+                                </div>
+
+
+                              </div>
+                            )}
+
+                            <div className="flex justify-end">
+                              <Button
+                                size="lg"
+                                onClick={() => approveMutation.mutate()}
+                                disabled={!canApprove}
+                                className="h-12 px-6 font-semibold"
+                              >
+                                {approveMutation.isPending ? "Approving..." : "Approve Check-In & Create Invoice"}
+                              </Button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -804,50 +1606,6 @@ export default function BookingCheckinPage() {
         </div>
       </SidebarInset>
     </SidebarProvider>
-    
-    {/* Sticky Bottom Bar - Save Changes */}
-    {hasChanges && (
-    <div 
-      className="fixed border-t shadow-xl bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800"
-      role="banner"
-      aria-label="Save changes"
-      style={{ 
-        position: 'fixed',
-        bottom: 0,
-        left: isMobile ? 0 : `${sidebarLeft}px`,
-        right: 0,
-        zIndex: 99999,
-        minHeight: '60px',
-        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))',
-        transform: 'translateZ(0)',
-        WebkitTransform: 'translateZ(0)',
-      }}
-    >
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-        <div className="flex items-center justify-end gap-4">
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={handleUndo}
-            disabled={checkinMutation.isPending}
-            className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
-          >
-            <IconRotateClockwise className="h-4 w-4 mr-2" />
-            Undo Changes
-          </Button>
-          <Button
-            size="lg"
-            onClick={handleFormSubmit}
-            disabled={checkinMutation.isPending}
-            className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
-          >
-            <IconDeviceFloppy className="h-4 w-4 mr-2" />
-            {checkinMutation.isPending ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
-      </div>
-    </div>
-    )}
     </>
   )
 }

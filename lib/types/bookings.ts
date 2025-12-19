@@ -46,8 +46,11 @@ export interface Booking {
   hobbs_end: number | null
   tach_start: number | null
   tach_end: number | null
+  airswitch_start: number | null
+  airswitch_end: number | null
   flight_time_hobbs: number | null
   flight_time_tach: number | null
+  flight_time_airswitch: number | null
   flight_time: number | null
   fuel_on_board: number | null
   passengers: string | null
@@ -57,10 +60,18 @@ export interface Booking {
   authorization_completed: boolean | null
   flight_remarks: string | null
   solo_end_hobbs: number | null
+  solo_end_tach: number | null
   dual_time: number | null
   solo_time: number | null
   total_hours_start: number | null
   total_hours_end: number | null
+
+  // Check-in billing/audit fields (financially critical)
+  billing_basis: 'hobbs' | 'tacho' | 'airswitch' | null
+  billing_hours: number | null
+  checkin_invoice_id: string | null
+  checkin_approved_at: string | null // ISO timestamp
+  checkin_approved_by: string | null
 }
 
 // Extended booking with joined data
@@ -71,6 +82,9 @@ export interface BookingWithRelations extends Booking {
     type: string
     model: string
     manufacturer: string | null
+    record_hobbs?: boolean
+    record_tacho?: boolean
+    record_airswitch?: boolean
   } | null
   student?: {
     id: string
@@ -90,6 +104,7 @@ export interface BookingWithRelations extends Booking {
   flight_type?: {
     id: string
     name: string
+    instruction_type?: 'trial' | 'dual' | 'solo' | null
   } | null
   lesson?: {
     id: string
@@ -102,6 +117,9 @@ export interface BookingWithRelations extends Booking {
     type: string
     model: string | null
     manufacturer: string | null
+    record_hobbs?: boolean
+    record_tacho?: boolean
+    record_airswitch?: boolean
   } | null
   checked_out_instructor?: {
     id: string

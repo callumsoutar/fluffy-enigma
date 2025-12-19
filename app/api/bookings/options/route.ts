@@ -76,7 +76,7 @@ export async function GET(request: Request) {
     // Flight Types
     supabase
       .from('flight_types')
-      .select('id, name')
+      .select('id, name, instruction_type')
       .eq('is_active', true)
       .is('voided_at', null)
       .order('name'),

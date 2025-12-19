@@ -88,9 +88,15 @@ export const bookingsQuerySchema = z.object({
 export const bookingIdSchema = uuidSchema
 
 // Numeric validation for meter readings and times
+// Note: durations like dual_time/solo_time can be 0.0, so we allow non-negative numbers.
 const numericSchema = z.preprocess(
   (val) => val === '' || val === null ? null : val,
-  z.coerce.number().positive().optional().nullable()
+  z.coerce.number().min(0).optional().nullable()
+)
+
+const billingBasisSchema = z.preprocess(
+  (val) => val === '' ? null : val,
+  z.enum(['hobbs', 'tacho', 'airswitch']).optional().nullable()
 )
 
 // PATCH request body schema (includes flight log fields)
@@ -133,9 +139,14 @@ export const bookingUpdateSchema = z.object({
   hobbs_end: numericSchema,
   tach_start: numericSchema,
   tach_end: numericSchema,
+  airswitch_start: numericSchema,
+  airswitch_end: numericSchema,
   flight_time_hobbs: numericSchema,
   flight_time_tach: numericSchema,
+  flight_time_airswitch: numericSchema,
   flight_time: numericSchema,
+  billing_basis: billingBasisSchema,
+  billing_hours: numericSchema,
   fuel_on_board: z.preprocess(
     (val) => val === '' || val === null ? null : val,
     z.coerce.number().int().min(0).optional().nullable()
@@ -147,11 +158,65 @@ export const bookingUpdateSchema = z.object({
   authorization_completed: z.boolean().optional(),
   flight_remarks: z.string().max(2000).optional().nullable(),
   solo_end_hobbs: numericSchema,
+  solo_end_tach: numericSchema,
   dual_time: numericSchema,
   solo_time: numericSchema,
   total_hours_start: numericSchema,
   total_hours_end: numericSchema,
 }).strict() // Reject unknown fields
+
+/**
+ * Booking check-in approval schema (financially critical)
+ *
+ * This validates the payload we pass into the atomic DB transaction RPC.
+ * All pricing calculations happen client-side, but we validate shape/ranges here.
+ */
+const invoiceItemForAtomicCreateSchema = z.object({
+  chargeable_id: z.union([uuidSchema, z.null()]).optional().nullable(),
+  description: z.string().min(1).max(500),
+  quantity: z.coerce.number().positive(),
+  unit_price: z.coerce.number().min(0),
+  tax_rate: z.coerce.number().min(0).max(1).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+})
+
+export const bookingCheckinApproveSchema = z.object({
+  checked_out_aircraft_id: uuidSchema,
+  checked_out_instructor_id: z.union([uuidSchema, z.null()]).optional().nullable(),
+  flight_type_id: uuidSchema,
+
+  actual_start: dateSchema,
+  actual_end: dateSchema,
+
+  hobbs_start: numericSchema,
+  hobbs_end: numericSchema,
+  tach_start: numericSchema,
+  tach_end: numericSchema,
+  airswitch_start: numericSchema,
+  airswitch_end: numericSchema,
+
+  flight_time_hobbs: numericSchema,
+  flight_time_tach: numericSchema,
+  flight_time_airswitch: numericSchema,
+
+  solo_end_hobbs: numericSchema,
+  solo_end_tach: numericSchema,
+  dual_time: numericSchema,
+  solo_time: numericSchema,
+
+  billing_basis: z.enum(['hobbs', 'tacho', 'airswitch']),
+  billing_hours: z.coerce.number().positive(),
+
+  tax_rate: z.coerce.number().min(0).max(1).optional().nullable(),
+  due_date: z.preprocess(
+    (val) => val === '' ? undefined : val,
+    dateSchema.optional().nullable()
+  ),
+  reference: z.string().max(200).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+
+  items: z.array(invoiceItemForAtomicCreateSchema).min(1),
+}).strict()
 
 /**
  * Validate UUID string

@@ -46,7 +46,10 @@ export async function GET(
         registration,
         type,
         model,
-        manufacturer
+        manufacturer,
+        record_hobbs,
+        record_tacho,
+        record_airswitch
       ),
       student:user_id (
         id,
@@ -65,7 +68,8 @@ export async function GET(
       ),
       flight_type:flight_type_id (
         id,
-        name
+        name,
+        instruction_type
       ),
       lesson:lesson_id (
         id,
@@ -77,7 +81,10 @@ export async function GET(
         registration,
         type,
         model,
-        manufacturer
+        manufacturer,
+        record_hobbs,
+        record_tacho,
+        record_airswitch
       ),
       checked_out_instructor:instructors!bookings_checked_out_instructor_id_fkey (
         id,
@@ -206,6 +213,47 @@ export async function PATCH(
     )
   }
 
+  // Financially critical: flight log + billing fields must only be editable by staff.
+  // Prevent members/students from tampering with meter readings, flight times, or billing basis.
+  const hasCheckinOrBillingFields =
+    body.checked_out_aircraft_id !== undefined ||
+    body.checked_out_instructor_id !== undefined ||
+    body.actual_start !== undefined ||
+    body.actual_end !== undefined ||
+    body.eta !== undefined ||
+    body.hobbs_start !== undefined ||
+    body.hobbs_end !== undefined ||
+    body.tach_start !== undefined ||
+    body.tach_end !== undefined ||
+    body.airswitch_start !== undefined ||
+    body.airswitch_end !== undefined ||
+    body.flight_time_hobbs !== undefined ||
+    body.flight_time_tach !== undefined ||
+    body.flight_time_airswitch !== undefined ||
+    body.flight_time !== undefined ||
+    body.billing_basis !== undefined ||
+    body.billing_hours !== undefined ||
+    body.fuel_on_board !== undefined ||
+    body.passengers !== undefined ||
+    body.route !== undefined ||
+    body.equipment !== undefined ||
+    body.briefing_completed !== undefined ||
+    body.authorization_completed !== undefined ||
+    body.flight_remarks !== undefined ||
+    body.solo_end_hobbs !== undefined ||
+    body.solo_end_tach !== undefined ||
+    body.dual_time !== undefined ||
+    body.solo_time !== undefined ||
+    body.total_hours_start !== undefined ||
+    body.total_hours_end !== undefined
+
+  if (hasCheckinOrBillingFields && !isAdminOrInstructor) {
+    return NextResponse.json(
+      { error: 'Forbidden: Only staff can update check-in/flight log fields' },
+      { status: 403 }
+    )
+  }
+
   // Prepare update data (only allow specific fields to be updated)
   const updateData: Record<string, unknown> = {}
   
@@ -259,9 +307,14 @@ export async function PATCH(
   if (body.hobbs_end !== undefined) updateData.hobbs_end = body.hobbs_end
   if (body.tach_start !== undefined) updateData.tach_start = body.tach_start
   if (body.tach_end !== undefined) updateData.tach_end = body.tach_end
+  if (body.airswitch_start !== undefined) updateData.airswitch_start = body.airswitch_start
+  if (body.airswitch_end !== undefined) updateData.airswitch_end = body.airswitch_end
   if (body.flight_time_hobbs !== undefined) updateData.flight_time_hobbs = body.flight_time_hobbs
   if (body.flight_time_tach !== undefined) updateData.flight_time_tach = body.flight_time_tach
+  if (body.flight_time_airswitch !== undefined) updateData.flight_time_airswitch = body.flight_time_airswitch
   if (body.flight_time !== undefined) updateData.flight_time = body.flight_time
+  if (body.billing_basis !== undefined) updateData.billing_basis = body.billing_basis
+  if (body.billing_hours !== undefined) updateData.billing_hours = body.billing_hours
   if (body.fuel_on_board !== undefined) updateData.fuel_on_board = body.fuel_on_board
   if (body.passengers !== undefined) updateData.passengers = body.passengers
   if (body.route !== undefined) updateData.route = body.route
@@ -270,6 +323,7 @@ export async function PATCH(
   if (body.authorization_completed !== undefined) updateData.authorization_completed = body.authorization_completed
   if (body.flight_remarks !== undefined) updateData.flight_remarks = body.flight_remarks
   if (body.solo_end_hobbs !== undefined) updateData.solo_end_hobbs = body.solo_end_hobbs
+  if (body.solo_end_tach !== undefined) updateData.solo_end_tach = body.solo_end_tach
   if (body.dual_time !== undefined) updateData.dual_time = body.dual_time
   if (body.solo_time !== undefined) updateData.solo_time = body.solo_time
   if (body.total_hours_start !== undefined) updateData.total_hours_start = body.total_hours_start
@@ -287,7 +341,10 @@ export async function PATCH(
         registration,
         type,
         model,
-        manufacturer
+        manufacturer,
+        record_hobbs,
+        record_tacho,
+        record_airswitch
       ),
       student:user_id (
         id,
@@ -306,7 +363,8 @@ export async function PATCH(
       ),
       flight_type:flight_type_id (
         id,
-        name
+        name,
+        instruction_type
       ),
       lesson:lesson_id (
         id,
@@ -318,7 +376,10 @@ export async function PATCH(
         registration,
         type,
         model,
-        manufacturer
+        manufacturer,
+        record_hobbs,
+        record_tacho,
+        record_airswitch
       ),
       checked_out_instructor:instructors!bookings_checked_out_instructor_id_fkey (
         id,

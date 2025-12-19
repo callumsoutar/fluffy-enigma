@@ -104,7 +104,7 @@ interface BookingOptions {
   aircraft: Array<{ id: string; registration: string; type: string; model: string | null; manufacturer: string | null }>
   members: Array<{ id: string; first_name: string | null; last_name: string | null; email: string }>
   instructors: Array<{ id: string; first_name: string | null; last_name: string | null; user: { id: string; email: string } | null }>
-  flightTypes: Array<{ id: string; name: string }>
+  flightTypes: Array<{ id: string; name: string; instruction_type: 'trial' | 'dual' | 'solo' | null }>
   lessons: Array<{ id: string; name: string; description: string | null }>
 }
 

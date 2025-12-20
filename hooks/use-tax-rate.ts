@@ -31,8 +31,10 @@ export function useOrganizationTaxRate() {
   })
 
   // Extract the rate from the first tax rate (should be the default)
-  const taxRate = data?.tax_rates?.[0]?.rate 
-    ? parseFloat(data.tax_rates[0].rate) 
+  // The DB/config may store either a decimal (0.15) or a percentage (15) — normalize to decimal.
+  const raw = data?.tax_rates?.[0]?.rate ? parseFloat(data.tax_rates[0].rate) : NaN
+  const taxRate = Number.isFinite(raw)
+    ? (raw > 1 ? raw / 100 : raw)
     : 0.15 // Default to 15% if not found
 
   return {

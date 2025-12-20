@@ -65,6 +65,13 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     try {
       const data = await res.json()
       if (typeof data?.error === "string") message = data.error
+      // Surface validation details when present (Zod issues from API routes)
+      if (Array.isArray(data?.details) && data.details.length > 0) {
+        const first = data.details[0]
+        const path = Array.isArray(first?.path) ? first.path.join(".") : undefined
+        const issue = typeof first?.message === "string" ? first.message : undefined
+        if (issue) message = path ? `${message}: ${path} — ${issue}` : `${message}: ${issue}`
+      }
     } catch {
       // ignore
     }
@@ -664,57 +671,10 @@ export default function BookingCheckinPage() {
     toast.success("Draft calculated (not saved)")
   })
 
-  // Helper function to normalize date strings to a format Zod accepts
-  const normalizeDateString = (value: string | null | undefined): string | null => {
-    if (!value || value === "" || typeof value !== "string") return null
-    let trimmed = value.trim()
-    if (trimmed === "") return null
-    
-    // Normalize +00:00 or +00 to Z (UTC)
-    if (trimmed.endsWith('+00:00') || trimmed.endsWith('-00:00')) {
-      trimmed = trimmed.slice(0, -6) + 'Z'
-    } else if (trimmed.endsWith('+00') || trimmed.endsWith('-00')) {
-      trimmed = trimmed.slice(0, -3) + 'Z'
-    }
-    
-    // Check short format (YYYY-MM-DDTHH:mm)
-    const shortFormatRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
-    if (shortFormatRegex.test(trimmed)) {
-      return trimmed
-    }
-    
-    // Validate it's a valid ISO datetime
-    try {
-      const datetimeResult = z.string().datetime().safeParse(trimmed)
-      if (datetimeResult.success) {
-        return trimmed
-      }
-    } catch {
-      // Continue
-    }
-    
-    // If validation fails, try to fix common issues
-    const postgresMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})[\+\-]00:?00?$/)
-    if (postgresMatch) {
-      return `${postgresMatch[1]}T${postgresMatch[2]}Z`
-    }
-    
-    return trimmed
-  }
-
   // Calculate flight hours from meter readings
   React.useEffect(() => {
     if (isInitializingRef.current) return
 
-    const hobbsHours = hobbsTotalHours
-    const tachHours = tachTotalHours
-
-    if (hobbsHours > 0) {
-      setValue("flight_time_hobbs", hobbsHours, { shouldDirty: false })
-    }
-    if (tachHours > 0) {
-      setValue("flight_time_tach", tachHours, { shouldDirty: false })
-    }
     // Persist the deterministic split times (no manual overrides)
     if (splitTimes.total > 0 && !splitTimes.error) {
       setValue("dual_time", splitTimes.dual, { shouldDirty: false })
@@ -754,8 +714,6 @@ export default function BookingCheckinPage() {
       billing_hours: booking.billing_hours || null,
       checked_out_aircraft_id: booking.checked_out_aircraft_id || booking.aircraft_id || null,
       checked_out_instructor_id: booking.checked_out_instructor_id || booking.instructor_id || null,
-      actual_start: normalizeDateString(booking.actual_start || booking.start_time || null),
-      actual_end: normalizeDateString(booking.actual_end || booking.end_time || null),
       flight_type_id: booking.flight_type_id || null,
       lesson_id: booking.lesson_id || null,
       remarks: null,
@@ -806,20 +764,12 @@ export default function BookingCheckinPage() {
         checked_out_instructor_id: selectedInstructorId,
         flight_type_id: selectedFlightTypeId,
 
-        // Actual times are not captured in the UI; default to scheduled booking times.
-        actual_start: booking.start_time,
-        actual_end: booking.end_time,
-
         hobbs_start: hobbsStart ?? null,
         hobbs_end: hobbsEnd ?? null,
         tach_start: tachStart ?? null,
         tach_end: tachEnd ?? null,
         airswitch_start: null,
         airswitch_end: null,
-
-        flight_time_hobbs: hobbsTotalHours > 0 ? hobbsTotalHours : null,
-        flight_time_tach: tachTotalHours > 0 ? tachTotalHours : null,
-        flight_time_airswitch: null,
 
         solo_end_hobbs: aircraftBillingBasis === 'hobbs' && hasSoloAtEnd ? (soloEndHobbs ?? null) : null,
         solo_end_tach: aircraftBillingBasis === 'tacho' && hasSoloAtEnd ? (soloEndTach ?? null) : null,

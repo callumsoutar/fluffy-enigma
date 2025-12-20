@@ -4,14 +4,16 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useState, useEffect } from "react"
+import * as React from "react"
 import type { AircraftWithType } from "@/lib/types/aircraft"
 import type { AircraftType } from "@/lib/types/aircraft"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { toast } from "sonner"
-import { IconInfoCircle, IconSettings, IconCurrencyDollar, IconPlus } from "@tabler/icons-react"
+import { IconInfoCircle, IconSettings, IconCurrencyDollar, IconPlus, IconRotateClockwise, IconDeviceFloppy } from "@tabler/icons-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Select,
   SelectTrigger,
@@ -98,6 +100,82 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
   const [newTypeCategory, setNewTypeCategory] = useState("")
   const [newTypeDescription, setNewTypeDescription] = useState("")
   const [isCreatingType, setIsCreatingType] = useState(false)
+  const isMobile = useIsMobile()
+  
+  // Track sidebar state for banner positioning
+  const [sidebarLeft, setSidebarLeft] = React.useState(0)
+  
+  React.useEffect(() => {
+    if (isMobile) {
+      setSidebarLeft(0)
+      return
+    }
+
+    const updateSidebarPosition = () => {
+      // Find the sidebar gap element which shows the actual sidebar width
+      const sidebarGap = document.querySelector('[data-slot="sidebar-gap"]')
+      if (sidebarGap) {
+        const computedWidth = window.getComputedStyle(sidebarGap).width
+        const width = parseFloat(computedWidth) || 0
+        setSidebarLeft(width)
+        return
+      }
+
+      // Fallback: Check sidebar state from data attributes
+      const sidebar = document.querySelector('[data-slot="sidebar"]')
+      if (!sidebar) {
+        setSidebarLeft(0)
+        return
+      }
+
+      const state = sidebar.getAttribute('data-state')
+      const collapsible = sidebar.getAttribute('data-collapsible')
+      
+      // Calculate left offset based on sidebar state
+      if (state === 'collapsed') {
+        if (collapsible === 'icon') {
+          // Icon mode: use icon width (3rem = 48px)
+          setSidebarLeft(48)
+        } else {
+          setSidebarLeft(0)
+        }
+      } else {
+        // Expanded: use CSS variable or default width
+        const root = document.documentElement
+        const sidebarWidth = root.style.getPropertyValue('--sidebar-width')
+        if (sidebarWidth) {
+          // Parse CSS calc() value like "calc(var(--spacing) * 72)"
+          const match = sidebarWidth.match(/calc\(var\(--spacing\)\s*\*\s*(\d+)\)/)
+          if (match) {
+            const multiplier = parseInt(match[1], 10)
+            // Assuming --spacing is 4px (0.25rem)
+            setSidebarLeft(multiplier * 4)
+          } else {
+            // Fallback to default expanded width
+            setSidebarLeft(288) // 72 * 4 = 288px
+          }
+        } else {
+          setSidebarLeft(288) // Default expanded width
+        }
+      }
+    }
+
+    updateSidebarPosition()
+    
+    // Update on resize and sidebar state changes
+    window.addEventListener('resize', updateSidebarPosition)
+    const observer = new MutationObserver(updateSidebarPosition)
+    const sidebar = document.querySelector('[data-slot="sidebar"]')
+    if (sidebar) {
+      observer.observe(sidebar, { attributes: true, attributeFilter: ['data-state'] })
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateSidebarPosition)
+      observer.disconnect()
+    }
+  }, [isMobile])
+
   const {
     register,
     handleSubmit,
@@ -219,32 +297,29 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
     }
   }
 
+  const handleUndo = () => {
+    reset()
+  }
+
   return (
+    <>
     <form onSubmit={handleSubmit(onSubmit)}>
-      <div className="flex flex-row items-center justify-between mb-6">
+      <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-900">Aircraft Information</h3>
-        <div className="flex gap-2 items-center">
-          <Button type="submit" disabled={isSaving} size="sm" className="min-w-[100px] font-semibold">
-            {isSaving ? "Saving..." : "Save"}
-          </Button>
-          <Button type="button" variant="outline" size="sm" disabled={!isDirty || isSaving} onClick={() => reset()}>
-            Undo
-          </Button>
-        </div>
       </div>
       {/* General Info Section */}
-      <Card className="mb-8 bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
+      <Card className="mb-8 bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 shadow-sm">
         <h4 className="flex items-center gap-2 text-base font-semibold mb-6 text-gray-900 tracking-tight border-b pb-2">
           <IconInfoCircle className="w-5 h-5 text-indigo-500" />
           General Info
         </h4>
-        <div className="flex flex-row gap-8">
-          {/* Left column: Inputs (60%) */}
-          <div className="flex-1 min-w-0" style={{ flexBasis: '60%' }}>
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+          {/* Left column: Inputs */}
+          <div className="flex-1 min-w-0 lg:basis-3/5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
               <div>
                 <Label className="block text-sm font-medium mb-1 text-gray-800">Manufacturer</Label>
-                <Input {...register("manufacturer")} className="bg-white w-64" />
+                <Input {...register("manufacturer")} className="bg-white w-full" />
                 {errors.manufacturer && <p className="text-xs text-red-500 mt-1">{errors.manufacturer.message}</p>}
               </div>
               <div>
@@ -253,7 +328,7 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
                   value={watch("aircraft_type_id") || undefined}
                   onValueChange={v => setValue("aircraft_type_id", v ?? null, { shouldDirty: true })}
                 >
-                  <SelectTrigger className="w-64">
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select aircraft type..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -280,27 +355,27 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
               </div>
               <div>
                 <Label className="block text-sm font-medium mb-1 text-gray-800">Model</Label>
-                <Input {...register("model")} className="bg-white w-64" />
+                <Input {...register("model")} className="bg-white w-full" />
                 {errors.model && <p className="text-xs text-red-500 mt-1">{errors.model.message}</p>}
               </div>
               <div>
                 <Label className="block text-sm font-medium mb-1 text-gray-800">Year Manufactured</Label>
-                <Input type="number" {...register("year_manufactured")} className="bg-white w-64" />
+                <Input type="number" {...register("year_manufactured")} className="bg-white w-full" />
                 {errors.year_manufactured && <p className="text-xs text-red-500 mt-1">{errors.year_manufactured.message}</p>}
               </div>
               <div>
                 <Label className="block text-sm font-medium mb-1 text-gray-800">Registration</Label>
-                <Input {...register("registration")} className="bg-white w-64" />
+                <Input {...register("registration")} className="bg-white w-full" />
                 {errors.registration && <p className="text-xs text-red-500 mt-1">{errors.registration.message}</p>}
               </div>
               <div>
                 <Label className="block text-sm font-medium mb-1 text-gray-800">Capacity</Label>
-                <Input type="number" {...register("capacity")} className="bg-white w-64" />
+                <Input type="number" {...register("capacity")} className="bg-white w-full" />
                 {errors.capacity && <p className="text-xs text-red-500 mt-1">{errors.capacity.message}</p>}
               </div>
               <div>
                 <Label className="block text-sm font-medium mb-1 text-gray-800">Fuel Consumption (L/hr)</Label>
-                <Input type="number" step="0.1" {...register("fuel_consumption")} className="bg-white w-64" />
+                <Input type="number" step="0.1" {...register("fuel_consumption")} className="bg-white w-full" />
                 {errors.fuel_consumption && <p className="text-xs text-red-500 mt-1">{errors.fuel_consumption.message}</p>}
               </div>
               <div className="md:col-span-2">
@@ -309,7 +384,7 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
                   value={watch("total_time_method") || undefined}
                   onValueChange={v => setValue("total_time_method", v ?? null, { shouldDirty: true })}
                 >
-                  <SelectTrigger className="w-64">
+                  <SelectTrigger className="w-full md:max-w-[16rem]">
                     <SelectValue placeholder="Select a method..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -326,42 +401,91 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
               </div>
             </div>
           </div>
-          {/* Right column: Checkboxes (40%) */}
-          <div className="flex-1 min-w-0 max-w-md" style={{ flexBasis: '40%' }}>
-            <div className="flex flex-col gap-4">
-              <div className="flex items-start gap-3">
-                <Checkbox id="on_line" checked={!!watch("on_line")} onCheckedChange={v => setValue("on_line", !!v, { shouldDirty: true })} />
-                <div>
-                  <Label htmlFor="on_line" className="font-medium text-sm text-gray-900">Available for Bookings</Label>
-                  <p className="text-xs text-gray-500">This aircraft can be booked and is available for operations.</p>
+          {/* Right column: Toggles */}
+          <div className="flex-1 min-w-0 lg:basis-2/5 lg:max-w-md">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3 sm:p-4">
+                <Checkbox
+                  id="on_line"
+                  className="mt-0.5"
+                  checked={!!watch("on_line")}
+                  onCheckedChange={v => setValue("on_line", !!v, { shouldDirty: true })}
+                />
+                <div className="min-w-0">
+                  <Label htmlFor="on_line" className="font-medium text-sm text-gray-900 leading-none">
+                    Available for Bookings
+                  </Label>
+                  <p className="text-xs text-gray-600 mt-1 leading-snug">
+                    This aircraft can be booked and is available for operations.
+                  </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Checkbox id="prioritise_scheduling" checked={!!watch("prioritise_scheduling")} onCheckedChange={v => setValue("prioritise_scheduling", !!v, { shouldDirty: true })} />
-                <div>
-                  <Label htmlFor="prioritise_scheduling" className="font-medium text-sm text-gray-900">Prioritise Scheduling</Label>
-                  <p className="text-xs text-gray-500">Give this aircraft priority in scheduling algorithms.</p>
+
+              <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3 sm:p-4">
+                <Checkbox
+                  id="prioritise_scheduling"
+                  className="mt-0.5"
+                  checked={!!watch("prioritise_scheduling")}
+                  onCheckedChange={v => setValue("prioritise_scheduling", !!v, { shouldDirty: true })}
+                />
+                <div className="min-w-0">
+                  <Label htmlFor="prioritise_scheduling" className="font-medium text-sm text-gray-900 leading-none">
+                    Prioritise Scheduling
+                  </Label>
+                  <p className="text-xs text-gray-600 mt-1 leading-snug">
+                    Give this aircraft priority in scheduling algorithms.
+                  </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Checkbox id="record_tacho" checked={!!watch("record_tacho")} onCheckedChange={v => setValue("record_tacho", !!v, { shouldDirty: true })} />
-                <div>
-                  <Label htmlFor="record_tacho" className="font-medium text-sm text-gray-900">Record Tacho</Label>
-                  <p className="text-xs text-gray-500">Track tacho readings for this aircraft.</p>
+
+              <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3 sm:p-4">
+                <Checkbox
+                  id="record_tacho"
+                  className="mt-0.5"
+                  checked={!!watch("record_tacho")}
+                  onCheckedChange={v => setValue("record_tacho", !!v, { shouldDirty: true })}
+                />
+                <div className="min-w-0">
+                  <Label htmlFor="record_tacho" className="font-medium text-sm text-gray-900 leading-none">
+                    Record Tacho
+                  </Label>
+                  <p className="text-xs text-gray-600 mt-1 leading-snug">
+                    Track tacho readings for this aircraft.
+                  </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Checkbox id="record_hobbs" checked={!!watch("record_hobbs")} onCheckedChange={v => setValue("record_hobbs", !!v, { shouldDirty: true })} />
-                <div>
-                  <Label htmlFor="record_hobbs" className="font-medium text-sm text-gray-900">Record Hobbs</Label>
-                  <p className="text-xs text-gray-500">Track Hobbs meter readings for this aircraft.</p>
+
+              <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3 sm:p-4">
+                <Checkbox
+                  id="record_hobbs"
+                  className="mt-0.5"
+                  checked={!!watch("record_hobbs")}
+                  onCheckedChange={v => setValue("record_hobbs", !!v, { shouldDirty: true })}
+                />
+                <div className="min-w-0">
+                  <Label htmlFor="record_hobbs" className="font-medium text-sm text-gray-900 leading-none">
+                    Record Hobbs
+                  </Label>
+                  <p className="text-xs text-gray-600 mt-1 leading-snug">
+                    Track Hobbs meter readings for this aircraft.
+                  </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Checkbox id="record_airswitch" checked={!!watch("record_airswitch")} onCheckedChange={v => setValue("record_airswitch", !!v, { shouldDirty: true })} />
-                <div>
-                  <Label htmlFor="record_airswitch" className="font-medium text-sm text-gray-900">Record Airswitch</Label>
-                  <p className="text-xs text-gray-500">Track airswitch events for this aircraft.</p>
+
+              <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3 sm:p-4">
+                <Checkbox
+                  id="record_airswitch"
+                  className="mt-0.5"
+                  checked={!!watch("record_airswitch")}
+                  onCheckedChange={v => setValue("record_airswitch", !!v, { shouldDirty: true })}
+                />
+                <div className="min-w-0">
+                  <Label htmlFor="record_airswitch" className="font-medium text-sm text-gray-900 leading-none">
+                    Record Airswitch
+                  </Label>
+                  <p className="text-xs text-gray-600 mt-1 leading-snug">
+                    Track airswitch events for this aircraft.
+                  </p>
                 </div>
               </div>
             </div>
@@ -378,17 +502,17 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
             <div>
               <Label className="block text-sm font-medium mb-1 text-gray-800">Total Hours</Label>
-              <Input type="number" step="0.1" {...register("total_hours")} className="bg-white w-64" />
+              <Input type="number" step="0.1" {...register("total_hours")} className="bg-white w-full" />
               {errors.total_hours && <p className="text-xs text-red-500 mt-1">{errors.total_hours.message}</p>}
             </div>
             <div>
               <Label className="block text-sm font-medium mb-1 text-gray-800">Current Tach</Label>
-              <Input type="number" step="0.1" {...register("current_tach")} className="bg-white w-64" />
+              <Input type="number" step="0.1" {...register("current_tach")} className="bg-white w-full" />
               {errors.current_tach && <p className="text-xs text-red-500 mt-1">{errors.current_tach.message}</p>}
             </div>
             <div>
               <Label className="block text-sm font-medium mb-1 text-gray-800">Current Hobbs</Label>
-              <Input type="number" step="0.1" {...register("current_hobbs")} className="bg-white w-64" />
+              <Input type="number" step="0.1" {...register("current_hobbs")} className="bg-white w-full" />
               {errors.current_hobbs && <p className="text-xs text-red-500 mt-1">{errors.current_hobbs.message}</p>}
             </div>
           </div>
@@ -396,7 +520,7 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
       </Card>
 
       {/* Charge Rates Section */}
-      <Card className="mb-8 bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
+      <Card className="mb-8 bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 shadow-sm">
         <h4 className="flex items-center gap-2 text-base font-semibold mb-6 text-gray-900 tracking-tight border-b pb-2">
           <IconCurrencyDollar className="w-5 h-5 text-indigo-500" />
           Charge Rates
@@ -405,60 +529,104 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
       </Card>
 
       {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
-
-      <Dialog open={isAddTypeDialogOpen} onOpenChange={setIsAddTypeDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Aircraft Type</DialogTitle>
-            <DialogDescription>
-              Create a new aircraft type to categorize your aircraft fleet.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label className="block text-sm font-medium mb-1">Name *</Label>
-              <Input
-                value={newTypeName}
-                onChange={(e) => setNewTypeName(e.target.value)}
-                placeholder="e.g., Cessna 172"
-              />
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-1">Category</Label>
-              <Input
-                value={newTypeCategory}
-                onChange={(e) => setNewTypeCategory(e.target.value)}
-                placeholder="e.g., Single Engine"
-              />
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-1">Description</Label>
-              <Input
-                value={newTypeDescription}
-                onChange={(e) => setNewTypeDescription(e.target.value)}
-                placeholder="e.g., Four-seat, single-engine aircraft"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsAddTypeDialogOpen(false)}
-              disabled={isCreatingType}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleCreateAircraftType}
-              disabled={isCreatingType || !newTypeName.trim()}
-            >
-              {isCreatingType ? "Creating..." : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      
+      {/* Add bottom padding when banner is visible to prevent content overlap */}
+      {isDirty && <div className="h-24" />}
     </form>
+    
+    {/* Sticky Bottom Bar - Save Changes */}
+    {isDirty && (
+      <div 
+        className="fixed bottom-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl"
+        style={{ 
+          position: 'fixed',
+          bottom: 0,
+          // On mobile: full width, on desktop: start after sidebar (adjusts dynamically)
+          left: isMobile ? 0 : `${sidebarLeft}px`,
+          right: 0,
+          zIndex: 50
+        }}
+      >
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+          <div className="flex items-center justify-end gap-4">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={handleUndo}
+              disabled={isSaving}
+              className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+            >
+              <IconRotateClockwise className="h-4 w-4 mr-2" />
+              Undo Changes
+            </Button>
+            <Button
+              size="lg"
+              onClick={handleSubmit(onSubmit)}
+              disabled={isSaving}
+              className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+            >
+              <IconDeviceFloppy className="h-4 w-4 mr-2" />
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <Dialog open={isAddTypeDialogOpen} onOpenChange={setIsAddTypeDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Aircraft Type</DialogTitle>
+          <DialogDescription>
+            Create a new aircraft type to categorize your aircraft fleet.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div>
+            <Label className="block text-sm font-medium mb-1">Name *</Label>
+            <Input
+              value={newTypeName}
+              onChange={(e) => setNewTypeName(e.target.value)}
+              placeholder="e.g., Cessna 172"
+            />
+          </div>
+          <div>
+            <Label className="block text-sm font-medium mb-1">Category</Label>
+            <Input
+              value={newTypeCategory}
+              onChange={(e) => setNewTypeCategory(e.target.value)}
+              placeholder="e.g., Single Engine"
+            />
+          </div>
+          <div>
+            <Label className="block text-sm font-medium mb-1">Description</Label>
+            <Input
+              value={newTypeDescription}
+              onChange={(e) => setNewTypeDescription(e.target.value)}
+              placeholder="e.g., Four-seat, single-engine aircraft"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsAddTypeDialogOpen(false)}
+            disabled={isCreatingType}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleCreateAircraftType}
+            disabled={isCreatingType || !newTypeName.trim()}
+          >
+            {isCreatingType ? "Creating..." : "Create"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
+

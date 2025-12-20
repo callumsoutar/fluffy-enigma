@@ -87,6 +87,42 @@ export const bookingsQuerySchema = z.object({
 // Booking ID parameter schema
 export const bookingIdSchema = uuidSchema
 
+// POST request body schema (create new booking)
+export const bookingCreateSchema = z.object({
+  aircraft_id: uuidSchema,
+  // Only staff can create bookings on behalf of other users; members/students will be forced to self on server.
+  user_id: z.union([uuidSchema, z.null()]).optional(),
+  instructor_id: z.union([uuidSchema, z.null()]).optional(),
+  flight_type_id: z.union([uuidSchema, z.null()]).optional(),
+  lesson_id: z.union([uuidSchema, z.null()]).optional(),
+  booking_type: bookingTypeSchema.default('flight'),
+  status: bookingStatusSchema.optional(),
+  start_time: dateSchema,
+  end_time: dateSchema,
+  purpose: z.string().min(1, 'Purpose is required').max(1000, 'Purpose too long'),
+  remarks: z.preprocess(
+    (val) => val === '' ? null : val,
+    z.string().max(2000, 'Remarks too long').optional().nullable()
+  ),
+  notes: z.preprocess(
+    (val) => val === '' ? null : val,
+    z.string().max(2000, 'Notes too long').optional().nullable()
+  ),
+}).strict().superRefine((data, ctx) => {
+  const start = new Date(data.start_time)
+  const end = new Date(data.end_time)
+
+  if (Number.isNaN(start.getTime())) {
+    ctx.addIssue({ code: "custom", message: "Invalid start_time", path: ["start_time"] })
+  }
+  if (Number.isNaN(end.getTime())) {
+    ctx.addIssue({ code: "custom", message: "Invalid end_time", path: ["end_time"] })
+  }
+  if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && start >= end) {
+    ctx.addIssue({ code: "custom", message: "End time must be after start time", path: ["end_time"] })
+  }
+})
+
 // Numeric validation for meter readings and times
 // Note: durations like dual_time/solo_time can be 0.0, so we allow non-negative numbers.
 const numericSchema = z.preprocess(
@@ -123,14 +159,6 @@ export const bookingUpdateSchema = z.object({
   // Flight log fields (consolidated from flight_logs)
   checked_out_aircraft_id: z.union([uuidSchema, z.null()]).optional(),
   checked_out_instructor_id: z.union([uuidSchema, z.null()]).optional(),
-  actual_start: z.preprocess(
-    (val) => val === '' ? undefined : val,
-    dateSchema.optional().nullable()
-  ),
-  actual_end: z.preprocess(
-    (val) => val === '' ? undefined : val,
-    dateSchema.optional().nullable()
-  ),
   eta: z.preprocess(
     (val) => val === '' ? undefined : val,
     dateSchema.optional().nullable()
@@ -163,6 +191,10 @@ export const bookingUpdateSchema = z.object({
   solo_time: numericSchema,
   total_hours_start: numericSchema,
   total_hours_end: numericSchema,
+  // Cancellation fields
+  cancellation_category_id: z.union([uuidSchema, z.null()]).optional(),
+  cancellation_reason: z.string().max(500).optional().nullable(),
+  cancelled_notes: z.string().max(2000).optional().nullable(),
 }).strict() // Reject unknown fields
 
 /**
@@ -185,19 +217,12 @@ export const bookingCheckinApproveSchema = z.object({
   checked_out_instructor_id: z.union([uuidSchema, z.null()]).optional().nullable(),
   flight_type_id: uuidSchema,
 
-  actual_start: dateSchema,
-  actual_end: dateSchema,
-
   hobbs_start: numericSchema,
   hobbs_end: numericSchema,
   tach_start: numericSchema,
   tach_end: numericSchema,
   airswitch_start: numericSchema,
   airswitch_end: numericSchema,
-
-  flight_time_hobbs: numericSchema,
-  flight_time_tach: numericSchema,
-  flight_time_airswitch: numericSchema,
 
   solo_end_hobbs: numericSchema,
   solo_end_tach: numericSchema,

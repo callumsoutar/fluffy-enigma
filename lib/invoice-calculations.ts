@@ -5,13 +5,15 @@
  * All calculations use proper rounding to 2 decimal places for currency precision.
  */
 
+import roundTo from 'round-to'
 import type { InvoiceItem } from '@/lib/types/invoice_items'
 
 /**
  * Round a number to 2 decimal places (for currency)
+ * Uses the round-to library for consistent, reliable rounding
  */
 export function roundToTwoDecimals(value: number): number {
-  return Math.round(value * 100) / 100
+  return roundTo(value, 2)
 }
 
 /**

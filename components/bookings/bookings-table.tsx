@@ -21,12 +21,13 @@ import {
   IconUser,
   IconSchool,
   IconCircleCheck,
-  IconAlertCircle
+  IconAlertCircle,
+  IconChevronRight
 } from "@tabler/icons-react"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Card } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { useRouter } from "next/navigation"
+import { cn } from "@/lib/utils"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -279,73 +280,68 @@ function BookingCard({ booking }: { booking: BookingWithRelations }) {
   const isFlying = status === "flying"
   const isUnconfirmed = status === "unconfirmed"
   const isConfirmed = status === "confirmed"
+  const isComplete = status === "complete"
 
   return (
     <Card 
-      className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+      className="group relative transition-all hover:shadow-md cursor-pointer border bg-card hover:bg-accent/5"
       onClick={() => router.push(`/bookings/${booking.id}`)}
     >
-      <div className="flex flex-col gap-4">
-        {/* Header: Aircraft and Status */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <IconPlane className="h-4 w-4 text-muted-foreground shrink-0" />
-              <div className="font-semibold text-base truncate">
-                {booking.aircraft ? (
-                  <>
-                    {booking.aircraft.manufacturer && `${booking.aircraft.manufacturer} `}
-                    {booking.aircraft.type} {booking.aircraft.model && `- ${booking.aircraft.model}`}
-                  </>
-                ) : (
-                  "—"
-                )}
+      <div className="p-4">
+        <div className="flex flex-col gap-3">
+          {/* Top row: Aircraft & Status */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="shrink-0 p-1.5 rounded-md bg-primary/5 text-primary border border-primary/10">
+                <IconPlane className="h-4 w-4" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold text-base truncate tracking-tight">
+                  {booking.aircraft?.registration || "No Aircraft"}
+                </span>
+                <span className="text-[10px] text-muted-foreground truncate font-medium">
+                  {booking.aircraft ? (
+                    `${booking.aircraft.manufacturer} ${booking.aircraft.type}`
+                  ) : (
+                    getBookingTypeLabel(booking.booking_type)
+                  )}
+                </span>
               </div>
             </div>
-            {booking.aircraft && (
-              <div className="text-xs text-muted-foreground font-mono ml-6">
-                {booking.aircraft.registration}
-              </div>
-            )}
+            <Badge 
+              variant={variant} 
+              className={cn(
+                "shrink-0 font-semibold px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide",
+                "shadow-sm border",
+                isFlying && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-300/50 dark:border-blue-700/50",
+                isUnconfirmed && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300/50 dark:border-amber-700/50",
+                isConfirmed && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-300/50 dark:border-green-700/50",
+                isComplete && "bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-300/50 dark:border-slate-700/50"
+              )}
+            >
+              {isFlying && <IconPlane className="h-3 w-3 mr-1.5 animate-pulse" />}
+              {isUnconfirmed && <IconAlertCircle className="h-3 w-3 mr-1.5" />}
+              {isConfirmed && <IconCircleCheck className="h-3 w-3 mr-1.5" />}
+              {label}
+            </Badge>
           </div>
-          <Badge 
-            variant={variant} 
-            className={`font-medium shrink-0 ${
-              isFlying ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800" :
-              isUnconfirmed ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800" :
-              isConfirmed ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800" :
-              ""
-            }`}
-          >
-            {isFlying && <IconPlane className="h-3 w-3 mr-1" />}
-            {isUnconfirmed && <IconAlertCircle className="h-3 w-3 mr-1" />}
-            {isConfirmed && <IconCircleCheck className="h-3 w-3 mr-1" />}
-            {label}
-          </Badge>
-        </div>
 
-        <Separator />
-
-        {/* Date and Time */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-start gap-2">
-            <IconCalendar className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            <div>
-              <div className="text-xs text-muted-foreground mb-0.5">Date</div>
-              <div className="font-medium">
+          {/* Middle row: Date & Time inline */}
+          <div className="flex items-center gap-3 text-sm text-foreground/80 font-medium">
+            <div className="flex items-center gap-1.5">
+              <IconCalendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>
                 {start.toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
-                  year: "numeric",
+                  year: "numeric"
                 })}
-              </div>
+              </span>
             </div>
-          </div>
-          <div className="flex items-start gap-2">
-            <IconClock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            <div>
-              <div className="text-xs text-muted-foreground mb-0.5">Time</div>
-              <div className="font-medium">
+            <div className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+            <div className="flex items-center gap-1.5">
+              <IconClock className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>
                 {start.toLocaleTimeString("en-US", {
                   hour: "numeric",
                   minute: "2-digit",
@@ -353,48 +349,34 @@ function BookingCard({ booking }: { booking: BookingWithRelations }) {
                   hour: "numeric",
                   minute: "2-digit",
                 })}
+              </span>
+            </div>
+          </div>
+
+          {/* Bottom row: People side by side */}
+          <div className="flex items-center gap-4 pt-2 border-t border-border/50">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="shrink-0 h-6 w-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                {booking.student?.first_name?.[0] || "?"}
               </div>
+              <span className="text-xs font-medium truncate text-muted-foreground group-hover:text-foreground transition-colors">
+                {booking.student ? `${booking.student.first_name} ${booking.student.last_name}` : "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="shrink-0 h-6 w-6 rounded-full bg-muted border flex items-center justify-center text-[10px] font-bold">
+                {booking.instructor?.first_name?.[0] || "?"}
+              </div>
+              <span className="text-xs font-medium truncate text-muted-foreground group-hover:text-foreground transition-colors">
+                {booking.instructor ? `${booking.instructor.first_name} ${booking.instructor.last_name}` : "—"}
+              </span>
             </div>
           </div>
         </div>
-
-        <Separator />
-
-        {/* People and Type */}
-        <div className="grid grid-cols-2 gap-4">
-          {booking.student && (
-            <div className="flex items-start gap-2">
-              <IconUser className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <div className="text-xs text-muted-foreground mb-0.5">Student</div>
-                <div className="font-medium truncate">
-                  {[booking.student.first_name, booking.student.last_name]
-                    .filter(Boolean)
-                    .join(" ") || booking.student.email}
-                </div>
-              </div>
-            </div>
-          )}
-          {booking.instructor && (
-            <div className="flex items-start gap-2">
-              <IconSchool className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <div className="text-xs text-muted-foreground mb-0.5">Instructor</div>
-                <div className="font-medium truncate">
-                  {[booking.instructor.first_name, booking.instructor.last_name]
-                    .filter(Boolean)
-                    .join(" ") || booking.instructor.user?.email || "—"}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Type Badge */}
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="font-medium">
-            {getBookingTypeLabel(booking.booking_type)}
-          </Badge>
+        
+        {/* Subtle Chevron */}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/20 group-hover:text-primary/40 transition-all group-hover:translate-x-0.5">
+          <IconChevronRight className="h-5 w-5" />
         </div>
       </div>
     </Card>

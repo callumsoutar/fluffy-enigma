@@ -75,7 +75,6 @@ export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
 
   const statement = statementQuery.data?.statement ?? []
   const closingBalance = statementQuery.data?.closing_balance ?? 0
-  const outstandingBalance = statementQuery.data?.outstanding_balance ?? 0
 
   const outstandingInvoicesCount = invoicesQuery.data?.length ?? 0
 
@@ -93,27 +92,27 @@ export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
   return (
     <div className="flex flex-col gap-8">
       {/* Summary bar */}
-      <div className="flex flex-col md:flex-row items-stretch gap-4 bg-gray-50 rounded-lg p-4 border border-gray-100">
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <DollarSign className="w-6 h-6 mb-1 text-green-500" />
-          <div className="text-xs text-muted-foreground">Account Balance</div>
+      <div className="flex flex-col md:flex-row items-stretch gap-4 md:gap-0 bg-gray-50 rounded-lg p-4 md:p-6 border border-gray-100">
+        <div className="flex-1 flex flex-col items-center justify-center py-4 md:py-0">
+          <DollarSign className="w-6 h-6 mb-2 text-green-500" />
+          <div className="text-xs text-muted-foreground mb-2">Account Balance</div>
           {!member || statementQuery.isLoading ? (
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground my-2" />
           ) : (
             <div className="flex flex-col items-center">
               {closingBalance < 0 ? (
                 <>
-                  <span className="text-3xl font-bold text-green-600">${Math.abs(closingBalance).toFixed(2)}</span>
+                  <span className="text-2xl md:text-3xl font-bold text-green-600">${Math.abs(closingBalance).toFixed(2)}</span>
                   <span className="text-xs mt-1 uppercase tracking-wider text-green-700 font-semibold">Credit</span>
                 </>
               ) : closingBalance > 0 ? (
                 <>
-                  <span className="text-3xl font-bold text-red-600">${closingBalance.toFixed(2)}</span>
+                  <span className="text-2xl md:text-3xl font-bold text-red-600">${closingBalance.toFixed(2)}</span>
                   <span className="text-xs mt-1 uppercase tracking-wider text-red-700 font-semibold">Owing</span>
                 </>
               ) : (
                 <>
-                  <span className="text-3xl font-bold text-gray-700">$0.00</span>
+                  <span className="text-2xl md:text-3xl font-bold text-gray-700">$0.00</span>
                   <span className="text-xs mt-1 uppercase tracking-wider text-gray-500 font-semibold">Settled</span>
                 </>
               )}
@@ -123,9 +122,9 @@ export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
 
         <div className="hidden md:block w-px bg-gray-200 mx-2" />
 
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <FileText className="w-6 h-6 mb-1 text-orange-500" />
-          <div className="text-xs text-muted-foreground">Outstanding Invoices</div>
+        <div className="flex-1 flex flex-col items-center justify-center py-4 md:py-0">
+          <FileText className="w-6 h-6 mb-2 text-orange-500" />
+          <div className="text-xs text-muted-foreground mb-2">Outstanding Invoices</div>
           {invoicesQuery.isLoading ? (
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground my-2" />
           ) : invoicesQuery.isError ? (
@@ -133,23 +132,7 @@ export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
               {invoicesQuery.error instanceof Error ? invoicesQuery.error.message : "Failed to load invoices"}
             </div>
           ) : (
-            <div className="text-xl font-bold text-orange-600">{outstandingInvoicesCount}</div>
-          )}
-        </div>
-
-        <div className="hidden md:block w-px bg-gray-200 mx-2" />
-
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <DollarSign className="w-6 h-6 mb-1 text-red-500" />
-          <div className="text-xs text-muted-foreground">Outstanding Balance</div>
-          {statementQuery.isLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground my-2" />
-          ) : statementQuery.isError ? (
-            <div className="text-destructive text-sm">
-              {statementQuery.error instanceof Error ? statementQuery.error.message : "Failed to load balance"}
-            </div>
-          ) : (
-            <div className="text-xl font-bold text-red-700">${outstandingBalance.toFixed(2)}</div>
+            <div className="text-2xl md:text-3xl font-bold text-orange-600">{outstandingInvoicesCount}</div>
           )}
         </div>
       </div>

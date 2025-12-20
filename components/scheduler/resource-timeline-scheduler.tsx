@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { ChevronLeft, ChevronRight, CalendarDays, Clock, User, Plane } from "lucide-react"
+import { ChevronLeft, ChevronRight, CalendarDays, Clock, User, Plane, Eye, X, UserCircle, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { format as formatDate } from "date-fns"
 
@@ -19,6 +19,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 
 import {
   type AircraftResource,
@@ -29,14 +36,14 @@ import {
   formatTimeLabel,
   formatTimeRangeLabel,
   getBookingLayout,
-  minutesFromMidnight,
-  roundToInterval,
   type TimelineConfig,
 } from "./scheduler-utils"
 
 import type { BookingStatus, BookingWithRelations, BookingsResponse } from "@/lib/types/bookings"
 import type { AircraftResponse, AircraftWithType } from "@/lib/types/aircraft"
 import type { MemberWithRelations, MembersResponse } from "@/lib/types/members"
+import { NewBookingModal, type NewBookingPrefill } from "@/components/bookings/new-booking-modal"
+import { CancelBookingModal } from "@/components/bookings/cancel-booking-modal"
 
 type Resource =
   | { kind: "instructor"; data: InstructorResource }
@@ -49,6 +56,7 @@ type SchedulerBooking = {
   studentName: string
   instructorId: string | null
   aircraftId: string
+  userId: string | null
   status: BookingStatus
   aircraftLabel?: string
   instructorLabel?: string
@@ -213,6 +221,7 @@ function bookingToSchedulerBooking(b: BookingWithRelations): SchedulerBooking | 
     studentName,
     instructorId: b.instructor_id,
     aircraftId: b.aircraft_id,
+    userId: b.user_id,
     status: b.status,
     aircraftLabel,
     instructorLabel,
@@ -222,8 +231,13 @@ function bookingToSchedulerBooking(b: BookingWithRelations): SchedulerBooking | 
 export function ResourceTimelineScheduler() {
   const router = useRouter()
   const isMobile = useIsMobile()
+  const queryClient = useQueryClient()
 
   const [selectedDate, setSelectedDate] = React.useState<Date>(() => startOfDay(new Date()))
+  const [newBookingOpen, setNewBookingOpen] = React.useState(false)
+  const [newBookingPrefill, setNewBookingPrefill] = React.useState<NewBookingPrefill | undefined>(undefined)
+  const [cancelModalOpen, setCancelModalOpen] = React.useState(false)
+  const [selectedBookingForCancel, setSelectedBookingForCancel] = React.useState<BookingWithRelations | null>(null)
 
   const config: TimelineConfig = React.useMemo(
     () => ({
@@ -234,7 +248,7 @@ export function ResourceTimelineScheduler() {
     []
   )
 
-  const { slots, start: timelineStart, end: timelineEnd, spanMinutes } = React.useMemo(
+  const { slots, start: timelineStart, end: timelineEnd } = React.useMemo(
     () => buildTimeSlots(selectedDate, config),
     [selectedDate, config]
   )
@@ -311,6 +325,44 @@ export function ResourceTimelineScheduler() {
     [router]
   )
 
+  const handleCancelBookingClick = React.useCallback(
+    async (booking: SchedulerBooking) => {
+      // Fetch full booking details for the modal
+      try {
+        const res = await fetch(`/api/bookings/${booking.id}`)
+        if (!res.ok) throw new Error("Failed to fetch booking")
+        const data = await res.json()
+        setSelectedBookingForCancel(data.booking as BookingWithRelations)
+        setCancelModalOpen(true)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to load booking details")
+      }
+    },
+    []
+  )
+
+  const statusUpdateMutation = useMutation({
+    mutationFn: async ({ bookingId, status }: { bookingId: string; status: BookingStatus }) => {
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to update booking")
+      }
+      return res.json()
+    },
+    onSuccess: async (data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["scheduler", "bookings"] })
+      toast.success(`Booking ${variables.status === 'confirmed' ? 'confirmed' : variables.status === 'cancelled' ? 'cancelled' : 'updated'} successfully`)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update booking")
+    },
+  })
+
   const handleEmptySlotClick = React.useCallback(
     ({
       resource,
@@ -322,21 +374,23 @@ export function ResourceTimelineScheduler() {
       container: HTMLDivElement
     }) => {
       const rect = container.getBoundingClientRect()
+      if (!rect.width) return
       const x = Math.max(0, Math.min(clientX - rect.left, rect.width))
-      const minutesInto = (x / rect.width) * spanMinutes
-      const absoluteMinutes = minutesFromMidnight(timelineStart) + minutesInto
-      const rounded = roundToInterval(absoluteMinutes, config.intervalMinutes)
+      // Snap to the clicked grid cell (each cell = one interval).
+      // This avoids "halfway through a cell changes the time" issues from continuous rounding.
+      const rawIdx = Math.floor((x / rect.width) * slotCount)
+      const idx = Math.max(0, Math.min(rawIdx, slotCount - 1))
+      const when = slots[idx] ?? timelineStart
 
-      const hour = Math.floor(rounded / 60)
-      const minute = rounded % 60
-      const when = new Date(selectedDate)
-      when.setHours(hour, minute, 0, 0)
-
-      toast("Create booking (stub)", {
-        description: `${getResourceTitle(resource)} @ ${formatTimeLabel(when)}`,
+      setNewBookingPrefill({
+        date: selectedDate,
+        startTime: formatTimeLabel(when),
+        aircraftId: resource.kind === "aircraft" ? resource.data.id : undefined,
+        instructorId: resource.kind === "instructor" ? resource.data.id : undefined,
       })
+      setNewBookingOpen(true)
     },
-    [spanMinutes, timelineStart, config.intervalMinutes, selectedDate]
+    [slotCount, slots, timelineStart, selectedDate]
   )
 
   return (
@@ -356,7 +410,7 @@ export function ResourceTimelineScheduler() {
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className="h-10 justify-start gap-2 px-3 font-semibold"
+                className="h-10 justify-start gap-2 px-3 font-semibold flex-1 sm:flex-initial"
                 aria-label="Select date"
               >
                 <CalendarDays className="h-4 w-4 text-muted-foreground" />
@@ -382,8 +436,21 @@ export function ResourceTimelineScheduler() {
             <ChevronRight className="h-4 w-4" />
           </Button>
 
-          <Button variant="ghost" onClick={goToToday}>
+          <Button variant="ghost" onClick={goToToday} className="hidden sm:inline-flex">
             Today
+          </Button>
+        </div>
+
+        {/* Desktop only: New booking button */}
+        <div className="hidden sm:flex items-center gap-2">
+          <Button
+            onClick={() => {
+              setNewBookingPrefill({ date: selectedDate, startTime: "09:00" })
+              setNewBookingOpen(true)
+            }}
+          >
+            <CalendarDays className="h-4 w-4 mr-2" />
+            New booking
           </Button>
         </div>
       </div>
@@ -501,10 +568,13 @@ export function ResourceTimelineScheduler() {
                       timelineStart={timelineStart}
                       timelineEnd={timelineEnd}
                       bookings={rowBookings}
+                      resourceTitle={getResourceTitle(resource)}
                       onEmptyClick={(clientX, container) =>
                         handleEmptySlotClick({ resource, clientX, container })
                       }
                       onBookingClick={handleBookingClick}
+                      onStatusUpdate={statusUpdateMutation.mutate}
+                      onCancelBooking={handleCancelBookingClick}
                     />
                   )
                 })}
@@ -538,10 +608,13 @@ export function ResourceTimelineScheduler() {
                       timelineStart={timelineStart}
                       timelineEnd={timelineEnd}
                       bookings={rowBookings}
+                      resourceTitle={getResourceTitle(resource)}
                       onEmptyClick={(clientX, container) =>
                         handleEmptySlotClick({ resource, clientX, container })
                       }
                       onBookingClick={handleBookingClick}
+                      onStatusUpdate={statusUpdateMutation.mutate}
+                      onCancelBooking={handleCancelBookingClick}
                     />
                   )
                 })}
@@ -550,6 +623,31 @@ export function ResourceTimelineScheduler() {
           </div>
         </div>
       </div>
+
+      <NewBookingModal
+        open={newBookingOpen}
+        onOpenChange={setNewBookingOpen}
+        prefill={newBookingPrefill}
+        onCreated={(booking) => {
+          toast("Booking created", {
+            description: `${booking.aircraft?.registration || "Aircraft"} • ${formatDate(new Date(booking.start_time), "dd MMM")} ${formatTimeLabel(new Date(booking.start_time))}`,
+            action: {
+              label: "Open",
+              onClick: () => router.push(`/bookings/${booking.id}`),
+            },
+          })
+        }}
+      />
+      <CancelBookingModal
+        open={cancelModalOpen}
+        onOpenChange={setCancelModalOpen}
+        booking={selectedBookingForCancel}
+        onCancelled={() => {
+          // Refresh scheduler bookings after cancellation
+          queryClient.invalidateQueries({ queryKey: ["scheduler", "bookings"] })
+          setSelectedBookingForCancel(null)
+        }}
+      />
     </div>
   )
 }
@@ -561,8 +659,11 @@ function TimelineRow({
   timelineStart,
   timelineEnd,
   bookings,
+  resourceTitle,
   onEmptyClick,
   onBookingClick,
+  onStatusUpdate,
+  onCancelBooking,
 }: {
   height: number
   slotCount: number
@@ -570,10 +671,14 @@ function TimelineRow({
   timelineStart: Date
   timelineEnd: Date
   bookings: SchedulerBooking[]
+  resourceTitle?: string
   onEmptyClick: (clientX: number, container: HTMLDivElement) => void
   onBookingClick: (booking: SchedulerBooking) => void
+  onStatusUpdate: (variables: { bookingId: string; status: BookingStatus }) => void
+  onCancelBooking: (booking: SchedulerBooking) => void
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
+  const router = useRouter()
 
   return (
     <div className="relative" style={{ height }}>
@@ -585,7 +690,7 @@ function TimelineRow({
           if (!containerRef.current) return
           onEmptyClick(e.clientX, containerRef.current)
         }}
-        aria-label="Timeline row"
+        aria-label={resourceTitle ? `Timeline row for ${resourceTitle}` : "Timeline row"}
       >
         <div
           className="grid h-full"
@@ -599,7 +704,8 @@ function TimelineRow({
                 className={cn(
                   "border-r last:border-r-0",
                   "transition-colors",
-                  "hover:bg-blue-500/5",
+                  // per-cell hover (a touch stronger so it's clearly visible)
+                  "hover:bg-sky-500/10",
                   idx % 2 === 1 ? "bg-muted/[0.03]" : "",
                   isHour ? "bg-muted/[0.05]" : ""
                 )}
@@ -610,7 +716,9 @@ function TimelineRow({
       </div>
 
       {/* Booking blocks */}
-      <div className="absolute inset-0">
+      {/* NOTE: This layer must not block hover/clicks on the grid when empty.
+          We disable pointer events on the full overlay and re-enable them on actual booking blocks. */}
+      <div className="absolute inset-0 pointer-events-none">
         {bookings.map((booking) => {
           const layout = getBookingLayout({
             bookingStart: booking.startsAt,
@@ -627,34 +735,37 @@ function TimelineRow({
             <div
               key={booking.id}
               // Full row height (no vertical inset) for clearer scanning and better density
-              className="absolute inset-y-0"
+              className="absolute inset-y-0 pointer-events-auto"
               style={{
                 left: `${layout.leftPct}%`,
                 width: `max(${layout.widthPct}%, 2%)`,
               }}
             >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onBookingClick(booking)
-                    }}
-                    className={cn(
-                      "group h-full w-full rounded-md px-2 text-left",
-                      "shadow-sm ring-1 ring-black/5",
-                      "transition-all hover:shadow-md hover:brightness-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-500/40",
-                      statusPillClasses(booking.status)
-                    )}
-                  >
-                    <div className="flex h-full flex-col justify-center">
-                      <div className="truncate text-xs font-semibold leading-tight">
-                        {label}
-                      </div>
-                    </div>
-                  </button>
-                </TooltipTrigger>
+              <ContextMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <ContextMenuTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onBookingClick(booking)
+                        }}
+                        className={cn(
+                          "group h-full w-full rounded-md px-2 text-left",
+                          "shadow-sm ring-1 ring-black/5",
+                          "transition-all hover:shadow-md hover:brightness-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-500/40",
+                          statusPillClasses(booking.status)
+                        )}
+                      >
+                        <div className="flex h-full flex-col justify-center">
+                          <div className="truncate text-xs font-semibold leading-tight">
+                            {label}
+                          </div>
+                        </div>
+                      </button>
+                    </ContextMenuTrigger>
+                  </TooltipTrigger>
                 <TooltipContent
                   variant="card"
                   side="top"
@@ -718,6 +829,45 @@ function TimelineRow({
                   </div>
                 </TooltipContent>
               </Tooltip>
+              <ContextMenuContent>
+                <ContextMenuItem
+                  onClick={() => router.push(`/aircraft/${booking.aircraftId}`)}
+                >
+                  <Eye className="h-4 w-4" />
+                  View Aircraft
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onClick={() => {
+                    onCancelBooking(booking)
+                  }}
+                  variant="destructive"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel Booking
+                </ContextMenuItem>
+                {booking.userId && (
+                  <ContextMenuItem
+                    onClick={() => router.push(`/members/${booking.userId}`)}
+                  >
+                    <UserCircle className="h-4 w-4" />
+                    View Contact Details
+                  </ContextMenuItem>
+                )}
+                {booking.status === 'unconfirmed' && (
+                  <>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem
+                      onClick={() => {
+                        onStatusUpdate({ bookingId: booking.id, status: 'confirmed' })
+                      }}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Confirm Booking
+                    </ContextMenuItem>
+                  </>
+                )}
+              </ContextMenuContent>
+            </ContextMenu>
             </div>
           )
         })}

@@ -39,8 +39,6 @@ export interface Booking {
   // Flight log fields (consolidated from flight_logs table)
   checked_out_aircraft_id: string | null
   checked_out_instructor_id: string | null
-  actual_start: string | null // ISO timestamp
-  actual_end: string | null // ISO timestamp
   eta: string | null // ISO timestamp
   hobbs_start: number | null
   hobbs_end: number | null
@@ -65,6 +63,14 @@ export interface Booking {
   solo_time: number | null
   total_hours_start: number | null
   total_hours_end: number | null
+
+  // Aircraft TTIS delta tracking (authoritative, server-side only)
+  applied_aircraft_delta: number | null
+  applied_total_time_method: string | null
+  correction_delta: number | null
+  corrected_at: string | null // ISO timestamp
+  corrected_by: string | null
+  correction_reason: string | null
 
   // Check-in billing/audit fields (financially critical)
   billing_basis: 'hobbs' | 'tacho' | 'airswitch' | null

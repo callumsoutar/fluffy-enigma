@@ -46,6 +46,7 @@ import { MemberPilotDetails } from "@/components/members/member-pilot-details"
 import { MemberContactDetails } from "@/components/members/member-contact-details"
 import { MemberMemberships } from "@/components/members/member-memberships"
 import { MemberAccountTab } from "@/components/members/member-account-tab"
+import { MemberFlightHistoryTab } from "@/components/members/member-flight-history-tab"
 
 async function fetchMember(id: string): Promise<MemberWithRelations> {
   const response = await fetch(`/api/members/${id}`)
@@ -446,10 +447,7 @@ export default function MemberDetailPage() {
                         </Tabs.Content>
 
                         <Tabs.Content value="flights">
-                          <div>
-                            <h2 className="text-lg font-semibold mb-4">Flight Management</h2>
-                            <p className="text-muted-foreground">Flight management coming soon...</p>
-                          </div>
+                          <MemberFlightHistoryTab memberId={memberId} />
                         </Tabs.Content>
 
                         <Tabs.Content value="training">

@@ -4,7 +4,7 @@ import { userHasAnyRole } from '@/lib/auth/roles'
 import { invoiceItemCreateSchema, invoiceItemUpdateSchema } from '@/lib/validation/invoices'
 import { invoiceIdSchema } from '@/lib/validation/invoices'
 import type { InvoiceItemWithRelations } from '@/lib/types/invoice_items'
-import { calculateItemAmounts, calculateInvoiceTotals } from '@/lib/invoice-calculations'
+import { calculateItemAmounts, calculateInvoiceTotals, roundToTwoDecimals } from '@/lib/invoice-calculations'
 
 /**
  * GET /api/invoice_items
@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
         subtotal: totals.subtotal,
         tax_total: totals.tax_total,
         total_amount: totals.total_amount,
-        balance_due: totals.total_amount - (invoice.total_paid || 0),
+        balance_due: roundToTwoDecimals(totals.total_amount - (invoice.total_paid || 0)),
       })
       .eq('id', validatedData.invoice_id)
   }
@@ -415,7 +415,7 @@ export async function PATCH(request: NextRequest) {
         subtotal: totals.subtotal,
         tax_total: totals.tax_total,
         total_amount: totals.total_amount,
-        balance_due: totals.total_amount - (invoice.total_paid || 0),
+        balance_due: roundToTwoDecimals(totals.total_amount - (invoice.total_paid || 0)),
       })
       .eq('id', existingItem.invoice_id)
   }
@@ -542,7 +542,7 @@ export async function DELETE(request: NextRequest) {
         subtotal: totals.subtotal,
         tax_total: totals.tax_total,
         total_amount: totals.total_amount,
-        balance_due: totals.total_amount - (invoice.total_paid || 0),
+        balance_due: roundToTwoDecimals(totals.total_amount - (invoice.total_paid || 0)),
       })
       .eq('id', existingItem.invoice_id)
   } else {

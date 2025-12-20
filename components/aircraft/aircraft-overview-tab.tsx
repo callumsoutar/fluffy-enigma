@@ -18,9 +18,8 @@ import type { AircraftComponent } from "@/lib/types/aircraft_components"
 interface FlightLog {
   id: string
   booking_id: string | null
-  actual_start: string | null
-  actual_end: string | null
   flight_time: number | null
+  created_at: string
   booking?: {
     student?: {
       first_name: string | null
@@ -75,8 +74,8 @@ export function AircraftOverviewTab({
 
   // Calculate hours since last flight
   const lastFlight = flightLogs[0]
-  const hoursSinceLastFlight = lastFlight?.actual_end
-    ? Math.round((new Date().getTime() - new Date(lastFlight.actual_end).getTime()) / (1000 * 60 * 60))
+  const hoursSinceLastFlight = lastFlight?.created_at
+    ? Math.round((new Date().getTime() - new Date(lastFlight.created_at).getTime()) / (1000 * 60 * 60))
     : null
 
   return (
@@ -249,7 +248,7 @@ export function AircraftOverviewTab({
                               : "—"}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {flight.actual_start ? formatDate(flight.actual_start) : "—"}
+                            {flight.created_at ? formatDate(flight.created_at) : "—"}
                           </p>
                         </div>
                       </div>

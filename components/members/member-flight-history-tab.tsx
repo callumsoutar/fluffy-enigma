@@ -1,90 +1,62 @@
 "use client"
 
 import * as React from "react"
+import { useQuery } from "@tanstack/react-query"
+import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns"
+import { Loader2 } from "lucide-react"
+import { IconCalendar, IconChartBar, IconClock, IconPlane, IconSchool } from "@tabler/icons-react"
+
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import {
-  IconPlane,
-  IconCalendar,
-  IconClock,
-  IconUser,
-  IconSchool,
-  IconChartBar,
-} from "@tabler/icons-react"
-import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns"
+import type { MemberFlightHistoryEntry, MemberFlightHistoryResponse } from "@/lib/types/flight-history"
 
-interface FlightLog {
-  id: string
-  booking_id: string | null
-  tach_start: number | null
-  tach_end: number | null
-  hobbs_start: number | null
-  hobbs_end: number | null
-  flight_time: number | null
-  created_at: string
-  booking?: {
-    start_time: string
-    end_time: string
-    student?: {
-      id: string
-      first_name: string | null
-      last_name: string | null
-      email: string
-    }
-    instructor?: {
-      id: string
-      first_name: string | null
-      last_name: string | null
-      email: string
-    }
+export type MemberFlightHistoryTabProps = {
+  memberId: string
+}
+
+async function fetchMemberFlightHistory(memberId: string): Promise<MemberFlightHistoryResponse> {
+  const res = await fetch(`/api/members/${memberId}/flight-history`)
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(payload?.error || "Failed to load flight history")
   }
+  return payload as MemberFlightHistoryResponse
 }
 
-interface AircraftFlightHistoryTabProps {
-  flightLogs: FlightLog[]
+function getInstructorName(flight: MemberFlightHistoryEntry): string {
+  const first = flight.instructor?.first_name ?? ""
+  const last = flight.instructor?.last_name ?? ""
+  const full = [first, last].filter(Boolean).join(" ").trim()
+  return full || "Instructor"
 }
 
-function formatTime(dateString: string | null | undefined): string {
-  if (!dateString) return "—"
-  try {
-    const date = new Date(dateString)
-    return format(date, "HH:mm")
-  } catch {
-    return "—"
-  }
-}
-
-
-interface UserData {
-  first_name: string | null
-  last_name: string | null
-  email: string
-}
-
-function getUserName(user: UserData | null | undefined): string {
-  if (!user) return "—"
-  const name = [user.first_name, user.last_name].filter(Boolean).join(" ")
-  return name || user.email || "—"
-}
-
-function getFlightHours(flight: FlightLog): number {
+function getFlightHours(flight: MemberFlightHistoryEntry): number {
   const flightTime = flight.flight_time
   if (flightTime == null) return 0
-  const hours = typeof flightTime === 'string' ? Number(flightTime) : flightTime
-  return isFinite(hours) ? hours : 0
+  const hours = typeof flightTime === "string" ? Number(flightTime) : flightTime
+  return Number.isFinite(hours) ? hours : 0
 }
 
-function getFlightHoursDisplay(flight: FlightLog): string {
+function getFlightHoursDisplay(flight: MemberFlightHistoryEntry): string {
   const flightTime = flight.flight_time
   if (flightTime == null) return "-"
   const hoursStr = String(flightTime)
-  return hoursStr.includes('.') ? hoursStr : `${hoursStr}.0`
+  return hoursStr.includes(".") ? hoursStr : `${hoursStr}.0`
 }
 
-export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTabProps) {
+export function MemberFlightHistoryTab({ memberId }: MemberFlightHistoryTabProps) {
+  const historyQuery = useQuery({
+    queryKey: ["member-flight-history", memberId],
+    queryFn: () => fetchMemberFlightHistory(memberId),
+    enabled: !!memberId,
+    refetchOnWindowFocus: true,
+  })
+
+  const allFlights = historyQuery.data?.flights ?? []
+
   // Date range state - default to last 30 days
   const [dateFrom, setDateFrom] = React.useState<Date>(startOfDay(subDays(new Date(), 30)))
   const [dateTo, setDateTo] = React.useState<Date>(endOfDay(new Date()))
@@ -104,21 +76,37 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
     setIsDatePickerOpen(false)
   }
 
-  // Filter flights by date range and ensure they have meter readings
-  const flights = flightLogs.filter((flight) => {
-    // Only show flights with at least one meter reading (tach_end or hobbs_end)
-    if (flight.tach_end == null && flight.hobbs_end == null) return false
-
-    // Use booking end time as the primary date for filtering
-    const dateToCheck = flight.booking?.end_time || flight.created_at
+  const flights = allFlights.filter((flight) => {
+    // primary date for filtering: scheduled end_time
+    const dateToCheck = flight.end_time
     if (!dateToCheck) return false
-
     const flightDate = new Date(dateToCheck)
     return isWithinInterval(flightDate, { start: dateFrom, end: dateTo })
   })
 
   const totalFlightHours = flights.reduce((total, f) => total + getFlightHours(f), 0)
-  const avgHoursPerFlight = flights.length > 0 ? totalFlightHours / flights.length : 0
+  const avgHoursPerFlight = flights.length ? totalFlightHours / flights.length : 0
+
+  if (historyQuery.isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading flight history...
+        </div>
+      </div>
+    )
+  }
+
+  if (historyQuery.isError) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-destructive">
+          {historyQuery.error instanceof Error ? historyQuery.error.message : "Failed to load flight history"}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -131,10 +119,7 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className={cn(
-                  "w-auto justify-start text-left font-normal",
-                  !dateFrom && "text-muted-foreground"
-                )}
+                className={cn("w-auto justify-start text-left font-normal", !dateFrom && "text-muted-foreground")}
               >
                 <IconCalendar className="mr-2 h-4 w-4" />
                 {dateFrom && dateTo ? (
@@ -192,11 +177,7 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
                   >
                     Cancel
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => setIsDatePickerOpen(false)}
-                    className="h-8 px-3 text-xs"
-                  >
+                  <Button size="sm" onClick={() => setIsDatePickerOpen(false)} className="h-8 px-3 text-xs">
                     Apply
                   </Button>
                 </div>
@@ -209,7 +190,7 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
       {/* Stats bar */}
       <div className="flex flex-col md:flex-row items-stretch gap-4 bg-gray-50 rounded-lg p-4 mb-6 border border-gray-100">
         <div className="flex-1 flex flex-col items-center justify-center">
-          <IconUser className="w-6 h-6 mb-1 text-indigo-500" />
+          <IconPlane className="w-6 h-6 mb-1 text-indigo-500" />
           <div className="text-xs text-muted-foreground">Total Flights</div>
           <div className="text-3xl font-bold text-gray-800 mt-1">{flights.length}</div>
         </div>
@@ -231,10 +212,7 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
         <Card className="rounded-md">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="text-muted-foreground mb-4">No completed flights found</div>
-            <Button
-              onClick={() => window.location.href = '/bookings'}
-              variant="outline"
-            >
+            <Button onClick={() => (window.location.href = "/bookings")} variant="outline">
               <IconCalendar className="w-4 h-4 mr-2" />
               Schedule Flight
             </Button>
@@ -248,87 +226,58 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
                     <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Date</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Member</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Aircraft</th>
                     <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Instructor</th>
-                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Hobbs Start</th>
-                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Hobbs End</th>
-                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Tach Start</th>
-                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Tach End</th>
-                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Flight Time</th>
-                    <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Actions</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Description</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Flight Time</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {flights.map((flight) => {
-                    const flightDate = flight.booking?.end_time || flight.created_at
-                    const bookingStart = flight.booking?.start_time
-                    const bookingEnd = flight.booking?.end_time
-                    
+                    const flightDate = flight.end_time
+                    const aircraftLabel =
+                      flight.aircraft?.registration || (flight.aircraft?.id ? `Aircraft ${flight.aircraft.id.slice(0, 8)}` : "Aircraft")
+                    const description = flight.lesson?.name || flight.flight_type?.name || flight.purpose || "Flight"
+
                     return (
                       <tr key={flight.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-2 px-3 text-xs">
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              {flightDate ? format(new Date(flightDate), 'MMM dd, yyyy') : '—'}
-                            </span>
-                            {bookingStart && bookingEnd && (
-                              <span className="text-gray-500 text-xs">
-                                {formatTime(bookingStart)}-{formatTime(bookingEnd)}
-                              </span>
-                            )}
+                          <span className="font-medium">
+                            {flightDate ? format(new Date(flightDate), "MMM dd, yyyy") : "—"}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-xs font-medium text-gray-900">
+                          <div className="flex items-center gap-2">
+                            <IconPlane className="w-4 h-4 text-gray-500" />
+                            {aircraftLabel}
                           </div>
                         </td>
                         <td className="py-2 px-3 text-xs">
-                          <div className="flex items-center gap-1">
-                            <IconUser className="w-3 h-3 text-gray-500" />
-                            <span className="font-medium">
-                              {flight.booking?.student
-                                ? getUserName(flight.booking.student)
-                                : 'Member'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-2 px-3 text-xs">
-                          {flight.booking?.instructor ? (
-                            <div className="flex items-center gap-1">
-                              <IconSchool className="w-3 h-3 text-gray-500" />
-                              <span>
-                                {getUserName(flight.booking.instructor)}
-                              </span>
+                          {flight.instructor ? (
+                            <div className="flex items-center gap-2">
+                              <IconSchool className="w-4 h-4 text-gray-500" />
+                              <span>{getInstructorName(flight)}</span>
                             </div>
                           ) : (
-                            <span className="text-gray-400 flex items-center gap-1">
-                              <IconPlane className="w-3 h-3" />
-                              Solo
-                            </span>
+                            <span className="text-gray-400">Solo</span>
                           )}
                         </td>
-                        <td className="py-2 px-2 text-center text-xs font-mono">
-                          {flight.hobbs_start != null ? flight.hobbs_start.toFixed(1) : '-'}
+                        <td className="py-2 px-3 text-xs text-gray-600 max-w-xs">
+                          <span className="truncate block" title={description}>
+                            {description}
+                          </span>
                         </td>
-                        <td className="py-2 px-2 text-center text-xs font-mono">
-                          {flight.hobbs_end != null ? flight.hobbs_end.toFixed(1) : '-'}
-                        </td>
-                        <td className="py-2 px-2 text-center text-xs font-mono">
-                          {flight.tach_start != null ? flight.tach_start.toFixed(1) : '-'}
-                        </td>
-                        <td className="py-2 px-2 text-center text-xs font-mono">
-                          {flight.tach_end != null ? flight.tach_end.toFixed(1) : '-'}
-                        </td>
-                        <td className="py-2 px-2 text-center text-xs font-mono font-semibold">
-                          {getFlightHoursDisplay(flight)}
-                        </td>
-                        <td className="py-2 px-2 text-center">
-                          {flight.booking_id && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => window.location.href = `/bookings/${flight.booking_id}`}
-                              className="h-6 px-2 text-xs"
-                            >
-                              View
-                            </Button>
-                          )}
+                        <td className="py-2 px-3 text-xs font-mono font-semibold">{getFlightHoursDisplay(flight)}</td>
+                        <td className="py-2 px-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => (window.location.href = `/bookings/${flight.id}`)}
+                            className="h-7 px-2 text-xs"
+                          >
+                            View
+                          </Button>
                         </td>
                       </tr>
                     )
@@ -342,3 +291,5 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
     </div>
   )
 }
+
+

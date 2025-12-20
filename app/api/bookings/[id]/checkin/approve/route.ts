@@ -93,9 +93,6 @@ export async function POST(
       p_checked_out_instructor_id: payload.checked_out_instructor_id ?? null,
       p_flight_type_id: payload.flight_type_id,
 
-      p_actual_start: payload.actual_start,
-      p_actual_end: payload.actual_end,
-
       p_hobbs_start: payload.hobbs_start,
       p_hobbs_end: payload.hobbs_end,
       p_tach_start: payload.tach_start,
@@ -107,10 +104,6 @@ export async function POST(
       p_solo_end_tach: payload.solo_end_tach ?? null,
       p_dual_time: payload.dual_time ?? null,
       p_solo_time: payload.solo_time ?? null,
-
-      p_flight_time_hobbs: payload.flight_time_hobbs,
-      p_flight_time_tach: payload.flight_time_tach,
-      p_flight_time_airswitch: payload.flight_time_airswitch,
 
       p_billing_basis: payload.billing_basis,
       p_billing_hours: payload.billing_hours,
@@ -185,45 +178,31 @@ export async function POST(
   // Idempotency safety: if the invoice is already pending but the booking isn't locked yet,
   // complete the booking lock step without trying to mutate invoice items/status again.
   if (invoiceRow.status === 'pending') {
-    const { error: bookingUpdateError } = await supabase
-      .from('bookings')
-      .update({
-        status: 'complete',
-        checked_out_aircraft_id: payload.checked_out_aircraft_id,
-        checked_out_instructor_id: payload.checked_out_instructor_id ?? null,
-        flight_type_id: payload.flight_type_id,
+    const { data: finalizeResult, error: finalizeError } = await supabase.rpc('finalize_booking_checkin_with_invoice_atomic', {
+      p_booking_id: bookingId,
+      p_invoice_id: invoiceId,
+      p_checked_out_aircraft_id: payload.checked_out_aircraft_id,
+      p_checked_out_instructor_id: payload.checked_out_instructor_id ?? null,
+      p_flight_type_id: payload.flight_type_id,
 
-        actual_start: payload.actual_start,
-        actual_end: payload.actual_end,
+      p_hobbs_start: payload.hobbs_start,
+      p_hobbs_end: payload.hobbs_end,
+      p_tach_start: payload.tach_start,
+      p_tach_end: payload.tach_end,
+      p_airswitch_start: payload.airswitch_start,
+      p_airswitch_end: payload.airswitch_end,
 
-        hobbs_start: payload.hobbs_start,
-        hobbs_end: payload.hobbs_end,
-        tach_start: payload.tach_start,
-        tach_end: payload.tach_end,
-        airswitch_start: payload.airswitch_start,
-        airswitch_end: payload.airswitch_end,
+      p_solo_end_hobbs: payload.solo_end_hobbs ?? null,
+      p_solo_end_tach: payload.solo_end_tach ?? null,
+      p_dual_time: payload.dual_time ?? null,
+      p_solo_time: payload.solo_time ?? null,
 
-        solo_end_hobbs: payload.solo_end_hobbs ?? null,
-        solo_end_tach: payload.solo_end_tach ?? null,
-        dual_time: payload.dual_time ?? null,
-        solo_time: payload.solo_time ?? null,
+      p_billing_basis: payload.billing_basis,
+      p_billing_hours: payload.billing_hours,
+    })
 
-        flight_time_hobbs: payload.flight_time_hobbs,
-        flight_time_tach: payload.flight_time_tach,
-        flight_time_airswitch: payload.flight_time_airswitch,
-
-        billing_basis: payload.billing_basis,
-        billing_hours: payload.billing_hours,
-        flight_time: payload.billing_hours,
-
-        checkin_invoice_id: invoiceId,
-        checkin_approved_at: nowIso,
-        checkin_approved_by: user.id,
-      })
-      .eq('id', bookingId)
-
-    if (bookingUpdateError) {
-      console.error('Invoice already pending but failed to lock booking check-in:', bookingUpdateError)
+    if (finalizeError || !isRpcSuccess(finalizeResult)) {
+      console.error('Invoice already pending but failed to finalize booking check-in (atomic):', finalizeError, finalizeResult)
       return NextResponse.json({ error: 'Invoice already approved but failed to lock booking check-in' }, { status: 500 })
     }
 
@@ -356,46 +335,32 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to approve invoice' }, { status: 500 })
   }
 
-  // Persist final check-in state and lock it
-  const { error: bookingUpdateError } = await supabase
-    .from('bookings')
-    .update({
-      status: 'complete',
-      checked_out_aircraft_id: payload.checked_out_aircraft_id,
-      checked_out_instructor_id: payload.checked_out_instructor_id ?? null,
-      flight_type_id: payload.flight_type_id,
+  // Persist final check-in state and lock it + apply TTIS (atomic)
+  const { data: finalizeResult, error: finalizeError } = await supabase.rpc('finalize_booking_checkin_with_invoice_atomic', {
+    p_booking_id: bookingId,
+    p_invoice_id: invoiceId,
+    p_checked_out_aircraft_id: payload.checked_out_aircraft_id,
+    p_checked_out_instructor_id: payload.checked_out_instructor_id ?? null,
+    p_flight_type_id: payload.flight_type_id,
 
-      actual_start: payload.actual_start,
-      actual_end: payload.actual_end,
+    p_hobbs_start: payload.hobbs_start,
+    p_hobbs_end: payload.hobbs_end,
+    p_tach_start: payload.tach_start,
+    p_tach_end: payload.tach_end,
+    p_airswitch_start: payload.airswitch_start,
+    p_airswitch_end: payload.airswitch_end,
 
-      hobbs_start: payload.hobbs_start,
-      hobbs_end: payload.hobbs_end,
-      tach_start: payload.tach_start,
-      tach_end: payload.tach_end,
-      airswitch_start: payload.airswitch_start,
-      airswitch_end: payload.airswitch_end,
+    p_solo_end_hobbs: payload.solo_end_hobbs ?? null,
+    p_solo_end_tach: payload.solo_end_tach ?? null,
+    p_dual_time: payload.dual_time ?? null,
+    p_solo_time: payload.solo_time ?? null,
 
-      solo_end_hobbs: payload.solo_end_hobbs ?? null,
-      solo_end_tach: payload.solo_end_tach ?? null,
-      dual_time: payload.dual_time ?? null,
-      solo_time: payload.solo_time ?? null,
+    p_billing_basis: payload.billing_basis,
+    p_billing_hours: payload.billing_hours,
+  })
 
-      flight_time_hobbs: payload.flight_time_hobbs,
-      flight_time_tach: payload.flight_time_tach,
-      flight_time_airswitch: payload.flight_time_airswitch,
-
-      billing_basis: payload.billing_basis,
-      billing_hours: payload.billing_hours,
-      flight_time: payload.billing_hours,
-
-      checkin_invoice_id: invoiceId,
-      checkin_approved_at: nowIso,
-      checkin_approved_by: user.id,
-    })
-    .eq('id', bookingId)
-
-  if (bookingUpdateError) {
-    console.error('Invoice approved but failed to lock booking check-in:', bookingUpdateError)
+  if (finalizeError || !isRpcSuccess(finalizeResult)) {
+    console.error('Invoice approved but failed to finalize booking check-in (atomic):', finalizeError, finalizeResult)
     return NextResponse.json({ error: 'Invoice approved but failed to lock booking check-in' }, { status: 500 })
   }
 

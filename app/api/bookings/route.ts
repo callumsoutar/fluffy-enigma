@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { userHasAnyRole } from '@/lib/auth/roles'
-import { bookingsQuerySchema } from '@/lib/validation/bookings'
+import { bookingCreateSchema, bookingsQuerySchema } from '@/lib/validation/bookings'
 import type { BookingStatus, BookingType, BookingsFilter, BookingWithRelations } from '@/lib/types/bookings'
 
 /**
@@ -203,4 +203,167 @@ export async function GET(request: NextRequest) {
     bookings: filteredBookings,
     total: filteredBookings.length,
   })
+}
+
+/**
+ * POST /api/bookings
+ *
+ * Create a new booking.
+ *
+ * Security:
+ * - Requires authentication
+ * - Members/students can only create bookings for themselves (user_id forced)
+ * - Only staff (owner/admin/instructor) can create on behalf of others and set non-default status
+ * - RLS policies enforce final write access
+ */
+export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const isStaff = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+  }
+
+  const parsed = bookingCreateSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid request data', details: parsed.error.issues },
+      { status: 400 }
+    )
+  }
+
+  const data = parsed.data
+
+  // Enforce privilege rules
+  if (!isStaff && data.user_id !== undefined && data.user_id !== null && data.user_id !== user.id) {
+    return NextResponse.json(
+      { error: 'Forbidden: Cannot create booking for another user' },
+      { status: 403 }
+    )
+  }
+  if (!isStaff && data.status && data.status !== 'unconfirmed') {
+    return NextResponse.json(
+      { error: 'Forbidden: Only staff can set booking status' },
+      { status: 403 }
+    )
+  }
+
+  const userIdForBooking = isStaff ? (data.user_id ?? user.id) : user.id
+  const statusForBooking = isStaff ? (data.status ?? 'unconfirmed') : 'unconfirmed'
+
+  // Lightweight referential checks (RLS/constraints are still authoritative)
+  // Ensure aircraft exists and is on-line
+  const { data: aircraftRow, error: aircraftErr } = await supabase
+    .from('aircraft')
+    .select('id, on_line')
+    .eq('id', data.aircraft_id)
+    .single()
+
+  if (aircraftErr || !aircraftRow) {
+    return NextResponse.json({ error: 'Invalid aircraft' }, { status: 400 })
+  }
+  if (aircraftRow.on_line === false) {
+    return NextResponse.json({ error: 'Aircraft is not available for booking' }, { status: 400 })
+  }
+
+  // Ensure user exists + active when staff creates on behalf of another user
+  if (isStaff && userIdForBooking !== user.id) {
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('id, is_active')
+      .eq('id', userIdForBooking)
+      .single()
+    if (!userRow) {
+      return NextResponse.json({ error: 'Invalid user' }, { status: 400 })
+    }
+    if (userRow.is_active === false) {
+      return NextResponse.json({ error: 'User is inactive' }, { status: 400 })
+    }
+  }
+
+  // Ensure instructor exists + actively instructing if provided
+  if (data.instructor_id) {
+    const { data: instructorRow } = await supabase
+      .from('instructors')
+      .select('id, is_actively_instructing')
+      .eq('id', data.instructor_id)
+      .single()
+    if (!instructorRow) {
+      return NextResponse.json({ error: 'Invalid instructor' }, { status: 400 })
+    }
+    if (instructorRow.is_actively_instructing === false) {
+      return NextResponse.json({ error: 'Instructor is not actively instructing' }, { status: 400 })
+    }
+  }
+
+  // Create booking
+  const insertPayload = {
+    aircraft_id: data.aircraft_id,
+    user_id: userIdForBooking,
+    instructor_id: data.instructor_id ?? null,
+    flight_type_id: data.flight_type_id ?? null,
+    lesson_id: data.lesson_id ?? null,
+    booking_type: data.booking_type,
+    status: statusForBooking,
+    start_time: data.start_time,
+    end_time: data.end_time,
+    purpose: data.purpose,
+    remarks: data.remarks ?? null,
+    notes: data.notes ?? null,
+  }
+
+  const { data: booking, error } = await supabase
+    .from('bookings')
+    .insert(insertPayload)
+    .select(`
+      *,
+      aircraft:aircraft_id (
+        id,
+        registration,
+        type,
+        model,
+        manufacturer
+      ),
+      student:user_id (
+        id,
+        first_name,
+        last_name,
+        email
+      ),
+      instructor:instructors!instructor_id (
+        id,
+        first_name,
+        last_name,
+        user:user_id (
+          id,
+          email
+        )
+      ),
+      flight_type:flight_type_id (
+        id,
+        name
+      ),
+      lesson:lesson_id (
+        id,
+        name,
+        description
+      )
+    `)
+    .single()
+
+  if (error) {
+    console.error('Error creating booking:', error)
+    return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 })
+  }
+
+  return NextResponse.json({ booking: booking as BookingWithRelations }, { status: 201 })
 }

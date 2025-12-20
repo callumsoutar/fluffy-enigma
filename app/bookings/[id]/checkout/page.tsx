@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -15,6 +15,7 @@ import {
   IconInfoCircle,
   IconRoute,
   IconGasStation,
+  IconCheck,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -92,6 +93,13 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     try {
       const data = await res.json()
       if (typeof data?.error === "string") message = data.error
+      // Surface validation details when present (Zod issues from API routes)
+      if (Array.isArray(data?.details) && data.details.length > 0) {
+        const first = data.details[0]
+        const path = Array.isArray(first?.path) ? first.path.join(".") : undefined
+        const issue = typeof first?.message === "string" ? first.message : undefined
+        if (issue) message = path ? `${message}: ${path} — ${issue}` : `${message}: ${issue}`
+      }
     } catch {
       // ignore
     }
@@ -116,6 +124,7 @@ function getErrorMessage(err: unknown) {
 
 export default function BookingCheckoutPage() {
   const params = useParams()
+  const router = useRouter()
   const { role } = useAuth()
   const bookingId = params.id as string
   const isMobile = useIsMobile()
@@ -383,15 +392,11 @@ export default function BookingCheckoutPage() {
     suppressNextActualEndDirtyRef.current = false
     
     // Calculate date/time values first (use booking fields directly)
-    const actualStart = booking.actual_start 
-      ? parseDateTime(booking.actual_start)
-      : parseDateTime(booking.start_time)
+    const actualStart = parseDateTime(booking.start_time)
     
-    const actualEnd = booking.actual_end 
-      ? parseDateTime(booking.actual_end)
-      : booking.end_time
-        ? parseDateTime(booking.end_time)
-        : { date: undefined, time: "" }
+    const actualEnd = booking.end_time
+      ? parseDateTime(booking.end_time)
+      : { date: undefined, time: "" }
     
     const eta = booking.eta 
       ? parseDateTime(booking.eta)
@@ -401,8 +406,8 @@ export default function BookingCheckoutPage() {
     const initialValues = {
       checked_out_aircraft_id: booking.checked_out_aircraft_id || booking.aircraft_id || null,
       checked_out_instructor_id: booking.checked_out_instructor_id || booking.instructor_id || null,
-      actual_start: normalizeDateString(booking.actual_start || booking.start_time || null),
-      actual_end: normalizeDateString(booking.actual_end || null),
+      start_time: normalizeDateString(booking.start_time || null) ?? undefined,
+      end_time: normalizeDateString(booking.end_time || null) ?? undefined,
       eta: normalizeDateString(booking.eta || booking.end_time || null),
       fuel_on_board: booking.fuel_on_board || null,
       passengers: booking.passengers || null,
@@ -449,7 +454,7 @@ export default function BookingCheckoutPage() {
     if (!isInitialized) return // Wait for initialization
     if (!actualStartDate) return // Need a start date
     if (actualEndDate) return // Already has an end date
-    if (booking?.actual_end) return // Don't override if booking already has actual_end
+    if (booking?.end_time) return // Don't override if booking already has end_time
     
     // Only auto-set if we don't have booking.end_time to use
     if (booking?.end_time) return // Use booking.end_time instead
@@ -457,7 +462,7 @@ export default function BookingCheckoutPage() {
     // This is a programmatic default, not a user edit
     suppressNextActualEndDirtyRef.current = true
     setActualEndDate(actualStartDate)
-  }, [isInitialized, actualStartDate, actualEndDate, booking?.end_time, booking?.actual_end])
+  }, [isInitialized, actualStartDate, actualEndDate, booking?.end_time])
 
   // Update form values when date/time changes (only after initialization to avoid marking as dirty during initial load)
   React.useEffect(() => {
@@ -465,14 +470,14 @@ export default function BookingCheckoutPage() {
     if (!isInitialized || isInitializingRef.current) return
     
     // Get current form value to compare
-    const currentValue = watch("actual_start")
+    const currentValue = watch("start_time")
     const combined = combineDateTime(actualStartDate, actualStartTime)
-    const newValue = combined || null // Ensure null instead of empty string
+    const newValue = combined ?? undefined // Use undefined instead of null for optional fields
     
     // Only update if value actually changed (prevents marking as dirty when value matches default)
     if (currentValue !== newValue) {
       const shouldDirty = didSyncActualStartRef.current
-      setValue("actual_start", newValue, { shouldDirty, shouldTouch: shouldDirty })
+      setValue("start_time", newValue, { shouldDirty, shouldTouch: shouldDirty })
     }
 
     // After the first eligible run, future changes should be considered user edits.
@@ -484,15 +489,15 @@ export default function BookingCheckoutPage() {
     if (!isInitialized || isInitializingRef.current) return
     
     // Get current form value to compare
-    const currentValue = watch("actual_end")
+    const currentValue = watch("end_time")
     const combined = combineDateTime(actualEndDate, actualEndTime)
-    const newValue = combined || null // Ensure null instead of empty string
+    const newValue = combined ?? undefined // Use undefined instead of null for optional fields
     
     // Only update if value actually changed (prevents marking as dirty when value matches default)
     if (currentValue !== newValue) {
       const shouldDirty =
         didSyncActualEndRef.current && !suppressNextActualEndDirtyRef.current
-      setValue("actual_end", newValue, { shouldDirty, shouldTouch: shouldDirty })
+      setValue("end_time", newValue, { shouldDirty, shouldTouch: shouldDirty })
     }
 
     // Clear one-time suppression (if it was set)
@@ -524,16 +529,13 @@ export default function BookingCheckoutPage() {
       // Use the same normalizeDateString function for consistency
       const cleanDateField = normalizeDateString
       
-      // Set actual_end to booking's end_time if not already set
-      // This ensures the booking has an end time when submitted, using the scheduled end time
-      let actualEndValue = data.actual_end
-      if (!actualEndValue || actualEndValue === null || actualEndValue === '') {
-        // If actual_end is not set, use the booking's end_time
+      // Ensure end_time is set (fallback to scheduled end_time, then "now" as last resort)
+      let endTimeValue = data.end_time
+      if (!endTimeValue || endTimeValue === null || endTimeValue === '') {
         if (booking?.end_time) {
-          actualEndValue = booking.end_time
+          endTimeValue = booking.end_time
         } else {
-          // Fallback to current time only if booking has no end_time
-          actualEndValue = new Date().toISOString()
+          endTimeValue = new Date().toISOString()
         }
       }
       
@@ -563,8 +565,8 @@ export default function BookingCheckoutPage() {
         // Flight log fields (now part of bookings table)
         ...(data.checked_out_aircraft_id !== undefined && { checked_out_aircraft_id: data.checked_out_aircraft_id }),
         ...(data.checked_out_instructor_id !== undefined && { checked_out_instructor_id: data.checked_out_instructor_id }),
-        actual_start: cleanDateField(data.actual_start),
-        actual_end: cleanDateField(actualEndValue),
+        ...(data.start_time !== undefined && { start_time: cleanDateField(data.start_time) }),
+        ...(data.end_time !== undefined && { end_time: cleanDateField(endTimeValue) }),
         ...(data.eta !== undefined && { eta: cleanDateField(data.eta) }),
         // Set tach_start and hobbs_start from aircraft's current values if not already set in form
         // Always set these values when checking out if aircraft is selected
@@ -671,16 +673,11 @@ export default function BookingCheckoutPage() {
     isInitializingRef.current = true
     
     // Use the same logic as initialization to determine what the "original" values should be
-    const actualStart = booking.actual_start 
-      ? parseDateTime(booking.actual_start)
-      : parseDateTime(booking.start_time)
+    const actualStart = parseDateTime(booking.start_time)
     
-    // Match the initialization logic: use booking.end_time if no actual_end
-    const actualEnd = booking.actual_end 
-      ? parseDateTime(booking.actual_end)
-      : booking.end_time
-        ? parseDateTime(booking.end_time)
-        : { date: undefined, time: "" }
+    const actualEnd = booking.end_time
+      ? parseDateTime(booking.end_time)
+      : { date: undefined, time: "" }
     
     const eta = booking.eta 
       ? parseDateTime(booking.eta)
@@ -698,8 +695,8 @@ export default function BookingCheckoutPage() {
     const originalValues = {
       checked_out_aircraft_id: booking.checked_out_aircraft_id || booking.aircraft_id || null,
       checked_out_instructor_id: booking.checked_out_instructor_id || booking.instructor_id || null,
-      actual_start: normalizeDateString(booking.actual_start || booking.start_time || null),
-      actual_end: normalizeDateString(booking.actual_end || null),
+      start_time: normalizeDateString(booking.start_time || null) ?? undefined,
+      end_time: normalizeDateString(booking.end_time || null) ?? undefined,
       eta: normalizeDateString(booking.eta || booking.end_time || null),
       fuel_on_board: booking.fuel_on_board || null,
       passengers: booking.passengers || null,
@@ -724,6 +721,12 @@ export default function BookingCheckoutPage() {
     }, 100)
     
     toast.info('Changes reverted')
+  }
+
+  const handleCheckFlightIn = () => {
+    if (!booking) return
+    // Route to check-in page
+    router.push(`/bookings/${bookingId}/checkin`)
   }
 
   const isAdminOrInstructor = role === 'owner' || role === 'admin' || role === 'instructor'
@@ -839,17 +842,17 @@ export default function BookingCheckoutPage() {
 
             {/* Main Content */}
             {/* Calculate bottom padding based on sticky bar height on mobile:
-                - 3 stacked buttons (hasChanges + confirmed): ~208px (144px buttons + 32px gaps + 32px padding)
+                - 3 stacked buttons (hasChanges + confirmed/flying): ~208px (144px buttons + 32px gaps + 32px padding)
                 - 2 stacked buttons (hasChanges only): ~144px (96px buttons + 16px gap + 32px padding)  
-                - 1 button (Check Out only): ~80px (48px button + 32px padding)
+                - 1 button (Check Out/Check In only): ~80px (48px button + 32px padding)
                 Add extra padding (40-50px) for comfortable scrolling */}
             <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 ${
               isMobile 
-                ? hasChanges && booking?.status === 'confirmed'
+                ? hasChanges && (booking?.status === 'confirmed' || booking?.status === 'flying')
                   ? "pt-8 pb-[260px]" // 3 stacked buttons: 208px + 52px extra
                   : hasChanges
                     ? "pt-8 pb-[200px]" // 2 stacked buttons: 144px + 56px extra
-                    : booking?.status === 'confirmed'
+                    : (booking?.status === 'confirmed' || booking?.status === 'flying')
                       ? "pt-8 pb-[140px]" // 1 button: 80px + 60px extra
                       : "pt-8 pb-24" // Fallback: no buttons or minimal
                 : "pt-10 pb-28"
@@ -867,27 +870,27 @@ export default function BookingCheckoutPage() {
                     </CardHeader>
                     <CardContent className="pt-6 space-y-6">
                       <p className="text-sm text-muted-foreground mb-4">
-                        Please fill out all the details for this flight, including actual flight times, meter readings, and any other relevant information. All fields marked with required indicators must be completed before checking out.
+                        Please fill out all the details for this flight, including booking times, meter readings, and any other relevant information. All fields marked with required indicators must be completed before checking out.
                       </p>
                       <form onSubmit={handleFormSubmit}>
                         <FieldSet className="w-full max-w-full">
                           <FieldGroup className="w-full max-w-full">
-                            {/* Actual Flight Times */}
+                            {/* Booking Times */}
                             <FieldSet className="p-6 rounded-xl w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
                               
                             
                               <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                <Field data-invalid={!!errors.actual_start}>
-                                  <FieldLabel htmlFor="actual_start">Booking Start</FieldLabel>
+                                <Field data-invalid={!!errors.start_time}>
+                                  <FieldLabel htmlFor="start_time">Booking Start</FieldLabel>
                                   <div className="flex gap-3 items-end">
                                     <div className="flex-1">
                                       <Popover open={openActualStartDate} onOpenChange={setOpenActualStartDate}>
                                         <PopoverTrigger asChild>
                                           <Button
-                                            id="actual_start"
+                                            id="start_time"
                                             variant="outline"
                                             className="w-full justify-between font-normal h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
-                                            aria-invalid={!!errors.actual_start}
+                                            aria-invalid={!!errors.start_time}
                                           >
                                             {actualStartDate
                                               ? actualStartDate.toLocaleDateString("en-US", {
@@ -936,20 +939,20 @@ export default function BookingCheckoutPage() {
                                       </Select>
                                     </div>
                                   </div>
-                                  <FieldError errors={errors.actual_start ? [{ message: errors.actual_start.message }] : undefined} />
+                                  <FieldError errors={errors.start_time ? [{ message: errors.start_time.message }] : undefined} />
                                 </Field>
 
-                                <Field data-invalid={!!errors.actual_end}>
-                                  <FieldLabel htmlFor="actual_end">Booking End</FieldLabel>
+                                <Field data-invalid={!!errors.end_time}>
+                                  <FieldLabel htmlFor="end_time">Booking End</FieldLabel>
                                   <div className="flex gap-3 items-end">
                                     <div className="flex-1">
                                       <Popover open={openActualEndDate} onOpenChange={setOpenActualEndDate}>
                                         <PopoverTrigger asChild>
                                           <Button
-                                            id="actual_end"
+                                            id="end_time"
                                             variant="outline"
                                             className="w-full justify-between font-normal h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
-                                            aria-invalid={!!errors.actual_end}
+                                            aria-invalid={!!errors.end_time}
                                           >
                                             {actualEndDate
                                               ? actualEndDate.toLocaleDateString("en-US", {
@@ -996,7 +999,7 @@ export default function BookingCheckoutPage() {
                                       </Select>
                                     </div>
                                   </div>
-                                  <FieldError errors={errors.actual_end ? [{ message: errors.actual_end.message }] : undefined} />
+                                  <FieldError errors={errors.end_time ? [{ message: errors.end_time.message }] : undefined} />
                                 </Field>
                               </FieldGroup>
                             </FieldSet>
@@ -1513,6 +1516,23 @@ export default function BookingCheckoutPage() {
               >
                 <IconPlane className="h-4 w-4 mr-2" />
                 {checkoutMutation.isPending ? "Checking Out..." : "Check Out"}
+              </Button>
+            )}
+            {/* Show Check In button if booking status is 'flying' */}
+            {booking?.status === 'flying' && (
+              <Button
+                size="lg"
+                onClick={handleCheckFlightIn}
+                className={`h-12 bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${
+                  isMobile && hasChanges && booking?.status === 'flying'
+                    ? 'w-full'
+                    : isMobile
+                      ? 'w-full sm:w-auto sm:flex-1 sm:max-w-[200px]'
+                      : 'px-8 min-w-[160px]'
+                }`}
+              >
+                <IconCheck className="h-4 w-4 mr-2" />
+                Check In
               </Button>
             )}
           </div>

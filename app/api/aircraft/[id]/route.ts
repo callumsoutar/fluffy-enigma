@@ -126,7 +126,7 @@ export async function GET(
         )
       `)
       .eq('checked_out_aircraft_id', aircraftId)
-      .order('actual_start', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(50),
     
     // Maintenance visits

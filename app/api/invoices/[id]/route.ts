@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { userHasAnyRole } from '@/lib/auth/roles'
 import { invoiceIdSchema, invoiceUpdateSchema } from '@/lib/validation/invoices'
 import type { InvoiceWithRelations } from '@/lib/types/invoices'
-import { calculateInvoiceTotals } from '@/lib/invoice-calculations'
+import { calculateInvoiceTotals, roundToTwoDecimals } from '@/lib/invoice-calculations'
 
 function isRpcSuccess(v: unknown): v is { success: true } {
   if (typeof v !== 'object' || v === null) return false
@@ -251,7 +251,7 @@ export async function PATCH(
       updateData.subtotal = totals.subtotal
       updateData.tax_total = totals.tax_total
       updateData.total_amount = totals.total_amount
-      updateData.balance_due = totals.total_amount - (existingInvoice.total_paid || 0)
+      updateData.balance_due = roundToTwoDecimals(totals.total_amount - (existingInvoice.total_paid || 0))
     }
   }
 

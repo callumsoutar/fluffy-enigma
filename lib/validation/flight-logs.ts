@@ -48,8 +48,6 @@ export const flightLogSchema = z.object({
   booking_id: uuidSchema,
   checked_out_aircraft_id: uuidSchema.optional().nullable(),
   checked_out_instructor_id: uuidSchema.optional().nullable(),
-  actual_start: dateSchema,
-  actual_end: dateSchema,
   eta: dateSchema,
   hobbs_start: numericSchema,
   hobbs_end: numericSchema,
@@ -83,8 +81,6 @@ export const flightLogCheckoutSchema = z.object({
   // Flight log fields (all optional for checkout)
   checked_out_aircraft_id: uuidSchema.optional().nullable(),
   checked_out_instructor_id: uuidSchema.optional().nullable(),
-  actual_start: dateSchema,
-  actual_end: dateSchema,
   eta: dateSchema,
   hobbs_start: numericSchema,
   hobbs_end: numericSchema,
@@ -132,8 +128,6 @@ export const flightLogCheckinSchema = z.object({
   // Flight log fields that can be edited during check-in
   checked_out_aircraft_id: uuidSchema.optional().nullable(),
   checked_out_instructor_id: uuidSchema.optional().nullable(),
-  actual_start: dateSchema,
-  actual_end: dateSchema,
   flight_type_id: uuidSchema.optional().nullable(),
   lesson_id: uuidSchema.optional().nullable(),
   description: z.string().max(2000).optional().nullable(),

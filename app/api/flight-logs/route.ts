@@ -4,7 +4,7 @@ import { userHasAnyRole } from '@/lib/auth/roles'
 
 const ALLOWED_FIELDS = [
   "booking_id", "checked_out_aircraft_id", "checked_out_instructor_id",
-  "actual_start", "actual_end", "eta", "hobbs_start", "hobbs_end", 
+  "eta", "hobbs_start", "hobbs_end", 
   "tach_start", "tach_end", "flight_time_hobbs", "flight_time_tach", 
   "flight_time", "fuel_on_board", "passengers", "route", "equipment",
   "briefing_completed", "authorization_completed", 

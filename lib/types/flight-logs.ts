@@ -5,8 +5,6 @@ export interface FlightLog {
   booking_id: string
   checked_out_aircraft_id: string | null
   checked_out_instructor_id: string | null
-  actual_start: string | null // ISO timestamp
-  actual_end: string | null // ISO timestamp
   eta: string | null // ISO timestamp
   hobbs_start: number | null
   hobbs_end: number | null

@@ -8,9 +8,12 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BookingsTable } from "@/components/bookings/bookings-table"
-import type { BookingWithRelations, BookingsFilter, BookingStatus, BookingType } from "@/lib/types/bookings"
+import { NewBookingModal } from "@/components/bookings/new-booking-modal"
+import type { BookingWithRelations } from "@/lib/types/bookings"
+import type { BookingsFilter, BookingStatus, BookingType } from "@/lib/types/bookings"
 
 // Fetch bookings from API
 async function fetchBookings(filters?: BookingsFilter): Promise<BookingWithRelations[]> {
@@ -65,6 +68,7 @@ export default function BookingsPage() {
   const [activeTab, setActiveTab] = React.useState("all")
   const [mounted, setMounted] = React.useState(false)
   const [filters, setFilters] = React.useState<BookingsFilter>({})
+  const [newBookingOpen, setNewBookingOpen] = React.useState(false)
 
   // Prevent hydration mismatch by only calculating dates after mount
   React.useEffect(() => {
@@ -109,6 +113,8 @@ export default function BookingsPage() {
     queryKey: ["bookings", queryFilters],
     queryFn: () => fetchBookings(queryFilters),
     staleTime: 30_000,
+    // Keep previous data while loading to avoid showing empty state when switching tabs
+    placeholderData: (previousData) => previousData,
   })
 
   // Calculate tab counts (memoized to prevent recalculation)
@@ -117,14 +123,19 @@ export default function BookingsPage() {
   const countsFilters: BookingsFilter = filters.search ? { search: filters.search } : {}
   const {
     data: allBookingsForCounts = [],
+    isLoading: isLoadingCounts,
   } = useQuery({
     queryKey: ["bookings", "counts", countsFilters],
     queryFn: () => fetchBookings(countsFilters),
     staleTime: 30_000,
+    // Keep previous data while loading to avoid showing zeros
+    placeholderData: (previousData) => previousData,
   })
 
   const tabCounts = React.useMemo(() => {
-    if (!mounted || isLoading) {
+    // Only return zeros if we haven't mounted yet or if we're loading counts for the first time
+    // Use the counts query loading state, not the main query loading state
+    if (!mounted || (isLoadingCounts && allBookingsForCounts.length === 0)) {
       return { all: 0, today: 0, flying: 0, unconfirmed: 0 }
     }
 
@@ -141,7 +152,7 @@ export default function BookingsPage() {
       flying: allBookingsForCounts.filter((b) => b.status === "flying").length,
       unconfirmed: allBookingsForCounts.filter((b) => b.status === "unconfirmed").length,
     }
-  }, [allBookingsForCounts, isLoading, mounted])
+  }, [allBookingsForCounts, isLoadingCounts, mounted])
 
   // Filter bookings based on active tab (already filtered by API, but keep for consistency)
   const filteredBookings = React.useMemo(() => {
@@ -211,11 +222,22 @@ export default function BookingsPage() {
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <div className="px-4 lg:px-6">
                 <div className="flex flex-col gap-4">
-                  <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Bookings</h1>
-                    <p className="text-muted-foreground">
-                      View and manage all flight bookings
-                    </p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h1 className="text-2xl font-bold tracking-tight">Bookings</h1>
+                      <p className="text-muted-foreground">
+                        View and manage all flight bookings
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <Button
+                        type="button"
+                        onClick={() => setNewBookingOpen(true)}
+                        className="w-full sm:w-auto"
+                      >
+                        New booking
+                      </Button>
+                    </div>
                   </div>
 
                   <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -304,6 +326,12 @@ export default function BookingsPage() {
           </div>
         </div>
       </SidebarInset>
+
+      <NewBookingModal
+        open={newBookingOpen}
+        onOpenChange={setNewBookingOpen}
+        prefill={{ date: new Date(), startTime: "09:00" }}
+      />
     </SidebarProvider>
   )
 }

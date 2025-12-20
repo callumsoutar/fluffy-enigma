@@ -22,6 +22,11 @@ export interface Aircraft {
   model: string | null
   year_manufactured: number | null
   total_hours: number | null
+  /**
+   * Authoritative persisted aircraft total time in service (TTIS).
+   * Mutated only server-side via transactional deltas.
+   */
+  total_time_in_service?: number | null
   status: string | null
   notes: string | null
   created_at: string
@@ -38,9 +43,18 @@ export interface Aircraft {
   fuel_consumption: number | null
   prioritise_scheduling: boolean
   aircraft_image_url: string | null
-  total_time_method: string | null
+  total_time_method: TotalTimeMethod | null
   aircraft_type_id: string | null
 }
+
+export type TotalTimeMethod =
+  | "hobbs"
+  | "tacho"
+  | "airswitch"
+  | "hobbs less 5%"
+  | "hobbs less 10%"
+  | "tacho less 5%"
+  | "tacho less 10%";
 
 /**
  * Aircraft with related aircraft type information

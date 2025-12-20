@@ -189,7 +189,7 @@ export async function PATCH(
   // First, check if booking exists and user has access
   const { data: existingBooking, error: fetchError } = await supabase
     .from('bookings')
-    .select('user_id, instructor_id, status')
+    .select('user_id, instructor_id, status, cancelled_at')
     .eq('id', bookingId)
     .single()
 
@@ -218,8 +218,6 @@ export async function PATCH(
   const hasCheckinOrBillingFields =
     body.checked_out_aircraft_id !== undefined ||
     body.checked_out_instructor_id !== undefined ||
-    body.actual_start !== undefined ||
-    body.actual_end !== undefined ||
     body.eta !== undefined ||
     body.hobbs_start !== undefined ||
     body.hobbs_end !== undefined ||
@@ -300,8 +298,6 @@ export async function PATCH(
   // Flight log fields (consolidated from flight_logs table)
   if (body.checked_out_aircraft_id !== undefined) updateData.checked_out_aircraft_id = body.checked_out_aircraft_id
   if (body.checked_out_instructor_id !== undefined) updateData.checked_out_instructor_id = body.checked_out_instructor_id
-  if (body.actual_start !== undefined) updateData.actual_start = body.actual_start
-  if (body.actual_end !== undefined) updateData.actual_end = body.actual_end
   if (body.eta !== undefined) updateData.eta = body.eta
   if (body.hobbs_start !== undefined) updateData.hobbs_start = body.hobbs_start
   if (body.hobbs_end !== undefined) updateData.hobbs_end = body.hobbs_end
@@ -328,6 +324,55 @@ export async function PATCH(
   if (body.solo_time !== undefined) updateData.solo_time = body.solo_time
   if (body.total_hours_start !== undefined) updateData.total_hours_start = body.total_hours_start
   if (body.total_hours_end !== undefined) updateData.total_hours_end = body.total_hours_end
+  
+  // Cancellation fields
+  if (body.cancellation_category_id !== undefined) {
+    // Only admins/instructors can cancel bookings
+    if (!isAdminOrInstructor) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only staff can cancel bookings' },
+        { status: 403 }
+      )
+    }
+    updateData.cancellation_category_id = body.cancellation_category_id
+  }
+  if (body.cancellation_reason !== undefined) {
+    // Only admins/instructors can set cancellation reason
+    if (!isAdminOrInstructor) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only staff can set cancellation reason' },
+        { status: 403 }
+      )
+    }
+    updateData.cancellation_reason = body.cancellation_reason
+  }
+  if (body.cancelled_notes !== undefined) {
+    // Only admins/instructors can set cancellation notes
+    if (!isAdminOrInstructor) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only staff can set cancellation notes' },
+        { status: 403 }
+      )
+    }
+    updateData.cancelled_notes = body.cancelled_notes
+  }
+  
+  // If cancellation fields are being set, also set cancelled_at and cancelled_by
+  if (body.cancellation_category_id !== undefined || body.cancellation_reason !== undefined) {
+    if (!isAdminOrInstructor) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only staff can cancel bookings' },
+        { status: 403 }
+      )
+    }
+    // Set cancelled_at to current timestamp if not already cancelled
+    if (!existingBooking.cancelled_at) {
+      updateData.cancelled_at = new Date().toISOString()
+      updateData.cancelled_by = user.id
+      // Also update status to cancelled
+      updateData.status = 'cancelled'
+    }
+  }
 
   // Update booking
   const { data: updatedBooking, error: updateError } = await supabase

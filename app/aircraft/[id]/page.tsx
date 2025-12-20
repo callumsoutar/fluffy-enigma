@@ -59,8 +59,6 @@ interface FlightLog {
   hobbs_start: number | null
   hobbs_end: number | null
   flight_time: number | null
-  actual_start: string | null
-  actual_end: string | null
   created_at: string
   booking?: {
     start_time: string

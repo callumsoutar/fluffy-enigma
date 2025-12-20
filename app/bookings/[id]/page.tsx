@@ -66,6 +66,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { CancelBookingModal } from "@/components/bookings/cancel-booking-modal"
 
 // Generate time options in half-hour increments
 function generateTimeOptions(): string[] {
@@ -95,6 +96,7 @@ import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ChevronDownIcon } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { BookingWithRelations, BookingStatus, BookingType } from "@/lib/types/bookings"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -106,6 +108,13 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     try {
       const data = await res.json()
       if (typeof data?.error === "string") message = data.error
+      // Surface validation details when present (Zod issues from API routes)
+      if (Array.isArray(data?.details) && data.details.length > 0) {
+        const first = data.details[0]
+        const path = Array.isArray(first?.path) ? first.path.join(".") : undefined
+        const issue = typeof first?.message === "string" ? first.message : undefined
+        if (issue) message = path ? `${message}: ${path} — ${issue}` : `${message}: ${issue}`
+      }
     } catch {
       // ignore
     }
@@ -402,6 +411,7 @@ export default function BookingDetailPage() {
   const [openEndDate, setOpenEndDate] = React.useState(false)
   const [auditLogOpen, setAuditLogOpen] = React.useState(true)
   const [memberSearchOpen, setMemberSearchOpen] = React.useState(false)
+  const [cancelModalOpen, setCancelModalOpen] = React.useState(false)
 
   // Populate form when booking loads/changes (query-cached)
   React.useEffect(() => {
@@ -571,8 +581,138 @@ export default function BookingDetailPage() {
         <AppSidebar variant="inset" />
         <SidebarInset>
           <SiteHeader />
-          <div className="flex flex-1 flex-col items-center justify-center p-8">
-            <div className="text-muted-foreground">Loading booking...</div>
+          <div className="flex flex-1 flex-col bg-muted/30">
+            {/* Mobile Skeleton */}
+            {isMobile ? (
+              <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+                <div className="px-4 py-4 space-y-4">
+                  {/* Back Button Skeleton */}
+                  <Skeleton className="h-4 w-16 mb-3" />
+                  
+                  {/* Header Skeleton */}
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <Skeleton className="h-7 w-48" />
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                  </div>
+
+                  {/* Info Cards Skeleton */}
+                  <div className="space-y-2.5 mb-4">
+                    <Skeleton className="h-12 w-full rounded-lg" />
+                    <Skeleton className="h-12 w-full rounded-lg" />
+                    <Skeleton className="h-12 w-full rounded-lg" />
+                  </div>
+
+                  {/* Flight Type Skeleton */}
+                  <Skeleton className="h-12 w-full rounded-lg mb-4" />
+                  
+                  {/* Training Section Skeleton */}
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                </div>
+              </div>
+            ) : (
+              /* Desktop Skeleton */
+              <div className="flex flex-1 flex-col p-6 lg:p-8">
+                <div className="max-w-7xl mx-auto w-full">
+                  {/* Header Section */}
+                  <div className="mb-6 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <Skeleton className="h-10 w-10 rounded-md" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-6 w-64" />
+                        <Skeleton className="h-4 w-48" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-9 w-24 rounded-md" />
+                  </div>
+
+                  {/* Main Content Grid */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left Column - Form */}
+                    <div className="lg:col-span-2 space-y-6">
+                      {/* Date & Time Card */}
+                      <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                        <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
+                          <Skeleton className="h-5 w-32" />
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-24" />
+                              <Skeleton className="h-10 w-full rounded-md" />
+                            </div>
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-24" />
+                              <Skeleton className="h-10 w-full rounded-md" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-24" />
+                              <Skeleton className="h-10 w-full rounded-md" />
+                            </div>
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-24" />
+                              <Skeleton className="h-10 w-full rounded-md" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Booking Details Card */}
+                      <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                        <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
+                          <Skeleton className="h-5 w-40" />
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                          {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <div key={i} className="space-y-2">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-10 w-full rounded-md" />
+                            </div>
+                          ))}
+                          <div className="space-y-2">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-24 w-full rounded-md" />
+                          </div>
+                          <div className="space-y-2">
+                            <Skeleton className="h-4 w-40" />
+                            <Skeleton className="h-24 w-full rounded-md" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Right Column - Status & Actions */}
+                    <div className="space-y-6">
+                      {/* Status Card */}
+                      <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                        <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
+                          <Skeleton className="h-5 w-32" />
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                          <Skeleton className="h-6 w-24 rounded-full" />
+                          <div className="space-y-2">
+                            <Skeleton className="h-4 w-20" />
+                            <Skeleton className="h-4 w-full" />
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Actions Card */}
+                      <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                        <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
+                          <Skeleton className="h-5 w-24" />
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-3">
+                          <Skeleton className="h-10 w-full rounded-md" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </SidebarInset>
       </SidebarProvider>
@@ -1378,9 +1518,13 @@ export default function BookingDetailPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => {
-                                // TODO: Implement cancel booking
-                                toast.info("Cancel booking functionality to be implemented")
+                                if (booking?.cancelled_at) {
+                                  toast.info("This booking is already cancelled")
+                                  return
+                                }
+                                setCancelModalOpen(true)
                               }}
+                              disabled={!!booking?.cancelled_at}
                               className="rounded-lg px-4 py-3 cursor-pointer focus:bg-red-50 dark:focus:bg-red-950/30 transition-colors my-0.5"
                             >
                               <IconTrash className="h-4 w-4 mr-3 text-red-600 dark:text-red-400 flex-shrink-0" />
@@ -1507,9 +1651,13 @@ export default function BookingDetailPage() {
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => {
-                            // TODO: Implement cancel booking
-                            toast.info("Cancel booking functionality to be implemented")
+                            if (booking?.cancelled_at) {
+                              toast.info("This booking is already cancelled")
+                              return
+                            }
+                            setCancelModalOpen(true)
                           }}
+                          disabled={!!booking?.cancelled_at}
                           className="rounded-lg px-4 py-3 cursor-pointer focus:bg-red-50 dark:focus:bg-red-950/30 transition-colors my-0.5"
                         >
                           <IconTrash className="h-4 w-4 mr-3 text-red-600 dark:text-red-400 flex-shrink-0" />
@@ -2124,6 +2272,15 @@ export default function BookingDetailPage() {
           )}
         </div>
       </SidebarInset>
+      <CancelBookingModal
+        open={cancelModalOpen}
+        onOpenChange={setCancelModalOpen}
+        booking={booking}
+        onCancelled={() => {
+          // Refresh booking data after cancellation
+          queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
+        }}
+      />
     </SidebarProvider>
   )
 }

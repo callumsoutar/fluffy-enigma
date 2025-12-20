@@ -8,6 +8,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { roundToTwoDecimals } from "@/lib/invoice-calculations"
 
 /**
  * Parameters for creating a membership invoice
@@ -85,13 +86,13 @@ export async function createMembershipInvoice(
 
     if (isTaxable) {
       // Rate is tax-inclusive, calculate tax-exclusive amount
-      subtotal = baseRate / (1 + taxRate)
-      taxAmount = subtotal * taxRate
-      totalAmount = baseRate
+      subtotal = roundToTwoDecimals(baseRate / (1 + taxRate))
+      taxAmount = roundToTwoDecimals(subtotal * taxRate)
+      totalAmount = roundToTwoDecimals(baseRate)
     } else {
-      subtotal = baseRate
+      subtotal = roundToTwoDecimals(baseRate)
       taxAmount = 0
-      totalAmount = baseRate
+      totalAmount = roundToTwoDecimals(baseRate)
     }
 
     // 6. Create invoice
@@ -123,11 +124,11 @@ export async function createMembershipInvoice(
       chargeable_id: chargeableId,
       description: `${params.membershipTypeName} Membership Fee`,
       quantity: 1,
-      unit_price: subtotal,
+      unit_price: roundToTwoDecimals(subtotal),
       tax_rate: isTaxable ? taxRate : 0,
-      amount: subtotal,
-      tax_amount: taxAmount,
-      line_total: totalAmount,
+      amount: roundToTwoDecimals(subtotal),
+      tax_amount: roundToTwoDecimals(taxAmount),
+      line_total: roundToTwoDecimals(totalAmount),
     })
 
     if (itemsError) {

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { userHasAnyRole } from '@/lib/auth/roles'
 import { accountStatementQuerySchema } from '@/lib/validation/account-statement'
 import type { AccountStatementEntry, AccountStatementResponse } from '@/lib/types/account-statement'
+import { roundToTwoDecimals } from '@/lib/invoice-calculations'
 
 function toNumber(v: unknown): number {
   // Supabase can return numeric columns as string depending on config.
@@ -241,11 +242,11 @@ export async function GET(request: NextRequest) {
   }
 
   for (const entry of statementEntries) {
-    running = Math.round((running + entry.amount) * 100) / 100
+    running = roundToTwoDecimals(running + entry.amount)
     statement.push({ ...entry, balance: running })
   }
 
-  const closingBalance = running
+  const closingBalance = roundToTwoDecimals(running)
 
   // Outstanding balance = sum of balance_due for open invoices.
   const { data: outstandingRows, error: outstandingError } = await supabase
@@ -270,7 +271,7 @@ export async function GET(request: NextRequest) {
     statement,
     opening_balance: openingBalance,
     closing_balance: closingBalance,
-    outstanding_balance: Math.round(outstandingBalance * 100) / 100,
+    outstanding_balance: roundToTwoDecimals(outstandingBalance),
   }
 
   return NextResponse.json(payload)

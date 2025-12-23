@@ -15,6 +15,7 @@ import {
   IconReport,
   IconSettings,
   IconPlaneDeparture,
+  IconCalendarTime,
 } from "@tabler/icons-react"
 import { useAuth } from "@/contexts/auth-context"
 import type { UserRole } from "@/lib/types/roles"
@@ -126,6 +127,12 @@ const navigationConfig: NavSection[] = [
         url: "/equipment",
           icon: IconTool,
         roles: ['owner', 'admin', 'instructor'],
+        },
+        {
+          title: "Rosters",
+          url: "/rosters",
+          icon: IconCalendarTime,
+          roles: ['owner', 'admin', 'instructor'],
         },
       ],
     },

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronLeft, ChevronRight, CalendarDays, Clock, User, Plane, Eye, X, UserCircle, CheckCircle } from "lucide-react"
+import { ChevronLeft, ChevronRight, CalendarDays, Clock, User, Plane, Eye, X, UserCircle, CheckCircle, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -42,6 +42,7 @@ import {
 import type { BookingStatus, BookingWithRelations, BookingsResponse } from "@/lib/types/bookings"
 import type { AircraftResponse, AircraftWithType } from "@/lib/types/aircraft"
 import type { MemberWithRelations, MembersResponse } from "@/lib/types/members"
+import type { RosterRule } from "@/lib/types/roster"
 import { NewBookingModal, type NewBookingPrefill } from "@/components/bookings/new-booking-modal"
 import { CancelBookingModal } from "@/components/bookings/cancel-booking-modal"
 
@@ -197,6 +198,15 @@ async function fetchInstructors() {
   return data.members
 }
 
+async function fetchRosterRules(date: string) {
+  const params = new URLSearchParams()
+  params.set("date", date)
+  const res = await fetch(`/api/roster-rules?${params.toString()}`)
+  if (!res.ok) throw new Error("Failed to fetch roster rules")
+  const data = await res.json()
+  return data.roster_rules as RosterRule[]
+}
+
 function getDisplayNameForMember(m: Pick<MemberWithRelations, "first_name" | "last_name" | "email">) {
   const full = [m.first_name, m.last_name].filter(Boolean).join(" ").trim()
   return full || m.email
@@ -258,38 +268,51 @@ export function ResourceTimelineScheduler() {
   const timelineMinWidth = isMobile ? slotCount * slotMinWidth : undefined
 
   const dayRange = React.useMemo(() => getSelectedDayRangeUtc(selectedDate), [selectedDate])
+  const dateKey = React.useMemo(() => formatDate(selectedDate, "yyyy-MM-dd"), [selectedDate])
 
-  const { data: aircraft = [] } = useQuery({
+  const { data: aircraft = [], isLoading: isLoadingAircraft } = useQuery({
     queryKey: ["scheduler", "aircraft"],
     queryFn: fetchAircraft,
     staleTime: 60_000,
   })
 
-  const { data: members = [] } = useQuery({
+  const { data: members = [], isLoading: isLoadingInstructors } = useQuery({
     queryKey: ["scheduler", "instructors"],
     queryFn: fetchInstructors,
     staleTime: 60_000,
   })
 
-  const { data: bookingsRaw = [] } = useQuery({
+  const { data: rosterRules = [], isLoading: isLoadingRoster } = useQuery({
+    queryKey: ["scheduler", "roster-rules", dateKey],
+    queryFn: () => fetchRosterRules(dateKey),
+    staleTime: 60_000,
+  })
+
+  const { data: bookingsRaw = [], isLoading: isLoadingBookings } = useQuery({
     queryKey: ["scheduler", "bookings", dayRange.startUtcIso, dayRange.endUtcIso],
     queryFn: () => fetchBookingsForRange(dayRange),
     staleTime: 15_000,
   })
 
+  const isLoading = isLoadingAircraft || isLoadingInstructors || isLoadingRoster || isLoadingBookings
+
   const instructorResources: InstructorResource[] = React.useMemo(() => {
+    // Only show instructors who have at least one active roster rule for this day
+    const rosteredInstructorIds = new Set(rosterRules.map((r) => r.instructor_id))
+
     return members
-      .filter((m) => !!m.instructor?.id)
+      .filter((m) => !!m.instructor?.id && rosteredInstructorIds.has(m.instructor.id))
       .map((m) => ({
         id: m.instructor!.id,
         name: getDisplayNameForMember(m),
         endorsements: undefined,
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [members])
+  }, [members, rosterRules])
 
   const aircraftResources: AircraftResource[] = React.useMemo(() => {
     return aircraft
+      .filter((a) => a.on_line)
       .map((a: AircraftWithType) => ({
         id: a.id,
         registration: a.registration,
@@ -456,172 +479,179 @@ export function ResourceTimelineScheduler() {
       </div>
 
       <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-        <div className="flex">
-          {/* Left column (resources) */}
-          <div className={cn("shrink-0 border-r border-border/60 bg-muted/10", LEFT_COL_WIDTH)}>
-            {/* Left header */}
-            <div className="sticky top-0 z-30 flex h-10 items-center border-b bg-card/95 px-2 sm:h-12 sm:px-4 backdrop-blur">
-              <div className="text-xs font-semibold text-foreground/90 sm:text-sm">Resources</div>
-            </div>
-
-            {/* Group: Instructors */}
-            <div
-              className="flex items-center border-b border-border/60 bg-muted/20 px-2 text-[11px] font-semibold text-muted-foreground sm:px-4"
-              style={{ height: GROUP_HEIGHT }}
-            >
-              Instructors
-            </div>
-            {instructorResources.map((inst) => (
-              <div
-                key={inst.id}
-                className="flex items-center border-b border-border/60 px-2 sm:px-4"
-                style={{ height: ROW_HEIGHT }}
-              >
-                <div className="min-w-0 truncate text-[13px] font-semibold leading-tight sm:text-sm">
-                  {inst.name}
-                </div>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-32 gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading scheduler data...</p>
+          </div>
+        ) : (
+          <div className="flex">
+            {/* Left column (resources) */}
+            <div className={cn("shrink-0 border-r border-border/60 bg-muted/10", LEFT_COL_WIDTH)}>
+              {/* Left header */}
+              <div className="sticky top-0 z-30 flex h-10 items-center border-b bg-card/95 px-2 sm:h-12 sm:px-4 backdrop-blur">
+                <div className="text-xs font-semibold text-foreground/90 sm:text-sm">Resources</div>
               </div>
-            ))}
 
-            {/* Group: Aircraft */}
-            <div
-              className="flex items-center border-b border-border/60 bg-muted/20 px-2 text-[11px] font-semibold text-muted-foreground sm:px-4"
-              style={{ height: GROUP_HEIGHT }}
-            >
-              Aircraft
-            </div>
-            {aircraftResources.map((ac) => (
+              {/* Group: Instructors */}
               <div
-                key={ac.id}
-                className="flex items-center border-b border-border/60 px-2 sm:px-4"
-                style={{ height: ROW_HEIGHT }}
+                className="flex items-center border-b border-border/60 bg-muted/20 px-2 text-[11px] font-semibold text-muted-foreground sm:px-4"
+                style={{ height: GROUP_HEIGHT }}
               >
-                <div className="min-w-0">
-                  <div className="truncate text-[13px] font-semibold leading-tight sm:text-sm">
-                    {ac.registration}{" "}
-                    <span className="font-medium text-muted-foreground/90">({ac.type})</span>
+                Instructors
+              </div>
+              {instructorResources.map((inst) => (
+                <div
+                  key={inst.id}
+                  className="flex items-center border-b border-border/60 px-2 sm:px-4"
+                  style={{ height: ROW_HEIGHT }}
+                >
+                  <div className="min-w-0 truncate text-[13px] font-semibold leading-tight sm:text-sm">
+                    {inst.name}
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
 
-          {/* Right column (timeline) */}
-          <div className="min-w-0 flex-1 overflow-x-auto">
-            <div style={timelineMinWidth ? { minWidth: timelineMinWidth } : undefined}>
-              {/* Time header */}
-              <div className="sticky top-0 z-30 h-10 border-b border-border/60 bg-card/95 backdrop-blur sm:h-12">
+              {/* Group: Aircraft */}
+              <div
+                className="flex items-center border-b border-border/60 bg-muted/20 px-2 text-[11px] font-semibold text-muted-foreground sm:px-4"
+                style={{ height: GROUP_HEIGHT }}
+              >
+                Aircraft
+              </div>
+              {aircraftResources.map((ac) => (
                 <div
-                  className="grid h-full"
-                  style={{
-                    gridTemplateColumns: `repeat(${slotCount}, minmax(0, 1fr))`,
-                  }}
+                  key={ac.id}
+                  className="flex items-center border-b border-border/60 px-2 sm:px-4"
+                  style={{ height: ROW_HEIGHT }}
                 >
-                  {slots.map((slot) => {
-                    const minutes = slot.getMinutes()
-                    const showLabel = minutes === 0
-                    return (
-                      <div
-                        key={slot.toISOString()}
-                        className={cn(
-                          "flex items-center justify-center border-r border-border/60 px-0.5 text-[10px] text-muted-foreground sm:px-1 sm:text-xs",
-                          "last:border-r-0"
-                        )}
-                      >
-                        <div className={cn("select-none font-medium", showLabel ? "" : "opacity-40")}>
-                          {formatTimeLabel(slot)}
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-semibold leading-tight sm:text-sm">
+                      {ac.registration}{" "}
+                      <span className="font-medium text-muted-foreground/90">({ac.type})</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Right column (timeline) */}
+            <div className="min-w-0 flex-1 overflow-x-auto">
+              <div style={timelineMinWidth ? { minWidth: timelineMinWidth } : undefined}>
+                {/* Time header */}
+                <div className="sticky top-0 z-30 h-10 border-b border-border/60 bg-card/95 backdrop-blur sm:h-12">
+                  <div
+                    className="grid h-full"
+                    style={{
+                      gridTemplateColumns: `repeat(${slotCount}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    {slots.map((slot) => {
+                      const minutes = slot.getMinutes()
+                      const showLabel = minutes === 0
+                      return (
+                        <div
+                          key={slot.toISOString()}
+                          className={cn(
+                            "flex items-center justify-center border-r border-border/60 px-0.5 text-[10px] text-muted-foreground sm:px-1 sm:text-xs",
+                            "last:border-r-0"
+                          )}
+                        >
+                          <div className={cn("select-none font-medium", showLabel ? "" : "opacity-40")}>
+                            {formatTimeLabel(slot)}
+                          </div>
                         </div>
-                      </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Rows */}
+                <div className="divide-y">
+                  {/* Instructors group header (timeline side) */}
+                  <div
+                    className="bg-muted/20"
+                    style={{ height: GROUP_HEIGHT }}
+                    aria-hidden="true"
+                  >
+                    <div
+                      className="grid h-full"
+                      style={{ gridTemplateColumns: `repeat(${slotCount}, minmax(0, 1fr))` }}
+                    >
+                      {slots.map((slot) => (
+                        <div key={slot.toISOString()} className="border-r last:border-r-0" />
+                      ))}
+                    </div>
+                  </div>
+
+                  {instructorResources.map((inst) => {
+                    const resource: Resource = { kind: "instructor", data: inst }
+                    const rowBookings = bookings.filter((b) => bookingMatchesResource(b, resource))
+
+                    return (
+                      <TimelineRow
+                        key={inst.id}
+                        height={ROW_HEIGHT}
+                        slotCount={slotCount}
+                        slots={slots}
+                        timelineStart={timelineStart}
+                        timelineEnd={timelineEnd}
+                        bookings={rowBookings}
+                        resourceTitle={getResourceTitle(resource)}
+                        onEmptyClick={(clientX, container) =>
+                          handleEmptySlotClick({ resource, clientX, container })
+                        }
+                        onBookingClick={handleBookingClick}
+                        onStatusUpdate={statusUpdateMutation.mutate}
+                        onCancelBooking={handleCancelBookingClick}
+                      />
+                    )
+                  })}
+
+                  {/* Aircraft group header (timeline side) */}
+                  <div
+                    className="bg-muted/20"
+                    style={{ height: GROUP_HEIGHT }}
+                    aria-hidden="true"
+                  >
+                    <div
+                      className="grid h-full"
+                      style={{ gridTemplateColumns: `repeat(${slotCount}, minmax(0, 1fr))` }}
+                    >
+                      {slots.map((slot) => (
+                        <div key={slot.toISOString()} className="border-r last:border-r-0" />
+                      ))}
+                    </div>
+                  </div>
+
+                  {aircraftResources.map((ac) => {
+                    const resource: Resource = { kind: "aircraft", data: ac }
+                    const rowBookings = bookings.filter((b) => bookingMatchesResource(b, resource))
+
+                    return (
+                      <TimelineRow
+                        key={ac.id}
+                        height={ROW_HEIGHT}
+                        slotCount={slotCount}
+                        slots={slots}
+                        timelineStart={timelineStart}
+                        timelineEnd={timelineEnd}
+                        bookings={rowBookings}
+                        resourceTitle={getResourceTitle(resource)}
+                        onEmptyClick={(clientX, container) =>
+                          handleEmptySlotClick({ resource, clientX, container })
+                        }
+                        onBookingClick={handleBookingClick}
+                        onStatusUpdate={statusUpdateMutation.mutate}
+                        onCancelBooking={handleCancelBookingClick}
+                      />
                     )
                   })}
                 </div>
               </div>
-
-              {/* Rows */}
-              <div className="divide-y">
-                {/* Instructors group header (timeline side) */}
-                <div
-                  className="bg-muted/20"
-                  style={{ height: GROUP_HEIGHT }}
-                  aria-hidden="true"
-                >
-                  <div
-                    className="grid h-full"
-                    style={{ gridTemplateColumns: `repeat(${slotCount}, minmax(0, 1fr))` }}
-                  >
-                    {slots.map((slot) => (
-                      <div key={slot.toISOString()} className="border-r last:border-r-0" />
-                    ))}
-                  </div>
-                </div>
-
-                {instructorResources.map((inst) => {
-                  const resource: Resource = { kind: "instructor", data: inst }
-                  const rowBookings = bookings.filter((b) => bookingMatchesResource(b, resource))
-
-                  return (
-                    <TimelineRow
-                      key={inst.id}
-                      height={ROW_HEIGHT}
-                      slotCount={slotCount}
-                      slots={slots}
-                      timelineStart={timelineStart}
-                      timelineEnd={timelineEnd}
-                      bookings={rowBookings}
-                      resourceTitle={getResourceTitle(resource)}
-                      onEmptyClick={(clientX, container) =>
-                        handleEmptySlotClick({ resource, clientX, container })
-                      }
-                      onBookingClick={handleBookingClick}
-                      onStatusUpdate={statusUpdateMutation.mutate}
-                      onCancelBooking={handleCancelBookingClick}
-                    />
-                  )
-                })}
-
-                {/* Aircraft group header (timeline side) */}
-                <div
-                  className="bg-muted/20"
-                  style={{ height: GROUP_HEIGHT }}
-                  aria-hidden="true"
-                >
-                  <div
-                    className="grid h-full"
-                    style={{ gridTemplateColumns: `repeat(${slotCount}, minmax(0, 1fr))` }}
-                  >
-                    {slots.map((slot) => (
-                      <div key={slot.toISOString()} className="border-r last:border-r-0" />
-                    ))}
-                  </div>
-                </div>
-
-                {aircraftResources.map((ac) => {
-                  const resource: Resource = { kind: "aircraft", data: ac }
-                  const rowBookings = bookings.filter((b) => bookingMatchesResource(b, resource))
-
-                  return (
-                    <TimelineRow
-                      key={ac.id}
-                      height={ROW_HEIGHT}
-                      slotCount={slotCount}
-                      slots={slots}
-                      timelineStart={timelineStart}
-                      timelineEnd={timelineEnd}
-                      bookings={rowBookings}
-                      resourceTitle={getResourceTitle(resource)}
-                      onEmptyClick={(clientX, container) =>
-                        handleEmptySlotClick({ resource, clientX, container })
-                      }
-                      onBookingClick={handleBookingClick}
-                      onStatusUpdate={statusUpdateMutation.mutate}
-                      onCancelBooking={handleCancelBookingClick}
-                    />
-                  )
-                })}
-              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       <NewBookingModal

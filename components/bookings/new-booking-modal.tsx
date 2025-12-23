@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { format } from "date-fns"
-import { CalendarIcon, Check, ChevronsUpDown, User, Plane, Clock, NotebookPen } from "lucide-react"
+import { CalendarIcon, Check, ChevronsUpDown, User, Plane, Clock, NotebookPen, Plus } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
@@ -134,19 +134,19 @@ function LocalCombobox<T extends { id: string }>(props: {
           type="button"
           variant="outline"
           disabled={disabled}
-          className="w-full justify-between"
+          className="h-10 w-full justify-between rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
           aria-expanded={open}
         >
           <span className="flex min-w-0 items-center gap-2">
-            {icon ? <span className="shrink-0 text-muted-foreground">{icon}</span> : null}
+            {icon ? <span className="shrink-0 text-slate-400">{icon}</span> : null}
             <span className="truncate">{selectedLabel}</span>
           </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl border-slate-200 shadow-xl" align="start">
         <Command shouldFilter={false}>
-          <CommandInput placeholder="Search..." value={query} onValueChange={setQuery} />
+          <CommandInput placeholder="Search..." value={query} onValueChange={setQuery} className="border-none focus:ring-0" />
           <CommandList className="max-h-[280px]">
             <CommandEmpty>No results.</CommandEmpty>
             <CommandGroup>
@@ -156,6 +156,7 @@ function LocalCombobox<T extends { id: string }>(props: {
                   onChange(null)
                   setOpen(false)
                 }}
+                className="rounded-lg py-2.5"
               >
                 <Check className={cn("mr-2 h-4 w-4", !valueId ? "opacity-100" : "opacity-0")} />
                 None
@@ -172,11 +173,11 @@ function LocalCombobox<T extends { id: string }>(props: {
                       onChange(item.id)
                       setOpen(false)
                     }}
+                    className="rounded-lg py-2.5"
                   >
                     <Check className={cn("mr-2 h-4 w-4", isSelected ? "opacity-100" : "opacity-0")} />
                     <div className="min-w-0">
-                      <div className="truncate">{label}</div>
-                      {meta ? <div className="truncate text-xs text-muted-foreground">{meta}</div> : null}
+                      <div className="truncate font-medium">{label}</div>
                     </div>
                   </CommandItem>
                 )
@@ -384,57 +385,79 @@ export function NewBookingModal(props: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 sm:max-w-[48rem] w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:w-full overflow-hidden">
-        <div className="p-6 sm:p-7 pb-4">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-xl sm:text-2xl">
-              <CalendarIcon className="h-5 w-5 text-muted-foreground" />
-              New Booking
-            </DialogTitle>
-            <DialogDescription className="text-sm">
-              Enter details for the new booking. Required fields are marked with{" "}
-              <span className="text-destructive">*</span>.
-            </DialogDescription>
+      <DialogContent className="max-w-[720px] overflow-hidden rounded-[24px] p-0 border-none shadow-2xl">
+        <div className="flex h-full flex-col bg-white">
+          <DialogHeader className="px-6 pt-6 pb-4 text-left">
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <Plus className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-bold tracking-tight text-slate-900">
+                  New Booking
+                </DialogTitle>
+                <DialogDescription className="mt-0.5 text-sm text-slate-500">
+                  Enter details for the new booking. Required fields are marked with{" "}
+                  <span className="text-destructive">*</span>.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-        </div>
 
-        <form
-          onSubmit={form.handleSubmit((v) => submit(v, "unconfirmed"))}
-          className="max-h-[80vh] overflow-y-auto px-6 pb-6 sm:px-7"
-        >
+          <form
+            onSubmit={form.handleSubmit((v) => submit(v, "unconfirmed"))}
+            className="max-h-[80vh] overflow-y-auto px-6 pb-6"
+          >
           <div className="space-y-6">
             {/* Booking kind (Regular / Trial) */}
-            <Tabs value={bookingMode} onValueChange={(v) => setBookingMode(v as "regular" | "trial")} className="w-full">
-              <TabsList className="grid h-11 w-full grid-cols-2 rounded-xl bg-muted p-1">
-                <TabsTrigger value="regular" className="gap-2">
-                  <User className="h-4 w-4" />
-                  Regular Booking
-                </TabsTrigger>
-                <TabsTrigger value="trial" className="gap-2">
-                  <Plane className="h-4 w-4" />
-                  Trial Flight
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <section>
+              <div className="mb-3 flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                <span className="text-xs font-semibold tracking-tight text-slate-900">Booking Category</span>
+              </div>
+              <Tabs value={bookingMode} onValueChange={(v) => setBookingMode(v as "regular" | "trial")} className="w-full">
+                <TabsList className="grid h-9 w-full grid-cols-2 rounded-[12px] bg-slate-50 p-1 ring-1 ring-slate-100">
+                  <TabsTrigger 
+                    value="regular" 
+                    className="gap-2 rounded-[8px] text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-slate-200 py-1"
+                  >
+                    <User className="h-3.5 w-3.5" />
+                    Regular Booking
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="trial" 
+                    className="gap-2 rounded-[8px] text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-slate-200 py-1"
+                  >
+                    <Plane className="h-3.5 w-3.5" />
+                    Trial Flight
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </section>
 
             {/* Scheduled times (two-column) */}
-            <div className="rounded-2xl border bg-card p-4 sm:p-5">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground/90">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                SCHEDULED TIMES
+            <section>
+              <div className="mb-3 flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                <span className="text-xs font-semibold tracking-tight text-slate-900">Schedule Times</span>
               </div>
-              <div className="mt-4 grid gap-5 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold tracking-wide text-foreground/80">
+              
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
                     START TIME <span className="text-destructive">*</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="flex-[1.4] space-y-1">
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button type="button" variant="outline" className="w-full justify-start">
-                            <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                            {format(form.watch("date"), "dd MMM yyyy")}
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            className="h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                          >
+                            <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">{format(form.watch("date"), "dd MMM yyyy")}</span>
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
@@ -450,44 +473,48 @@ export function NewBookingModal(props: {
                         </PopoverContent>
                       </Popover>
                       {errors.date ? (
-                        <p className="text-xs text-destructive">{errors.date.message as string}</p>
+                        <p className="text-[10px] text-destructive">{errors.date.message as string}</p>
                       ) : null}
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex-1 space-y-1">
                       <Select
                         value={form.watch("startTime")}
                         onValueChange={(v) => form.setValue("startTime", v, { shouldValidate: true })}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select time" />
+                        <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                          <SelectValue placeholder="Time" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
                           {TIME_OPTIONS.map((t) => (
-                            <SelectItem key={t} value={t}>
+                            <SelectItem key={t} value={t} className="rounded-lg py-2 text-xs">
                               {t}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                       {errors.startTime ? (
-                        <p className="text-xs text-destructive">{errors.startTime.message}</p>
+                        <p className="text-[10px] text-destructive">{errors.startTime.message}</p>
                       ) : null}
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold tracking-wide text-foreground/80">
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
                     END TIME <span className="text-destructive">*</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="flex-[1.4] space-y-1">
                       {/* For now we keep the same date (booking is same-day). UI matches screenshot. */}
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button type="button" variant="outline" className="w-full justify-start">
-                            <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                            {format(form.watch("date"), "dd MMM yyyy")}
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            className="h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                          >
+                            <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">{format(form.watch("date"), "dd MMM yyyy")}</span>
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
@@ -503,43 +530,47 @@ export function NewBookingModal(props: {
                         </PopoverContent>
                       </Popover>
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex-1 space-y-1">
                       <Select
                         value={form.watch("endTime")}
                         onValueChange={(v) => form.setValue("endTime", v, { shouldValidate: true })}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select time" />
+                        <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                          <SelectValue placeholder="Time" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
                           {TIME_OPTIONS.map((t) => (
-                            <SelectItem key={t} value={t}>
+                            <SelectItem key={t} value={t} className="rounded-lg py-2 text-xs">
                               {t}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      {errors.endTime ? <p className="text-xs text-destructive">{errors.endTime.message}</p> : null}
+                      {errors.endTime ? <p className="text-[10px] text-destructive">{errors.endTime.message}</p> : null}
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Details (two-column grid) */}
-            <div className="rounded-2xl border bg-card p-4 sm:p-5">
+            <section>
+              <div className="mb-3 flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                <span className="text-xs font-semibold tracking-tight text-slate-900">Booking Details</span>
+              </div>
+
               {optionsError ? (
-                <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                <div className="mb-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-2 text-[10px] font-medium text-destructive">
                   Could not load booking options. Please refresh and try again.
                 </div>
               ) : null}
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-5 sm:grid-cols-2">
                 {/* Member */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    Select Member {isStaff ? <span className="text-destructive">*</span> : null}
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    SELECT MEMBER {isStaff ? <span className="text-destructive">*</span> : null}
                   </label>
                   {isStaff ? (
                     <>
@@ -548,70 +579,91 @@ export function NewBookingModal(props: {
                         onSelect={(u) => form.setValue("member", u, { shouldValidate: true })}
                       />
                       {errors.member ? (
-                        <p className="text-xs text-destructive">{errors.member.message as string}</p>
+                        <p className="text-[10px] text-destructive mt-1">{errors.member.message as string}</p>
                       ) : null}
                     </>
                   ) : (
-                    <div className="rounded-xl border bg-muted/20 px-3 py-2.5 text-sm">
-                      Booking for <span className="font-medium">{user?.email ?? "your account"}</span>
-                      {role ? <span className="ml-2 text-xs text-muted-foreground">({role})</span> : null}
+                    <div className="h-10 flex items-center rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs font-medium text-slate-600">
+                      <User className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{user?.email ?? "your account"}</span>
+                      {role ? <span className="ml-1.5 text-[10px] text-slate-400 shrink-0">({role})</span> : null}
                     </div>
                   )}
                 </div>
 
                 {/* Instructor */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    Select Instructor
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    SELECT INSTRUCTOR
                   </label>
-                  <LocalCombobox
+                  <Select
                     disabled={optionsLoading || !options || shouldHideInstructor}
-                    valueId={form.watch("instructorId") || null}
-                    onChange={(id) => form.setValue("instructorId", id, { shouldValidate: true })}
-                    placeholder={
-                      shouldHideInstructor
-                        ? "Not required for solo flights"
-                        : optionsLoading
-                          ? "Loading..."
-                          : "No instructor"
-                    }
-                    items={options?.instructors ?? []}
-                    icon={<User className="h-4 w-4" />}
-                    itemLabel={(i) => {
-                      const full = [i.first_name, i.last_name].filter(Boolean).join(" ").trim()
-                      return full || i.user?.email || "Instructor"
-                    }}
-                    itemMeta={(i) => (i.user?.email ? i.user.email : null)}
-                  />
+                    value={form.watch("instructorId") || "none"}
+                    onValueChange={(id) => form.setValue("instructorId", id === "none" ? null : id, { shouldValidate: true })}
+                  >
+                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <div className="flex items-center gap-2 truncate">
+                        <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <SelectValue placeholder={
+                          shouldHideInstructor
+                            ? "Not required"
+                            : optionsLoading
+                              ? "Loading..."
+                              : "No instructor"
+                        } />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
+                      <SelectItem value="none" className="rounded-lg py-2 text-xs">
+                        No instructor
+                      </SelectItem>
+                      {(options?.instructors ?? []).map((i) => {
+                        const full = [i.first_name, i.last_name].filter(Boolean).join(" ").trim()
+                        const label = full || i.user?.email || "Instructor"
+                        return (
+                          <SelectItem key={i.id} value={i.id} className="rounded-lg py-2 text-xs">
+                            {label}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
                   {errors.instructorId ? (
-                    <p className="text-xs text-destructive">{errors.instructorId.message}</p>
+                    <p className="text-[10px] text-destructive mt-1">{errors.instructorId.message}</p>
                   ) : null}
                 </div>
 
                 {/* Aircraft */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <Plane className="h-4 w-4 text-muted-foreground" />
-                    Aircraft <span className="text-destructive">*</span>
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    AIRCRAFT <span className="text-destructive">*</span>
                   </label>
-                  <LocalCombobox
+                  <Select
                     disabled={optionsLoading || !options}
-                    valueId={form.watch("aircraftId") || null}
-                    onChange={(id) => form.setValue("aircraftId", id ?? "", { shouldValidate: true })}
-                    placeholder={optionsLoading ? "Loading..." : "Select aircraft"}
-                    items={options?.aircraft ?? []}
-                    icon={<Plane className="h-4 w-4" />}
-                    itemLabel={(a) => `${a.registration} (${a.type})`}
-                    itemMeta={(a) => [a.manufacturer, a.model].filter(Boolean).join(" ") || null}
-                  />
-                  {errors.aircraftId ? <p className="text-xs text-destructive">{errors.aircraftId.message}</p> : null}
+                    value={form.watch("aircraftId") || undefined}
+                    onValueChange={(id) => form.setValue("aircraftId", id, { shouldValidate: true })}
+                  >
+                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <div className="flex items-center gap-2 truncate">
+                        <Plane className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <SelectValue placeholder={optionsLoading ? "Loading..." : "Select aircraft"} />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
+                      {(options?.aircraft ?? []).map((a) => (
+                        <SelectItem key={a.id} value={a.id} className="rounded-lg py-2 text-xs">
+                          {a.registration} ({a.type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.aircraftId ? <p className="text-[10px] text-destructive mt-1">{errors.aircraftId.message}</p> : null}
                 </div>
 
                 {/* Booking Type */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Booking Type <span className="text-destructive">*</span>
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    BOOKING TYPE <span className="text-destructive">*</span>
                   </label>
                   <Select
                     value={bookingType}
@@ -622,52 +674,62 @@ export function NewBookingModal(props: {
                       }
                     }}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select type" />
+                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectValue placeholder="Type" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
                       {BOOKING_TYPE_OPTIONS.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
+                        <SelectItem key={t.value} value={t.value} className="rounded-lg py-2 text-xs">
                           {t.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {errors.bookingType ? <p className="text-xs text-destructive">{errors.bookingType.message}</p> : null}
+                  {errors.bookingType ? <p className="text-[10px] text-destructive mt-1">{errors.bookingType.message}</p> : null}
                 </div>
 
                 {/* Flight type */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <Plane className="h-4 w-4 text-muted-foreground" />
-                    Flight Type {bookingType === "flight" ? <span className="text-destructive">*</span> : null}
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    FLIGHT TYPE {bookingType === "flight" ? <span className="text-destructive">*</span> : null}
                   </label>
-                  <LocalCombobox
+                  <Select
                     disabled={optionsLoading || !options || bookingType !== "flight"}
-                    valueId={form.watch("flightTypeId") || null}
-                    onChange={(id) => form.setValue("flightTypeId", id, { shouldValidate: true })}
-                    placeholder={
-                      bookingType !== "flight"
-                        ? "Not applicable"
-                        : optionsLoading
-                          ? "Loading..."
-                          : "Select flight type"
-                    }
-                    items={filteredFlightTypes}
-                    icon={<Plane className="h-4 w-4" />}
-                    itemLabel={(ft) => ft.name}
-                    itemMeta={(ft) => (ft.instruction_type ? ft.instruction_type.toUpperCase() : null)}
-                  />
+                    value={form.watch("flightTypeId") || "none"}
+                    onValueChange={(id) => form.setValue("flightTypeId", id === "none" ? null : id, { shouldValidate: true })}
+                  >
+                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <div className="flex items-center gap-2 truncate">
+                        <Plane className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <SelectValue placeholder={
+                          bookingType !== "flight"
+                            ? "N/A"
+                            : optionsLoading
+                              ? "Loading..."
+                              : "Select flight type"
+                        } />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
+                      <SelectItem value="none" className="rounded-lg py-2 text-xs">
+                        None
+                      </SelectItem>
+                      {filteredFlightTypes.map((ft) => (
+                        <SelectItem key={ft.id} value={ft.id} className="rounded-lg py-2 text-xs">
+                          {ft.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {errors.flightTypeId ? (
-                    <p className="text-xs text-destructive">{errors.flightTypeId.message as string}</p>
+                    <p className="text-[10px] text-destructive mt-1">{errors.flightTypeId.message as string}</p>
                   ) : null}
                 </div>
 
                 {/* Lesson */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <NotebookPen className="h-4 w-4 text-muted-foreground" />
-                    Lesson
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    LESSON
                   </label>
                   <LocalCombobox
                     disabled={optionsLoading || !options || bookingType !== "flight"}
@@ -675,75 +737,95 @@ export function NewBookingModal(props: {
                     onChange={(id) => form.setValue("lessonId", id, { shouldValidate: true })}
                     placeholder={
                       bookingType !== "flight"
-                        ? "Not applicable"
+                        ? "N/A"
                         : optionsLoading
                           ? "Loading..."
                           : "Select lesson"
                     }
                     items={options?.lessons ?? []}
-                    icon={<NotebookPen className="h-4 w-4" />}
+                    icon={<NotebookPen className="h-3.5 w-3.5 shrink-0" />}
                     itemLabel={(l) => l.name}
-                    itemMeta={(l) => l.description || null}
                   />
                   {errors.lessonId ? (
-                    <p className="text-xs text-destructive">{errors.lessonId.message as string}</p>
+                    <p className="text-[10px] text-destructive mt-1">{errors.lessonId.message as string}</p>
                   ) : null}
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Notes */}
-            <div className="rounded-2xl border bg-card p-4 sm:p-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Description <span className="text-destructive">*</span>
+            <section>
+              <div className="mb-3 flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className="text-xs font-semibold tracking-tight text-slate-900">Notes & Remarks</span>
+              </div>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    DESCRIPTION <span className="text-destructive">*</span>
                   </label>
                   <Textarea
-                    rows={4}
-                    placeholder="e.g. Dual circuits, pre-solo consolidation, night rating..."
+                    rows={3}
+                    placeholder="e.g. Dual circuits..."
+                    className="rounded-xl border-slate-200 focus:ring-slate-900 text-xs"
                     {...form.register("purpose")}
                   />
-                  {errors.purpose ? <p className="text-xs text-destructive">{errors.purpose.message}</p> : null}
+                  {errors.purpose ? <p className="text-[10px] text-destructive mt-1">{errors.purpose.message}</p> : null}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
-                    <NotebookPen className="h-4 w-4 text-muted-foreground" />
-                    Remarks (optional)
+                <div>
+                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    REMARKS (OPTIONAL)
                   </label>
-                  <Textarea rows={4} placeholder="Internal notes / special requirements" {...form.register("remarks")} />
-                  {errors.remarks ? <p className="text-xs text-destructive">{errors.remarks.message}</p> : null}
+                  <Textarea 
+                    rows={3} 
+                    placeholder="Internal notes..." 
+                    className="rounded-xl border-slate-200 focus:ring-slate-900 text-xs"
+                    {...form.register("remarks")} 
+                  />
+                  {errors.remarks ? <p className="text-[10px] text-destructive mt-1">{errors.remarks.message}</p> : null}
                 </div>
               </div>
-            </div>
-
-            {/* Footer */}
-            <div className="sticky bottom-0 -mx-6 border-t bg-background/95 px-6 py-4 backdrop-blur sm:-mx-7 sm:px-7">
-              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-                  Cancel
-                </Button>
-                {isStaff ? (
-                  <Button
-                    type="button"
-                    className="bg-emerald-600 text-white hover:bg-emerald-700"
-                    disabled={submitting}
-                    onClick={form.handleSubmit((v) => submit(v, "confirmed"))}
-                  >
-                    Save and Confirm
-                  </Button>
-                ) : null}
-                <Button type="submit" className="bg-indigo-600 text-white hover:bg-indigo-700" disabled={submitting}>
-                  {submitting ? "Saving..." : "Save"}
-                </Button>
-              </div>
-            </div>
+            </section>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
-  )
+
+        {/* Footer */}
+        <div className="border-t bg-white px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+          <div className="flex items-center justify-between gap-3">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => onOpenChange(false)} 
+              disabled={submitting}
+              className="h-10 flex-1 rounded-xl border-slate-200 text-xs font-bold shadow-none hover:bg-slate-50"
+            >
+              Cancel
+            </Button>
+            {isStaff ? (
+              <Button
+                type="button"
+                disabled={submitting}
+                onClick={form.handleSubmit((v) => submit(v, "confirmed"))}
+                className="h-10 flex-1 rounded-xl bg-emerald-600 text-xs font-bold text-white shadow-lg shadow-emerald-600/10 hover:bg-emerald-500"
+              >
+                Save & Confirm
+              </Button>
+            ) : null}
+            <Button 
+              type="submit" 
+              disabled={submitting}
+              onClick={form.handleSubmit((v) => submit(v, "unconfirmed"))}
+              className="h-10 flex-[1.4] rounded-xl bg-slate-900 text-xs font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
+            >
+              {submitting ? "Saving..." : "Save Booking"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
+)
 }
 
 

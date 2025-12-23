@@ -13,10 +13,14 @@ const nextConfig: NextConfig = {
         hostname: '**.gstatic.com',
         pathname: '/**',
       },
-      // Allow Supabase storage if you're using it
       {
         protocol: 'https',
         hostname: '**.supabase.co',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.squarespace-cdn.com',
         pathname: '/**',
       },
     ],

@@ -8,6 +8,7 @@ import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { IconPlaneDeparture } from "@tabler/icons-react"
 import { useAuth } from "@/contexts/auth-context"
+import { cn } from "@/lib/utils"
 
 function getUserInitials(name: string, email: string): string {
   if (name && name.trim()) {
@@ -40,11 +41,11 @@ export function SiteHeader() {
   const userInitials = getUserInitials(userName, userEmail)
   
   return (
-    <header className={`flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height) ${
-      isMobile 
-        ? "bg-slate-800 dark:bg-slate-900 border-slate-700/50 dark:border-slate-800/50 shadow-sm" 
-        : "border-border/40 bg-gradient-to-r from-slate-50 via-blue-50/40 to-background dark:from-slate-900 dark:via-slate-800/60 dark:to-background"
-    }`}>
+    <header className={cn(
+      "flex h-12 shrink-0 items-center gap-2 border-b transition-[width] ease-linear",
+      "bg-slate-800 dark:bg-slate-900 border-slate-700/50 dark:border-slate-800/50 shadow-sm",
+      "md:border-border/40 md:bg-gradient-to-r md:from-slate-50 md:via-blue-50/40 md:to-background md:dark:from-slate-900 md:dark:via-slate-800/60 md:dark:to-background md:shadow-none"
+    )}>
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         {isMobile ? (
           <>

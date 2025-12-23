@@ -86,18 +86,18 @@ export default function MemberSelect({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className="w-full justify-between"
+          className="h-10 w-full justify-between rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
         >
           <span className="truncate">{displayName}</span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl border-slate-200 shadow-xl" align="start">
         <Command shouldFilter={false}>
-          <CommandInput placeholder="Search members..." value={search} onValueChange={setSearch} />
+          <CommandInput placeholder="Search members..." value={search} onValueChange={setSearch} className="border-none focus:ring-0" />
           <CommandList className="max-h-[300px]">
             {loading ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">
+              <div className="py-6 text-center text-sm text-slate-500">
                 Loading...
               </div>
             ) : users.length === 0 ? (
@@ -110,6 +110,7 @@ export default function MemberSelect({
                     onSelect(null)
                     setOpen(false)
                   }}
+                  className="rounded-lg py-2.5"
                 >
                   No member selected
                 </CommandItem>
@@ -123,13 +124,9 @@ export default function MemberSelect({
                         onSelect(user)
                         setOpen(false)
                       }}
+                      className="rounded-lg py-2.5"
                     >
-                      {displayName}
-                      {user.email && (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          ({user.email})
-                        </span>
-                      )}
+                      <span className="font-medium">{displayName}</span>
                     </CommandItem>
                   )
                 })}

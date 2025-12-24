@@ -42,8 +42,11 @@ export function SiteHeader() {
   
   return (
     <header className={cn(
-      "flex h-12 shrink-0 items-center gap-2 border-b transition-[width] ease-linear",
-      "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm"
+      "flex h-12 shrink-0 items-center gap-2 border-b transition-[width] ease-linear shadow-sm",
+      // Mobile: Sidebar blue theme, Desktop: White theme
+      isMobile 
+        ? "bg-sidebar text-sidebar-foreground border-sidebar-border"
+        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
     )}>
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         {isMobile ? (
@@ -52,20 +55,20 @@ export function SiteHeader() {
             <Button
               variant="ghost"
               size="icon"
-              className="size-7 text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800"
+              className="size-7 text-sidebar-foreground hover:text-sidebar-foreground/90 hover:bg-sidebar-accent"
               onClick={toggleSidebar}
             >
               <Menu className="h-5 w-5" />
               <span className="sr-only">Toggle Sidebar</span>
             </Button>
             <div className="flex flex-1 items-center justify-center gap-2">
-              <IconPlaneDeparture className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-              <span className="text-base font-semibold text-slate-900 dark:text-slate-100">Flight Desk Pro</span>
+              <IconPlaneDeparture className="h-5 w-5 text-sidebar-foreground" />
+              <span className="text-base font-semibold text-sidebar-foreground">Flight Desk Pro</span>
             </div>
             <div className="flex items-center">
-              <Avatar className="h-8 w-8 border border-slate-200 dark:border-slate-800">
+              <Avatar className="h-8 w-8 border-2 border-sidebar-border">
                 <AvatarImage src={userAvatar} alt={userName} />
-                <AvatarFallback className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>

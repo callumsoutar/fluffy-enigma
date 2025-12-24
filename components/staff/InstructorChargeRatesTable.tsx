@@ -350,6 +350,177 @@ export default function InstructorChargeRatesTable({ instructorId }: Props) {
         </div>
       ) : (
         <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+          {/* Mobile View: Cards (matches AircraftChargeRatesTable pattern) */}
+          <div className="block sm:hidden divide-y divide-gray-100">
+            {rates.map((rate) => (
+              <div key={rate.id} className={`p-4 ${isEditing(rate.id) ? 'bg-indigo-50/50' : ''}`}>
+                {isEditing(rate.id) ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-500">Rate (Inc. Tax)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={editingRate?.rate_per_hour}
+                          onChange={(e) => setEditingRate(prev => prev ? { ...prev, rate_per_hour: e.target.value } : null)}
+                          className="pl-7 bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-500">Effective From</label>
+                      <Input
+                        type="date"
+                        value={editingRate?.effective_from}
+                        onChange={(e) => setEditingRate(prev => prev ? { ...prev, effective_from: e.target.value } : null)}
+                        className="bg-white"
+                      />
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="flex-1 bg-indigo-600"
+                        onClick={handleSaveRate}
+                        disabled={saving}
+                      >
+                        <Check className="w-4 h-4 mr-2" />
+                        Save
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={handleCancelEdit}
+                        disabled={saving}
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                        <span className="font-semibold text-gray-900">
+                          {flightTypes.find(ft => ft.id === rate.flight_type_id)?.name || 'Unknown'}
+                        </span>
+                      </div>
+                      <span className="text-lg font-bold text-indigo-600">
+                        ${calculateTaxInclusive(parseFloat(rate.rate_per_hour)).toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500">
+                        Effective {rate.effective_from ? new Date(rate.effective_from).toLocaleDateString() : 'Immediate'}
+                      </span>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-gray-500"
+                          onClick={() => handleEditRate(rate)}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500"
+                          onClick={() => handleDeleteRate(rate.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* New Rate Mobile Form */}
+            {isAddingNew() && (
+              <div className="p-4 bg-blue-50/50 space-y-4 border-t border-blue-100">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-blue-600">Flight Type</label>
+                  <Select
+                    value={editingRate?.flight_type_id}
+                    onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, flight_type_id: value } : null)}
+                  >
+                    <SelectTrigger className="w-full bg-white border-blue-200">
+                      <SelectValue placeholder="Select flight type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableFlightTypes.map((ft) => (
+                        <SelectItem key={ft.id} value={ft.id}>{ft.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-blue-600">Rate (Inc. Tax)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editingRate?.rate_per_hour}
+                      onChange={(e) => setEditingRate(prev => prev ? { ...prev, rate_per_hour: e.target.value } : null)}
+                      className="pl-7 bg-white border-blue-200"
+                      placeholder="0.00"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-blue-600">Effective From</label>
+                  <Input
+                    type="date"
+                    value={editingRate?.effective_from}
+                    onChange={(e) => setEditingRate(prev => prev ? { ...prev, effective_from: e.target.value } : null)}
+                    className="bg-white border-blue-200"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="flex-1 bg-blue-600"
+                    onClick={handleSaveNewRate}
+                    disabled={saving}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 border-blue-200"
+                    onClick={handleCancelNewRate}
+                    disabled={saving}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="hidden sm:block overflow-x-auto">
             <Table>
               <TableHeader className="bg-gray-50/50">

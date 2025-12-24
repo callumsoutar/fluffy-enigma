@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
   const parsedParams = listQuerySchema.safeParse({
     day_of_week: searchParams.get("day_of_week") ?? undefined,
     instructor_id: searchParams.get("instructor_id") ?? undefined,
+    date: searchParams.get("date") ?? undefined,
   })
 
   if (!parsedParams.success) {

@@ -14,27 +14,26 @@ interface FlightType {
 }
 
 interface Props {
-  aircraftId: string
+  instructorId: string
 }
 
 interface Rate {
   id: string
-  aircraft_id: string
+  instructor_id: string
   flight_type_id: string
   rate_per_hour: string
-  charge_hobbs: boolean
-  charge_tacho: boolean
-  charge_airswitch: boolean
+  currency: string
+  effective_from: string
 }
 
 interface EditingRate {
   id: string
   flight_type_id: string
   rate_per_hour: string
-  charge_method: 'hobbs' | 'tacho' | 'airswitch' | ''
+  effective_from: string
 }
 
-export default function AircraftChargeRatesTable({ aircraftId }: Props) {
+export default function InstructorChargeRatesTable({ instructorId }: Props) {
   const [rates, setRates] = useState<Rate[]>([])
   const [loading, setLoading] = useState(true)
   const [flightTypes, setFlightTypes] = useState<FlightType[]>([])
@@ -43,11 +42,13 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
   const [addingNewRate, setAddingNewRate] = useState(false)
   const [defaultTaxRate, setDefaultTaxRate] = useState<number>(0.15) // Default to 15%
 
+  const todayIsoDate = () => new Date().toISOString().slice(0, 10)
+
   // Fetch rates
   useEffect(() => {
     async function fetchRates() {
       try {
-        const ratesRes = await fetch(`/api/aircraft-charge-rates?aircraft_id=${aircraftId}`)
+        const ratesRes = await fetch(`/api/instructor-charge-rates?instructor_id=${instructorId}`)
         if (!ratesRes.ok) {
           setRates([])
         } else {
@@ -61,7 +62,7 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
       }
     }
     fetchRates()
-  }, [aircraftId])
+  }, [instructorId])
 
   // Fetch flight types and default tax rate
   useEffect(() => {
@@ -81,7 +82,6 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
 
         if (taxRes.ok) {
           const taxData = await taxRes.json()
-          // Set default tax rate (use first default rate or fallback to 15%)
           if (taxData.tax_rates && taxData.tax_rates.length > 0) {
             setDefaultTaxRate(parseFloat(taxData.tax_rates[0].rate))
           }
@@ -102,7 +102,7 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
       return
     }
 
-    // Get available flight types (not already assigned to this aircraft)
+    // Get available flight types (not already assigned to this instructor)
     const assignedFlightTypeIds = rates.map(rate => rate.flight_type_id)
     const availableFlightTypes = flightTypes.filter(ft => !assignedFlightTypeIds.includes(ft.id))
 
@@ -111,13 +111,12 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
       return
     }
 
-    // Start adding new rate mode
     setAddingNewRate(true)
     setEditingRate({
-      id: 'new', // Temporary ID for new rate
+      id: 'new',
       flight_type_id: availableFlightTypes[0].id,
       rate_per_hour: '',
-      charge_method: 'hobbs', // Default to hobbs
+      effective_from: todayIsoDate(),
     })
   }
 
@@ -135,26 +134,18 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
       return
     }
 
-    if (!editingRate.charge_method) {
-      toast.error('Please select a charge method')
-      return
-    }
-
-    // Calculate tax-exclusive rate for storage
     const taxExclusiveRate = calculateTaxExclusive(taxInclusiveRate)
 
     setSaving(true)
     try {
-      const res = await fetch('/api/aircraft-charge-rates', {
+      const res = await fetch('/api/instructor-charge-rates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          aircraft_id: aircraftId,
+          instructor_id: instructorId,
           flight_type_id: editingRate.flight_type_id,
           rate_per_hour: taxExclusiveRate,
-          charge_hobbs: editingRate.charge_method === 'hobbs',
-          charge_tacho: editingRate.charge_method === 'tacho',
-          charge_airswitch: editingRate.charge_method === 'airswitch',
+          effective_from: editingRate.effective_from,
         }),
       })
 
@@ -164,7 +155,7 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
       }
 
       // Refresh rates
-      const ratesRes = await fetch(`/api/aircraft-charge-rates?aircraft_id=${aircraftId}`)
+      const ratesRes = await fetch(`/api/instructor-charge-rates?instructor_id=${instructorId}`)
       if (ratesRes.ok) {
         const ratesData = await ratesRes.json()
         setRates(ratesData.rates || [])
@@ -186,20 +177,13 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
   }
 
   const handleEditRate = (rate: Rate) => {
-    // Convert stored tax-exclusive rate to tax-inclusive for display
     const taxInclusiveRate = calculateTaxInclusive(parseFloat(rate.rate_per_hour))
-
-    // Determine charge method from boolean flags
-    let chargeMethod: 'hobbs' | 'tacho' | 'airswitch' | '' = ''
-    if (rate.charge_hobbs) chargeMethod = 'hobbs'
-    else if (rate.charge_tacho) chargeMethod = 'tacho'
-    else if (rate.charge_airswitch) chargeMethod = 'airswitch'
 
     setEditingRate({
       id: rate.id,
       flight_type_id: rate.flight_type_id,
       rate_per_hour: taxInclusiveRate.toFixed(2),
-      charge_method: chargeMethod,
+      effective_from: rate.effective_from || todayIsoDate(),
     })
   }
 
@@ -216,21 +200,17 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
       return
     }
 
-    // Calculate tax-exclusive rate for storage
     const taxExclusiveRate = calculateTaxExclusive(taxInclusiveRate)
 
     setSaving(true)
     try {
-      const res = await fetch('/api/aircraft-charge-rates', {
+      const res = await fetch('/api/instructor-charge-rates', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: editingRate.id,
-          flight_type_id: editingRate.flight_type_id,
           rate_per_hour: taxExclusiveRate,
-          charge_hobbs: editingRate.charge_method === 'hobbs',
-          charge_tacho: editingRate.charge_method === 'tacho',
-          charge_airswitch: editingRate.charge_method === 'airswitch',
+          effective_from: editingRate.effective_from,
         }),
       })
 
@@ -240,7 +220,7 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
       }
 
       // Refresh rates
-      const ratesRes = await fetch(`/api/aircraft-charge-rates?aircraft_id=${aircraftId}`)
+      const ratesRes = await fetch(`/api/instructor-charge-rates?instructor_id=${instructorId}`)
       if (ratesRes.ok) {
         const ratesData = await ratesRes.json()
         setRates(ratesData.rates || [])
@@ -259,7 +239,7 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
     if (!confirm('Are you sure you want to delete this rate?')) return
 
     try {
-      const res = await fetch('/api/aircraft-charge-rates', {
+      const res = await fetch('/api/instructor-charge-rates', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: rateId }),
@@ -270,7 +250,7 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
       }
 
       // Refresh rates
-      const ratesRes = await fetch(`/api/aircraft-charge-rates?aircraft_id=${aircraftId}`)
+      const ratesRes = await fetch(`/api/instructor-charge-rates?instructor_id=${instructorId}`)
       if (ratesRes.ok) {
         const ratesData = await ratesRes.json()
         setRates(ratesData.rates || [])
@@ -284,7 +264,6 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
   const isEditing = (rateId: string) => editingRate?.id === rateId
   const isAddingNew = () => addingNewRate && editingRate?.id === 'new'
 
-  // Tax calculation helpers
   const calculateTaxExclusive = (taxInclusiveAmount: number): number => {
     return taxInclusiveAmount / (1 + defaultTaxRate)
   }
@@ -329,7 +308,6 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Action Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-2 text-gray-600 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100">
           <Info className="w-4 h-4 text-indigo-500" />
@@ -349,7 +327,6 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
         </Button>
       </div>
 
-      {/* Main Content */}
       {rates.length === 0 && !addingNewRate ? (
         <div className="border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center bg-gray-50/50">
           <div className="flex flex-col items-center gap-4">
@@ -373,211 +350,14 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
         </div>
       ) : (
         <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-          {/* Mobile View: Cards */}
-          <div className="block sm:hidden divide-y divide-gray-100">
-            {rates.map((rate) => (
-              <div key={rate.id} className={`p-4 ${isEditing(rate.id) ? 'bg-indigo-50/50' : ''}`}>
-                {isEditing(rate.id) ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-500">Flight Type</label>
-                      <Select
-                        value={editingRate?.flight_type_id}
-                        onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, flight_type_id: value } : null)}
-                      >
-                        <SelectTrigger className="w-full bg-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableFlightTypes.map((ft) => (
-                            <SelectItem key={ft.id} value={ft.id}>{ft.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-500">Rate (Inc. Tax)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={editingRate?.rate_per_hour}
-                          onChange={(e) => setEditingRate(prev => prev ? { ...prev, rate_per_hour: e.target.value } : null)}
-                          className="pl-7 bg-white"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-500">Charge Method</label>
-                      <Select
-                        value={editingRate?.charge_method}
-                        onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, charge_method: value as 'hobbs' | 'tacho' | 'airswitch' | '' } : null)}
-                      >
-                        <SelectTrigger className="w-full bg-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="hobbs">Hobbs</SelectItem>
-                          <SelectItem value="tacho">Tacho</SelectItem>
-                          <SelectItem value="airswitch">Airswitch</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="flex-1 bg-indigo-600"
-                        onClick={handleSaveRate}
-                        disabled={saving}
-                      >
-                        <Check className="w-4 h-4 mr-2" />
-                        Save
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={handleCancelEdit}
-                        disabled={saving}
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                        <span className="font-semibold text-gray-900">
-                          {flightTypes.find(ft => ft.id === rate.flight_type_id)?.name || 'Unknown'}
-                        </span>
-                      </div>
-                      <span className="text-lg font-bold text-indigo-600">
-                        ${calculateTaxInclusive(parseFloat(rate.rate_per_hour)).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div className="flex gap-1">
-                        {rate.charge_hobbs && <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-medium rounded-full border border-blue-100">Hobbs</span>}
-                        {rate.charge_tacho && <span className="px-2 py-0.5 bg-green-50 text-green-700 text-[10px] font-medium rounded-full border border-green-100">Tacho</span>}
-                        {rate.charge_airswitch && <span className="px-2 py-0.5 bg-purple-50 text-purple-700 text-[10px] font-medium rounded-full border border-purple-100">Airswitch</span>}
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-gray-500"
-                          onClick={() => handleEditRate(rate)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-red-500"
-                          onClick={() => handleDeleteRate(rate.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* New Rate Mobile Form */}
-            {isAddingNew() && (
-              <div className="p-4 bg-blue-50/50 space-y-4 border-t border-blue-100">
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-blue-600">Flight Type</label>
-                  <Select
-                    value={editingRate?.flight_type_id}
-                    onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, flight_type_id: value } : null)}
-                  >
-                    <SelectTrigger className="w-full bg-white border-blue-200">
-                      <SelectValue placeholder="Select flight type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableFlightTypes.map((ft) => (
-                        <SelectItem key={ft.id} value={ft.id}>{ft.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-blue-600">Rate (Inc. Tax)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={editingRate?.rate_per_hour}
-                      onChange={(e) => setEditingRate(prev => prev ? { ...prev, rate_per_hour: e.target.value } : null)}
-                      className="pl-7 bg-white border-blue-200"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-blue-600">Charge Method</label>
-                  <Select
-                    value={editingRate?.charge_method}
-                    onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, charge_method: value as 'hobbs' | 'tacho' | 'airswitch' | '' } : null)}
-                  >
-                    <SelectTrigger className="w-full bg-white border-blue-200">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hobbs">Hobbs</SelectItem>
-                      <SelectItem value="tacho">Tacho</SelectItem>
-                      <SelectItem value="airswitch">Airswitch</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="flex-1 bg-blue-600"
-                    onClick={handleSaveNewRate}
-                    disabled={saving}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 border-blue-200"
-                    onClick={handleCancelNewRate}
-                    disabled={saving}
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Desktop View: Table */}
           <div className="hidden sm:block overflow-x-auto">
             <Table>
               <TableHeader className="bg-gray-50/50">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="font-semibold text-gray-900 py-4 px-6 w-1/3">Flight Type</TableHead>
-                  <TableHead className="font-semibold text-gray-900 py-4 px-6 w-1/4">Rate (Inc. Tax)</TableHead>
-                  <TableHead className="font-semibold text-gray-900 py-4 px-6 w-1/4">Charge Method</TableHead>
-                  <TableHead className="font-semibold text-gray-900 py-4 px-6 text-right w-1/6">Actions</TableHead>
+                  <TableHead className="font-semibold text-gray-900 py-4 px-6">Flight Type</TableHead>
+                  <TableHead className="font-semibold text-gray-900 py-4 px-6">Rate (Inc. Tax)</TableHead>
+                  <TableHead className="font-semibold text-gray-900 py-4 px-6">Effective From</TableHead>
+                  <TableHead className="font-semibold text-gray-900 py-4 px-6 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -589,28 +369,9 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
                     }`}
                   >
                     <TableCell className="py-4 px-6">
-                      {isEditing(rate.id) ? (
-                        <Select
-                          value={editingRate?.flight_type_id}
-                          onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, flight_type_id: value } : null)}
-                        >
-                          <SelectTrigger className="w-full bg-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableFlightTypes.map((ft) => (
-                              <SelectItem key={ft.id} value={ft.id}>{ft.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                          <span className="font-medium text-gray-900">
-                            {flightTypes.find(ft => ft.id === rate.flight_type_id)?.name || 'Unknown'}
-                          </span>
-                        </div>
-                      )}
+                      <span className="font-medium text-gray-900">
+                        {flightTypes.find(ft => ft.id === rate.flight_type_id)?.name || 'Unknown'}
+                      </span>
                     </TableCell>
                     <TableCell className="py-4 px-6">
                       {isEditing(rate.id) ? (
@@ -632,25 +393,16 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
                     </TableCell>
                     <TableCell className="py-4 px-6">
                       {isEditing(rate.id) ? (
-                        <Select
-                          value={editingRate?.charge_method}
-                          onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, charge_method: value as 'hobbs' | 'tacho' | 'airswitch' | '' } : null)}
-                        >
-                          <SelectTrigger className="w-full max-w-[160px] bg-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="hobbs">Hobbs</SelectItem>
-                            <SelectItem value="tacho">Tacho</SelectItem>
-                            <SelectItem value="airswitch">Airswitch</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Input
+                          type="date"
+                          value={editingRate?.effective_from}
+                          onChange={(e) => setEditingRate(prev => prev ? { ...prev, effective_from: e.target.value } : null)}
+                          className="bg-white max-w-[180px]"
+                        />
                       ) : (
-                        <div className="flex gap-1">
-                          {rate.charge_hobbs && <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-md border border-blue-100">Hobbs</span>}
-                          {rate.charge_tacho && <span className="px-2 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-md border border-green-100">Tacho</span>}
-                          {rate.charge_airswitch && <span className="px-2 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-md border border-purple-100">Airswitch</span>}
-                        </div>
+                        <span className="text-gray-600">
+                          {rate.effective_from ? new Date(rate.effective_from).toLocaleDateString() : 'Immediate'}
+                        </span>
                       )}
                     </TableCell>
                     <TableCell className="py-4 px-6">
@@ -703,7 +455,6 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
                   </TableRow>
                 ))}
 
-                {/* New Rate Desktop Row */}
                 {isAddingNew() && (
                   <TableRow className="bg-blue-50/30 border-b border-blue-100">
                     <TableCell className="py-4 px-6">
@@ -731,24 +482,16 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
                           onChange={(e) => setEditingRate(prev => prev ? { ...prev, rate_per_hour: e.target.value } : null)}
                           className="pl-7 bg-white border-blue-200"
                           placeholder="0.00"
-                          autoFocus
                         />
                       </div>
                     </TableCell>
                     <TableCell className="py-4 px-6">
-                      <Select
-                        value={editingRate?.charge_method}
-                        onValueChange={(value) => setEditingRate(prev => prev ? { ...prev, charge_method: value as 'hobbs' | 'tacho' | 'airswitch' | '' } : null)}
-                      >
-                        <SelectTrigger className="w-full max-w-[160px] bg-white border-blue-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="hobbs">Hobbs</SelectItem>
-                          <SelectItem value="tacho">Tacho</SelectItem>
-                          <SelectItem value="airswitch">Airswitch</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        type="date"
+                        value={editingRate?.effective_from}
+                        onChange={(e) => setEditingRate(prev => prev ? { ...prev, effective_from: e.target.value } : null)}
+                        className="bg-white border-blue-200 max-w-[180px]"
+                      />
                     </TableCell>
                     <TableCell className="py-4 px-6">
                       <div className="flex gap-2 justify-end">
@@ -784,3 +527,4 @@ export default function AircraftChargeRatesTable({ aircraftId }: Props) {
     </div>
   )
 }
+

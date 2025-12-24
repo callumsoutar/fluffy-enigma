@@ -74,8 +74,6 @@ const rosterRuleCreateSchema = z
     }
   })
 
-interface RosterRuleCreate extends z.infer<typeof rosterRuleCreateSchema> {}
-
 export async function GET(request: NextRequest) {
   const auth = await requireOperationsAccess(request)
   if ("error" in auth) {

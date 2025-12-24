@@ -10,8 +10,11 @@ import { z } from "zod"
 import { requireStaffAccess } from "@/lib/api/require-staff-access"
 
 const instructorIdSchema = z.string().uuid()
-const employmentTypeSchema = z.enum(["full_time", "part_time", "casual", "contractor"])
-const statusSchema = z.enum(["active", "inactive", "deactivated", "suspended"])
+const EMPLOYMENT_TYPE_VALUES = ["full_time", "part_time", "casual", "contractor"] as const
+const INSTRUCTOR_STATUS_VALUES = ["active", "inactive", "deactivated", "suspended"] as const
+
+const employmentTypeSchema = z.enum(EMPLOYMENT_TYPE_VALUES)
+const statusSchema = z.enum(INSTRUCTOR_STATUS_VALUES)
 
 const instructorUpdateSchema = z
   .object({
@@ -57,7 +60,7 @@ interface InstructorRecord {
 }
 
 const normalizeStatus = (value: string | null | undefined): InstructorStatus => {
-  if (typeof value === "string" && statusSchema.options.includes(value as InstructorStatus)) {
+  if (typeof value === "string" && INSTRUCTOR_STATUS_VALUES.includes(value as InstructorStatus)) {
     return value as InstructorStatus
   }
 
@@ -65,7 +68,7 @@ const normalizeStatus = (value: string | null | undefined): InstructorStatus => 
 }
 
 const normalizeEmploymentType = (value: string | null | undefined): EmploymentType | null => {
-  if (typeof value === "string" && employmentTypeSchema.options.includes(value as EmploymentType)) {
+  if (typeof value === "string" && EMPLOYMENT_TYPE_VALUES.includes(value as EmploymentType)) {
     return value as EmploymentType
   }
 
@@ -226,7 +229,7 @@ export async function PATCH(
   let body: unknown
   try {
     body = await request.json()
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 

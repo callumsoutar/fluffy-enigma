@@ -14,8 +14,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   Field,
-  FieldDescription,
-  FieldGroup,
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -164,7 +162,7 @@ export function LoginForm({
 
               <div className="text-center">
                 <p className="text-sm text-slate-600">
-                  Don't have an account?{" "}
+                  Don&apos;t have an account?{" "}
                   <a href="#" className="font-bold text-[#0B1527] hover:underline">
                     Sign Up
                   </a>

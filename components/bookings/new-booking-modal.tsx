@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { format } from "date-fns"
-import { CalendarIcon, Check, ChevronsUpDown, User, Plane, Clock, NotebookPen, Plus } from "lucide-react"
+import { CalendarIcon, Check, ChevronsUpDown, User, Plane, NotebookPen, Plus } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 

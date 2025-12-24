@@ -31,7 +31,6 @@ import {
   IconArrowLeft,
   IconUser,
   IconMail,
-  IconBadge,
   IconClock,
   IconNotes,
   IconPhone,
@@ -41,8 +40,10 @@ import {
   IconInfoCircle,
   IconRotateClockwise,
   IconDeviceFloppy,
+  IconCurrencyDollar,
 } from "@tabler/icons-react"
 import { useIsMobile } from "@/hooks/use-mobile"
+import InstructorChargeRatesTable from "@/components/staff/InstructorChargeRatesTable"
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Active" },
@@ -57,6 +58,8 @@ const EMPLOYMENT_TYPES = [
   { value: "casual", label: "Casual" },
   { value: "contractor", label: "Contractor" },
 ] as const
+
+const SELECT_NONE = "__none__" as const
 
 const employmentTypeSchema = z.enum([
   "full_time",
@@ -74,7 +77,7 @@ const detailsSchema = z.object({
   instructor_check_due_date: z.string().nullable().optional(),
   instrument_check_due_date: z.string().nullable().optional(),
   class_1_medical_due_date: z.string().nullable().optional(),
-  employment_type: employmentTypeSchema.optional(),
+  employment_type: employmentTypeSchema.nullable().optional(),
   is_actively_instructing: z.boolean(),
   status: statusSchema,
   night_removal: z.boolean(),
@@ -94,6 +97,7 @@ type NotesFormValues = z.infer<typeof notesSchema>
 
 const tabItems = [
   { id: "details", label: "Details", icon: IconUser },
+  { id: "rates", label: "Charge Rates", icon: IconCurrencyDollar },
   { id: "history", label: "History", icon: IconClock },
   { id: "notes", label: "Notes", icon: IconNotes },
 ]
@@ -193,7 +197,7 @@ function buildDetailsFormValues(instructor: InstructorWithUser): DetailsFormValu
     instructor_check_due_date: instructor.instructor_check_due_date ?? null,
     instrument_check_due_date: instructor.instrument_check_due_date ?? null,
     class_1_medical_due_date: instructor.class_1_medical_due_date ?? null,
-    employment_type: instructor.employment_type ?? "full_time",
+    employment_type: instructor.employment_type ?? null,
     is_actively_instructing: instructor.is_actively_instructing,
     status: instructor.status || "active",
     night_removal: Boolean(instructor.night_removal),
@@ -202,6 +206,23 @@ function buildDetailsFormValues(instructor: InstructorWithUser): DetailsFormValu
     tawa_removal: Boolean(instructor.tawa_removal),
     ifr_removal: Boolean(instructor.ifr_removal),
   }
+}
+
+const EMPTY_DETAILS_FORM_VALUES: DetailsFormValues = {
+  first_name: "",
+  last_name: "",
+  rating: null,
+  instructor_check_due_date: null,
+  instrument_check_due_date: null,
+  class_1_medical_due_date: null,
+  employment_type: null,
+  is_actively_instructing: false,
+  status: "active",
+  night_removal: false,
+  aerobatics_removal: false,
+  multi_removal: false,
+  tawa_removal: false,
+  ifr_removal: false,
 }
 
 function buildNotesFormValues(instructor: InstructorWithUser): NotesFormValues {
@@ -453,7 +474,7 @@ export default function InstructorDetailPage() {
     formState: { isDirty, errors },
   } = useForm<DetailsFormValues>({
     resolver: zodResolver(detailsSchema),
-    defaultValues: instructor ? buildDetailsFormValues(instructor) : undefined,
+    defaultValues: instructor ? buildDetailsFormValues(instructor) : EMPTY_DETAILS_FORM_VALUES,
     mode: "onBlur",
   })
 
@@ -851,21 +872,40 @@ export default function InstructorDetailPage() {
                             <div className="grid grid-cols-1 gap-5">
                               <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Employment type</label>
-                                <Select
-                                  value={watch("employment_type")}
-                                  onValueChange={(val) => setValue("employment_type", val as DetailsFormValues["employment_type"], { shouldDirty: true })}
-                                >
-                                  <SelectTrigger className="w-full bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 transition-all">
-                                    <SelectValue placeholder="Select type" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {EMPLOYMENT_TYPES.map((type) => (
-                                      <SelectItem key={type.value} value={type.value}>
-                                        {type.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <Controller
+                                  name="employment_type"
+                                  control={control}
+                                  render={({ field }) => (
+                                    <Select
+                                      key={field.value ?? SELECT_NONE}
+                                      value={field.value ?? SELECT_NONE}
+                                      onValueChange={(val) =>
+                                        field.onChange(
+                                          val === SELECT_NONE
+                                            ? null
+                                            : (val as Exclude<DetailsFormValues["employment_type"], null | undefined>)
+                                        )
+                                      }
+                                    >
+                                      <SelectTrigger className="w-full bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 transition-all">
+                                        <SelectValue placeholder="Select type">
+                                          {field.value
+                                            ? EMPLOYMENT_TYPES.find((type) => type.value === field.value)?.label ??
+                                              "Unknown"
+                                            : "Not set"}
+                                        </SelectValue>
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value={SELECT_NONE}>Not set</SelectItem>
+                                        {EMPLOYMENT_TYPES.map((type) => (
+                                          <SelectItem key={type.value} value={type.value}>
+                                            {type.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                />
                                 {errors.employment_type && (
                                   <p className="text-xs text-red-500 mt-1.5 font-medium">{errors.employment_type.message}</p>
                                 )}
@@ -873,21 +913,30 @@ export default function InstructorDetailPage() {
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                 <div>
                                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">Status</label>
-                                  <Select
-                                    value={watch("status")}
-                                    onValueChange={(val) => setValue("status", val as DetailsFormValues["status"], { shouldDirty: true })}
-                                  >
-                                    <SelectTrigger className="w-full bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 transition-all">
-                                      <SelectValue placeholder="Select status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {STATUS_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                          {option.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  <Controller
+                                    name="status"
+                                    control={control}
+                                    render={({ field }) => (
+                                      <Select
+                                        value={field.value ?? "active"}
+                                        onValueChange={(val) => field.onChange(val as DetailsFormValues["status"])}
+                                      >
+                                        <SelectTrigger className="w-full bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 transition-all">
+                                          <SelectValue placeholder="Select status">
+                                            {STATUS_OPTIONS.find((option) => option.value === field.value)?.label ??
+                                              "Active"}
+                                          </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {STATUS_OPTIONS.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                              {option.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  />
                                 </div>
                                 <div className="flex flex-col justify-end pb-2">
                                   <label className="text-sm font-semibold text-gray-700 flex items-center gap-3 cursor-pointer select-none">
@@ -1046,6 +1095,15 @@ export default function InstructorDetailPage() {
                           </div>
                         </div>
                       </form>
+                    </Tabs.Content>
+                    <Tabs.Content value="rates">
+                      <div className="space-y-6">
+                        <div className="flex flex-col gap-1">
+                          <h3 className="text-lg font-bold text-gray-900 tracking-tight">Instructor Charge Rates</h3>
+                          <p className="text-sm text-gray-500">Configure how much this instructor charges for different flight types.</p>
+                        </div>
+                        <InstructorChargeRatesTable instructorId={instructorId as string} />
+                      </div>
                     </Tabs.Content>
                     <Tabs.Content value="history">
                       <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">

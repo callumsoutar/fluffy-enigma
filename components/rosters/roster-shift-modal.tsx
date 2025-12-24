@@ -20,32 +20,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/field"
-import { Textarea } from "@/components/ui/textarea"
+import { FieldError } from "@/components/ui/field"
 import { toast } from "sonner"
 import {
   Calendar,
-  Clock,
   Pencil,
   Plus,
-  RefreshCw,
   Repeat,
   User,
-  X,
 } from "lucide-react"
 import { format, parseISO } from "date-fns"
 import { cn } from "@/lib/utils"
-
-const dayOptions = [
-  { value: 0, label: "Sunday" },
-  { value: 1, label: "Monday" },
-  { value: 2, label: "Tuesday" },
-  { value: 3, label: "Wednesday" },
-  { value: 4, label: "Thursday" },
-  { value: 5, label: "Friday" },
-  { value: 6, label: "Saturday" },
-]
 
 const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/
 
@@ -168,7 +153,6 @@ export function RosterShiftModal({
   })
 
   const [error, setError] = React.useState<string | null>(null)
-  const [notesOpen, setNotesOpen] = React.useState(() => Boolean(initialValues.notes?.trim()))
 
   const watchedValues = form.watch([
     "is_recurring",
@@ -187,7 +171,6 @@ export function RosterShiftModal({
         days_of_week: initialValues.days_of_week ?? (initialValues.day_of_week !== undefined ? [initialValues.day_of_week] : []),
       }
       form.reset(values)
-      setNotesOpen(Boolean(initialValues.notes?.trim()))
     }
   }, [open, initialValues, form])
 
@@ -230,13 +213,13 @@ export function RosterShiftModal({
     }
   }, [effectiveFromValue, form, isRecurringNow, open])
 
-  const handleClose = () => {
+  const handleClose = React.useCallback(() => {
     if (!isSubmitting) {
       form.reset(initialValues)
       setError(null)
       onClose()
     }
-  }
+  }, [isSubmitting, form, initialValues, onClose])
 
   const handleDelete = async () => {
     if (!ruleId) return

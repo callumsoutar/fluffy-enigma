@@ -43,8 +43,7 @@ export function SiteHeader() {
   return (
     <header className={cn(
       "flex h-12 shrink-0 items-center gap-2 border-b transition-[width] ease-linear",
-      "bg-slate-800 dark:bg-slate-900 border-slate-700/50 dark:border-slate-800/50 shadow-sm",
-      "md:border-border/40 md:bg-gradient-to-r md:from-slate-50 md:via-blue-50/40 md:to-background md:dark:from-slate-900 md:dark:via-slate-800/60 md:dark:to-background md:shadow-none"
+      "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm"
     )}>
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         {isMobile ? (
@@ -53,20 +52,20 @@ export function SiteHeader() {
             <Button
               variant="ghost"
               size="icon"
-              className="size-7 text-slate-100 hover:text-white hover:bg-slate-700/50"
+              className="size-7 text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800"
               onClick={toggleSidebar}
             >
               <Menu className="h-5 w-5" />
               <span className="sr-only">Toggle Sidebar</span>
             </Button>
             <div className="flex flex-1 items-center justify-center gap-2">
-              <IconPlaneDeparture className="h-5 w-5 text-slate-100" />
-              <span className="text-base font-semibold text-slate-100">Flight Desk Pro</span>
+              <IconPlaneDeparture className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              <span className="text-base font-semibold text-slate-900 dark:text-slate-100">Flight Desk Pro</span>
             </div>
             <div className="flex items-center">
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-8 w-8 border border-slate-200 dark:border-slate-800">
                 <AvatarImage src={userAvatar} alt={userName} />
-                <AvatarFallback className="bg-slate-700/80 text-slate-100">
+                <AvatarFallback className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>

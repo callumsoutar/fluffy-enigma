@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { userHasAnyRole } from "@/lib/auth/roles"
 import type { InstructorUser, InstructorWithUser, InstructorsResponse } from "@/lib/types/instructors"

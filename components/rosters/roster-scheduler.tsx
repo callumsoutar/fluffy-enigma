@@ -28,7 +28,6 @@ const TIMELINE_CONFIG = {
 }
 
 const ROW_HEIGHT = 42
-const GROUP_HEIGHT = 28
 const LEFT_COL_WIDTH = "w-[160px] sm:w-[220px]"
 
 function startOfDay(date: Date) {
@@ -98,7 +97,7 @@ export function RosterScheduler() {
   const timelineMinWidth = isMobile ? slotCount * slotMinWidth : undefined
 
   const dayKey = format(selectedDate, "yyyy-MM-dd")
-  const rosterQueryKey = ["roster-rules", dayKey]
+  const rosterQueryKey = React.useMemo(() => ["roster-rules", dayKey], [dayKey])
 
   const {
     data: instructors = [],

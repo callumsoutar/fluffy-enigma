@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { userHasAnyRole } from "@/lib/auth/roles"
 
-export async function requireStaffAccess(request: NextRequest): Promise<NextResponse | null> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function requireStaffAccess(_request: NextRequest): Promise<NextResponse | null> {
   const supabase = await createClient()
   const {
     data: { user },

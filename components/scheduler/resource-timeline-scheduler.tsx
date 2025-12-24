@@ -36,6 +36,7 @@ import {
   formatTimeLabel,
   formatTimeRangeLabel,
   getBookingLayout,
+  minutesFromMidnight,
   type TimelineConfig,
 } from "./scheduler-utils"
 
@@ -67,6 +68,43 @@ type SchedulerBooking = {
 const ROW_HEIGHT = 34
 const GROUP_HEIGHT = 28
 const LEFT_COL_WIDTH = "w-[160px] sm:w-[240px] lg:w-[280px]"
+
+type MinutesWindow = { startMin: number; endMin: number }
+
+function parseTimeToMinutes(time: string) {
+  // Accepts "HH:MM" or "HH:MM:SS"
+  const [hhRaw, mmRaw] = time.split(":")
+  const hh = Number(hhRaw)
+  const mm = Number(mmRaw)
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
+  return hh * 60 + mm
+}
+
+function buildInstructorAvailabilityMap(rules: RosterRule[]) {
+  const map = new Map<string, MinutesWindow[]>()
+
+  for (const r of rules) {
+    // Defensive: API should already filter inactive/voided, but keep it safe.
+    if (!r.is_active || r.voided_at) continue
+
+    const startMin = parseTimeToMinutes(r.start_time)
+    const endMin = parseTimeToMinutes(r.end_time)
+    if (startMin === null || endMin === null) continue
+    if (endMin <= startMin) continue
+
+    const existing = map.get(r.instructor_id) ?? []
+    existing.push({ startMin, endMin })
+    map.set(r.instructor_id, existing)
+  }
+
+  return map
+}
+
+function isMinutesWithinAnyWindow(mins: number, windows: MinutesWindow[]) {
+  // start inclusive, end exclusive (17:00 slot is unavailable if end is 17:00)
+  return windows.some((w) => mins >= w.startMin && mins < w.endMin)
+}
 
 function startOfDay(d: Date) {
   const x = new Date(d)
@@ -288,6 +326,10 @@ export function ResourceTimelineScheduler() {
     staleTime: 60_000,
   })
 
+  const instructorAvailabilityById = React.useMemo(() => {
+    return buildInstructorAvailabilityMap(rosterRules)
+  }, [rosterRules])
+
   const { data: bookingsRaw = [], isLoading: isLoadingBookings } = useQuery({
     queryKey: ["scheduler", "bookings", dayRange.startUtcIso, dayRange.endUtcIso],
     queryFn: () => fetchBookingsForRange(dayRange),
@@ -405,6 +447,15 @@ export function ResourceTimelineScheduler() {
       const idx = Math.max(0, Math.min(rawIdx, slotCount - 1))
       const when = slots[idx] ?? timelineStart
 
+      if (resource.kind === "instructor") {
+        const windows = instructorAvailabilityById.get(resource.data.id) ?? []
+        const mins = minutesFromMidnight(when)
+        if (!isMinutesWithinAnyWindow(mins, windows)) {
+          // Unavailable slot: ignore click (cell is visually disabled)
+          return
+        }
+      }
+
       setNewBookingPrefill({
         date: selectedDate,
         startTime: formatTimeLabel(when),
@@ -413,7 +464,7 @@ export function ResourceTimelineScheduler() {
       })
       setNewBookingOpen(true)
     },
-    [slotCount, slots, timelineStart, selectedDate]
+    [slotCount, slots, timelineStart, selectedDate, instructorAvailabilityById]
   )
 
   return (
@@ -587,6 +638,7 @@ export function ResourceTimelineScheduler() {
                   {instructorResources.map((inst) => {
                     const resource: Resource = { kind: "instructor", data: inst }
                     const rowBookings = bookings.filter((b) => bookingMatchesResource(b, resource))
+                    const windows = instructorAvailabilityById.get(inst.id) ?? []
 
                     return (
                       <TimelineRow
@@ -598,6 +650,9 @@ export function ResourceTimelineScheduler() {
                         timelineEnd={timelineEnd}
                         bookings={rowBookings}
                         resourceTitle={getResourceTitle(resource)}
+                        isSlotAvailable={(slot) =>
+                          isMinutesWithinAnyWindow(minutesFromMidnight(slot), windows)
+                        }
                         onEmptyClick={(clientX, container) =>
                           handleEmptySlotClick({ resource, clientX, container })
                         }
@@ -690,6 +745,7 @@ function TimelineRow({
   timelineEnd,
   bookings,
   resourceTitle,
+  isSlotAvailable,
   onEmptyClick,
   onBookingClick,
   onStatusUpdate,
@@ -702,6 +758,7 @@ function TimelineRow({
   timelineEnd: Date
   bookings: SchedulerBooking[]
   resourceTitle?: string
+  isSlotAvailable?: (slot: Date) => boolean
   onEmptyClick: (clientX: number, container: HTMLDivElement) => void
   onBookingClick: (booking: SchedulerBooking) => void
   onStatusUpdate: (variables: { bookingId: string; status: BookingStatus }) => void
@@ -715,9 +772,21 @@ function TimelineRow({
       {/* Click-capture layer */}
       <div
         ref={containerRef}
-        className="absolute inset-0 cursor-pointer"
+        className="absolute inset-0 cursor-default"
         onClick={(e) => {
           if (!containerRef.current) return
+          if (isSlotAvailable) {
+            const rect = containerRef.current.getBoundingClientRect()
+            if (!rect.width) return
+            const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
+            const rawIdx = Math.floor((x / rect.width) * slotCount)
+            const idx = Math.max(0, Math.min(rawIdx, slotCount - 1))
+            const slot = slots[idx]
+            if (slot && !isSlotAvailable(slot)) {
+              // Slot is unavailable: ignore click
+              return
+            }
+          }
           onEmptyClick(e.clientX, containerRef.current)
         }}
         aria-label={resourceTitle ? `Timeline row for ${resourceTitle}` : "Timeline row"}
@@ -728,16 +797,16 @@ function TimelineRow({
         >
           {slots.map((slot, idx) => {
             const isHour = slot.getMinutes() === 0
+            const available = isSlotAvailable ? isSlotAvailable(slot) : true
             return (
               <div
                 key={slot.toISOString()}
                 className={cn(
                   "border-r last:border-r-0",
                   "transition-colors",
-                  // per-cell hover (a touch stronger so it's clearly visible)
-                  "hover:bg-sky-500/10",
-                  idx % 2 === 1 ? "bg-muted/[0.03]" : "",
-                  isHour ? "bg-muted/[0.05]" : ""
+                  available ? "cursor-pointer hover:bg-sky-500/10" : "cursor-not-allowed bg-muted/20",
+                  available && idx % 2 === 1 ? "bg-muted/[0.03]" : "",
+                  available && isHour ? "bg-muted/[0.05]" : ""
                 )}
               />
             )

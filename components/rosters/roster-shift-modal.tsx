@@ -301,9 +301,18 @@ export function RosterShiftModal({
 
   return (
     <Dialog open={open} onOpenChange={(value) => value || handleClose()}>
-      <DialogContent className="max-w-[600px] overflow-hidden rounded-[28px] p-0 border-none shadow-2xl">
-        <div className="flex h-full flex-col bg-white">
-          <DialogHeader className="px-8 pt-8 pb-6 text-left">
+      <DialogContent
+        className={cn(
+          // Mobile: top-aligned + fixed viewport height so content never clips, and becomes scrollable.
+          // Desktop: keep the usual centered dialog behavior.
+          "p-0 border-none shadow-2xl rounded-[28px] overflow-hidden",
+          "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[600px]",
+          "top-[calc(env(safe-area-inset-top)+1rem)] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]",
+          "h-[calc(100dvh-2rem)] sm:h-auto sm:max-h-[calc(100dvh-4rem)]"
+        )}
+      >
+        <div className="flex h-full min-h-0 flex-col bg-white">
+          <DialogHeader className="px-6 sm:px-8 pt-[calc(2rem+env(safe-area-inset-top))] sm:pt-8 pb-6 text-left">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                 {mode === "create" ? <Plus className="h-6 w-6" /> : <Pencil className="h-6 w-6" />}
@@ -319,7 +328,7 @@ export function RosterShiftModal({
             </div>
           </DialogHeader>
 
-          <div className="px-8 pb-8">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 sm:px-8 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:pb-8">
             <div className="mb-6 flex items-center gap-4 rounded-[20px] bg-blue-50 p-4 text-blue-700 ring-1 ring-blue-100/50">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-blue-100">
                 <Calendar className="h-6 w-6" />

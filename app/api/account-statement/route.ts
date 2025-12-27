@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
       payment_method,
       payment_reference,
       notes,
+      transaction_id,
       invoice:invoice_id (
         invoice_number
       )

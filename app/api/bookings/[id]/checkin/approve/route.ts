@@ -65,7 +65,7 @@ export async function POST(
   // we approve using that invoice (draft -> pending) instead of creating a new one.
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, user_id, booking_type, status, checkin_invoice_id, checkin_approved_at')
+    .select('id, user_id, booking_type, status, checkin_invoice_id, checkin_approved_at, lesson_id, instructor_id')
     .eq('id', bookingId)
     .single()
 
@@ -126,6 +126,51 @@ export async function POST(
     const result = rpcResult as unknown as { invoice_id?: string }
     if (!result?.invoice_id) {
       return NextResponse.json({ error: 'Check-in approved but missing invoice_id' }, { status: 500 })
+    }
+
+    // Upsert lesson progress if any debrief data is provided
+    const hasDebriefData = payload.instructor_comments ||
+                          payload.lesson_highlights || 
+                          payload.areas_for_improvement || 
+                          payload.airmanship || 
+                          payload.focus_next_lesson || 
+                          payload.safety_concerns || 
+                          payload.weather_conditions || 
+                          payload.lesson_status;
+
+    if (hasDebriefData) {
+      const { data: existingProgress } = await supabase
+        .from('lesson_progress')
+        .select('id')
+        .eq('booking_id', bookingId)
+        .maybeSingle();
+
+      const progressData = {
+        booking_id: bookingId,
+        user_id: booking.user_id,
+        lesson_id: booking.lesson_id,
+        instructor_id: payload.checked_out_instructor_id || booking.instructor_id,
+        instructor_comments: payload.instructor_comments,
+        lesson_highlights: payload.lesson_highlights,
+        areas_for_improvement: payload.areas_for_improvement,
+        airmanship: payload.airmanship,
+        focus_next_lesson: payload.focus_next_lesson,
+        safety_concerns: payload.safety_concerns,
+        weather_conditions: payload.weather_conditions,
+        status: payload.lesson_status,
+        date: new Date().toISOString(),
+      };
+
+      if (existingProgress) {
+        await supabase
+          .from('lesson_progress')
+          .update(progressData)
+          .eq('id', existingProgress.id);
+      } else {
+        await supabase
+          .from('lesson_progress')
+          .insert(progressData);
+      }
     }
 
     // Fetch the created invoice with relations (reuse invoice route selection shape)
@@ -362,6 +407,51 @@ export async function POST(
   if (finalizeError || !isRpcSuccess(finalizeResult)) {
     console.error('Invoice approved but failed to finalize booking check-in (atomic):', finalizeError, finalizeResult)
     return NextResponse.json({ error: 'Invoice approved but failed to lock booking check-in' }, { status: 500 })
+  }
+
+  // Upsert lesson progress if any debrief data is provided
+  const hasDebriefData = payload.instructor_comments ||
+                        payload.lesson_highlights || 
+                        payload.areas_for_improvement || 
+                        payload.airmanship || 
+                        payload.focus_next_lesson || 
+                        payload.safety_concerns || 
+                        payload.weather_conditions || 
+                        payload.lesson_status;
+
+  if (hasDebriefData) {
+    const { data: existingProgress } = await supabase
+      .from('lesson_progress')
+      .select('id')
+      .eq('booking_id', bookingId)
+      .maybeSingle();
+
+    const progressData = {
+      booking_id: bookingId,
+      user_id: booking.user_id,
+      lesson_id: booking.lesson_id,
+      instructor_id: payload.checked_out_instructor_id || booking.instructor_id,
+      instructor_comments: payload.instructor_comments,
+      lesson_highlights: payload.lesson_highlights,
+      areas_for_improvement: payload.areas_for_improvement,
+      airmanship: payload.airmanship,
+      focus_next_lesson: payload.focus_next_lesson,
+      safety_concerns: payload.safety_concerns,
+      weather_conditions: payload.weather_conditions,
+      status: payload.lesson_status,
+      date: new Date().toISOString(),
+    };
+
+    if (existingProgress) {
+      await supabase
+        .from('lesson_progress')
+        .update(progressData)
+        .eq('id', existingProgress.id);
+    } else {
+      await supabase
+        .from('lesson_progress')
+        .insert(progressData);
+    }
   }
 
   // Fetch the approved invoice with relations

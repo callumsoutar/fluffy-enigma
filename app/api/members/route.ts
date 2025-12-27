@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { userHasAnyRole } from '@/lib/auth/roles'
-import { membersQuerySchema } from '@/lib/validation/members'
+import { memberCreateSchema, membersQuerySchema } from '@/lib/validation/members'
 import type { PersonType, MembershipStatus, MembersFilter, MemberWithRelations } from '@/lib/types/members'
 
 /**
@@ -290,4 +290,73 @@ export async function GET(request: NextRequest) {
     members: normalizedMembers,
     total: normalizedMembers.length,
   })
+}
+
+/**
+ * POST /api/members
+ *
+ * Create a basic member/contact record (users table).
+ * Requires authentication and instructor/admin/owner role.
+ *
+ * Notes:
+ * - This creates a row in public.users only. Memberships and instructor profiles are created separately.
+ * - Auth user creation/invites are not handled here (no service-role in this app layer).
+ */
+export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  if (!hasAccess) {
+    return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 })
+  }
+
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+  }
+
+  const parsed = memberCreateSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid request data', details: parsed.error.issues },
+      { status: 400 }
+    )
+  }
+
+  const { email, first_name, last_name, phone, street_address } = parsed.data
+
+  const { data: created, error } = await supabase
+    .from('users')
+    .insert({
+      email,
+      first_name: first_name ?? null,
+      last_name: last_name ?? null,
+      phone: phone ?? null,
+      street_address: street_address ?? null,
+      is_active: true,
+    })
+    .select('*')
+    .single()
+
+  if (error) {
+    // Unique violation, commonly on email
+    if ((error as { code?: string })?.code === '23505') {
+      return NextResponse.json(
+        { error: 'A member with that email already exists.' },
+        { status: 409 }
+      )
+    }
+
+    console.error('Error creating member:', error)
+    return NextResponse.json({ error: 'Failed to create member' }, { status: 500 })
+  }
+
+  return NextResponse.json({ member: created }, { status: 201 })
 }

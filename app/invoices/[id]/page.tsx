@@ -617,8 +617,8 @@ export default function InvoiceDetailPage() {
         <SidebarInset>
           <SiteHeader />
           <div className="flex flex-1 flex-col bg-muted/20">
-            <div className="mx-auto w-full max-w-[920px] px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
-              <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b shadow-sm">
+          <div className="mx-auto w-full max-w-[920px] px-4 sm:px-6 lg:px-10 py-4 lg:py-8">
+            <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-2.5 sm:py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b shadow-sm">
                 <InvoiceActionsToolbar
                   mode="new"
                   onSave={createInvoiceWithItems}
@@ -841,26 +841,31 @@ export default function InvoiceDetailPage() {
                             <InvoiceLineItemAddRow
                               disabled={adding}
                               taxRate={organizationTaxRate}
-                              onAdd={({ chargeable, description, quantity, unitPrice, taxRate }) => {
+                              layout="table-row"
+                              onAdd={(item) => {
                                 try {
+                                  // Fetch the chargeable to get its tax status if needed, 
+                                  // but for now we'll assume the taxRate passed in is correct for taxable items
+                                  // In a real app, you might want to fetch more details here.
+                                  
                                   const calculatedAmounts = InvoiceCalculations.calculateItemAmounts({
-                                    quantity,
-                                    unit_price: unitPrice,
-                                    tax_rate: taxRate,
+                                    quantity: item.quantity,
+                                    unit_price: item.unit_price,
+                                    tax_rate: organizationTaxRate, // Simplified: using org tax rate
                                   })
 
                                   setDraftItems((prev) => [
                                     ...prev,
                                     {
-                                      id: chargeable.id + "-" + Date.now(),
+                                      id: item.chargeable_id + "-" + Date.now(),
                                       invoice_id: "",
-                                      chargeable_id: chargeable.id,
-                                      description,
-                                      quantity,
-                                      unit_price: unitPrice,
+                                      chargeable_id: item.chargeable_id,
+                                      description: item.description,
+                                      quantity: item.quantity,
+                                      unit_price: item.unit_price,
                                       rate_inclusive: calculatedAmounts.rate_inclusive,
                                       amount: calculatedAmounts.amount,
-                                      tax_rate: taxRate,
+                                      tax_rate: organizationTaxRate,
                                       tax_amount: calculatedAmounts.tax_amount,
                                       line_total: calculatedAmounts.line_total,
                                       notes: null,
@@ -963,8 +968,8 @@ export default function InvoiceDetailPage() {
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col bg-muted/20">
-          <div className="mx-auto w-full max-w-[920px] px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
-            <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b shadow-sm">
+          <div className="mx-auto w-full max-w-[920px] px-4 sm:px-6 lg:px-10 py-4 lg:py-8">
+            <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-2.5 sm:py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b shadow-sm">
               <InvoiceActionsToolbar
                 mode={isReadOnly ? 'view' : 'edit'}
                 invoiceId={invoice.id}
@@ -1278,9 +1283,10 @@ export default function InvoiceDetailPage() {
                         {!isReadOnly && !itemsError && (
                           <InvoiceLineItemAddRow
                             disabled={adding}
+                            layout="table-row"
                             taxRate={invoice.tax_rate ?? organizationTaxRate}
-                            onAdd={({ chargeable, quantity, unitPrice, taxRate }) => {
-                              handleAddItemWithUnitPrice(chargeable, quantity, unitPrice, taxRate)
+                            onAdd={(item) => {
+                              handleAddItemWithUnitPrice(item.chargeable, item.quantity, item.unit_price, invoice.tax_rate ?? organizationTaxRate)
                               toast.success("Item added")
                             }}
                           />

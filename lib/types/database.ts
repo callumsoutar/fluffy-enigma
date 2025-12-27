@@ -417,6 +417,149 @@ export interface Database {
           BFR_due?: string | null
         }
       }
+      exam: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          passing_score: number
+          is_active: boolean
+          syllabus_id: string | null
+          created_at: string
+          updated_at: string
+          voided_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          passing_score: number
+          is_active?: boolean
+          syllabus_id?: string | null
+          created_at?: string
+          updated_at?: string
+          voided_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          passing_score?: number
+          is_active?: boolean
+          syllabus_id?: string | null
+          created_at?: string
+          updated_at?: string
+          voided_at?: string | null
+        }
+      }
+      exam_results: {
+        Row: {
+          id: string
+          exam_id: string
+          user_id: string
+          score: number
+          result: Database["public"]["Enums"]["exam_result"]
+          exam_date: string
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          exam_id: string
+          user_id: string
+          score: number
+          result: Database["public"]["Enums"]["exam_result"]
+          exam_date?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          exam_id?: string
+          user_id?: string
+          score?: number
+          result?: Database["public"]["Enums"]["exam_result"]
+          exam_date?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      syllabus: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          is_active: boolean
+          number_of_exams: number
+          created_at: string
+          updated_at: string
+          voided_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          is_active?: boolean
+          number_of_exams?: number
+          created_at?: string
+          updated_at?: string
+          voided_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          is_active?: boolean
+          number_of_exams?: number
+          created_at?: string
+          updated_at?: string
+          voided_at?: string | null
+        }
+      }
+      student_syllabus_enrollment: {
+        Row: {
+          id: string
+          user_id: string
+          syllabus_id: string
+          enrolled_at: string
+          completion_date: string | null
+          status: string
+          notes: string | null
+          primary_instructor_id: string | null
+          aircraft_type: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          syllabus_id: string
+          enrolled_at?: string
+          completion_date?: string | null
+          status?: string
+          notes?: string | null
+          primary_instructor_id?: string | null
+          aircraft_type?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          syllabus_id?: string
+          enrolled_at?: string
+          completion_date?: string | null
+          status?: string
+          notes?: string | null
+          primary_instructor_id?: string | null
+          aircraft_type?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -426,6 +569,7 @@ export interface Database {
     }
     Enums: {
       gender_enum: "male" | "female"
+      exam_result: "PASS" | "FAIL"
     }
   }
 }
@@ -462,3 +606,22 @@ export type InvoiceUpdate = Database["public"]["Tables"]["invoices"]["Update"]
 export type User = Database["public"]["Tables"]["users"]["Row"]
 export type UserInsert = Database["public"]["Tables"]["users"]["Insert"]
 export type UserUpdate = Database["public"]["Tables"]["users"]["Update"]
+
+export type Exam = Database["public"]["Tables"]["exam"]["Row"]
+export type ExamInsert = Database["public"]["Tables"]["exam"]["Insert"]
+export type ExamUpdate = Database["public"]["Tables"]["exam"]["Update"]
+
+export type ExamResult = Database["public"]["Tables"]["exam_results"]["Row"]
+export type ExamResultInsert = Database["public"]["Tables"]["exam_results"]["Insert"]
+export type ExamResultUpdate = Database["public"]["Tables"]["exam_results"]["Update"]
+
+export type Syllabus = Database["public"]["Tables"]["syllabus"]["Row"]
+export type SyllabusInsert = Database["public"]["Tables"]["syllabus"]["Insert"]
+export type SyllabusUpdate = Database["public"]["Tables"]["syllabus"]["Update"]
+
+export type StudentSyllabusEnrollment =
+  Database["public"]["Tables"]["student_syllabus_enrollment"]["Row"]
+export type StudentSyllabusEnrollmentInsert =
+  Database["public"]["Tables"]["student_syllabus_enrollment"]["Insert"]
+export type StudentSyllabusEnrollmentUpdate =
+  Database["public"]["Tables"]["student_syllabus_enrollment"]["Update"]

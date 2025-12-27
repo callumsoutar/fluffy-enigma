@@ -49,12 +49,17 @@ export default function InvoiceViewActions({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button type="button" variant="outline" className="gap-2 print:hidden">
+          <Button 
+            type="button" 
+            variant="outline" 
+            size="sm"
+            className="h-8 sm:h-9 gap-1.5 print:hidden"
+          >
             Options
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="h-3.5 w-3.5 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuItem onSelect={() => window.print()}>
             <Printer className="h-4 w-4" />
             Print / Save PDF

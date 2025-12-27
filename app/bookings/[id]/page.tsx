@@ -27,6 +27,7 @@ import {
   IconCheck,
   IconPhone,
   IconMessage,
+  IconBriefcase,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -174,11 +175,30 @@ function getStatusBadgeVariant(status: BookingStatus) {
     case "unconfirmed":
       return "secondary"
     case "complete":
-      return "outline"
+      return "default"
     case "cancelled":
       return "destructive"
     default:
       return "outline"
+  }
+}
+
+function getStatusBadgeStyles(status: BookingStatus): string {
+  switch (status) {
+    case "complete":
+      return "bg-green-600 text-white border-green-700 hover:bg-green-700"
+    case "flying":
+      return "bg-orange-500 text-white border-orange-600 hover:bg-orange-600"
+    case "confirmed":
+      return "bg-blue-600 text-white border-blue-700 hover:bg-blue-700"
+    case "unconfirmed":
+      return "bg-amber-500 text-white border-amber-600 hover:bg-amber-600"
+    case "briefing":
+      return "bg-purple-600 text-white border-purple-700 hover:bg-purple-700"
+    case "cancelled":
+      return "bg-red-600 text-white border-red-700 hover:bg-red-700"
+    default:
+      return ""
   }
 }
 
@@ -501,7 +521,10 @@ export default function BookingDetailPage() {
     },
   })
 
-  const onSubmit = (data: BookingFormData) => updateMutation.mutate(data)
+  const onSubmit = (data: BookingFormData) => {
+    if (isReadOnly) return
+    updateMutation.mutate(data)
+  }
 
   // Mutation for status updates (separate from form updates)
   const statusUpdateMutation = useMutation({
@@ -566,6 +589,9 @@ export default function BookingDetailPage() {
   }
 
   const isAdminOrInstructor = role === 'owner' || role === 'admin' || role === 'instructor'
+  const isComplete = booking?.status === 'complete'
+  const isCancelled = booking?.status === 'cancelled'
+  const isReadOnly = isComplete || isCancelled
 
   const isLoading = bookingQuery.isLoading || optionsQuery.isLoading || auditQuery.isLoading
   const isError = bookingQuery.isError
@@ -791,85 +817,144 @@ export default function BookingDetailPage() {
             {/* Mobile Header Section */}
             {isMobile ? (
               <>
-              {/* Mobile Header - Read Only Display */}
-              <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
-                <div className="px-4 py-4 space-y-4">
-                  {/* Back Button */}
-                  <Link
-                    href="/bookings"
-                    className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-3"
-                  >
-                    <IconArrowLeft className="h-4 w-4" />
-                    Back
-                  </Link>
-
-                  {/* Reservation Number with Status Badge */}
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400 flex-1">
-                      Reservation #{booking.id.slice(0, 8).toUpperCase()}
-                    </h1>
-                    <Badge 
-                      variant={getStatusBadgeVariant(booking.status)} 
-                      className={`text-xs px-3 py-1 font-medium ${
-                        booking.status === 'flying' 
-                          ? 'bg-blue-600 text-white border-blue-700' 
-                          : booking.status === 'confirmed'
-                          ? 'bg-green-600 text-white border-green-700'
-                          : booking.status === 'unconfirmed'
-                          ? 'bg-amber-500 text-white border-amber-600'
-                          : ''
-                      }`}
+              {/* Mobile Overview Header - Hierarchy from Screenshot */}
+              <div className="flex flex-col bg-background text-foreground pb-10">
+                {/* Header Area */}
+                <div className="px-6 pt-8 pb-8 border-b border-border/40">
+                  <div className="flex items-center justify-between mb-6">
+                    <Link 
+                      href="/bookings"
+                      className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {getStatusLabel(booking.status)}
+                      <IconArrowLeft className="h-4 w-4" />
+                      Back to Bookings
+                    </Link>
+                    <Badge 
+                      variant={getStatusBadgeVariant(booking.status)}
+                      className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-sm border-border/20 ${getStatusBadgeStyles(booking.status)}`}
+                    >
+                      {booking.status}
                     </Badge>
                   </div>
+                  
+                  <div className="space-y-1">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground uppercase">
+                      booking no. #{booking.id.slice(0, 8)}
+                    </h1>
+                    <div className="flex items-center gap-2 text-muted-foreground mb-4">
+                      <IconPlane className="h-4 w-4" />
+                      <span className="text-lg font-semibold uppercase tracking-wider">
+                        {booking.aircraft?.registration || "No Aircraft"}
+                      </span>
+                    </div>
 
-                  {/* Date, Time, Aircraft with Icons */}
-                  <div className="space-y-2.5 mb-4">
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
-                      <IconCalendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-foreground">
-                        {formatDate(booking.start_time)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
-                      <IconClock className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-foreground">
-                        {formatTimeRange(booking.start_time, booking.end_time)}
-                      </span>
-                    </div>
-                    {booking.aircraft && (
-                      <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
-                        <IconPlane className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-foreground">
-                          {booking.aircraft.registration} {booking.aircraft.type && `(${booking.aircraft.type})`}
+                    {/* Schedule Section */}
+                    <div className="mt-6 pt-4 border-t border-border/20 space-y-1">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <IconCalendar className="h-3.5 w-3.5" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wider font-bold">Schedule</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-lg font-bold text-foreground">
+                          {formatDate(booking.start_time)}
+                        </span>
+                        <span className="text-2xl font-bold text-foreground -mt-1">
+                          {formatTimeRange(booking.start_time, booking.end_time)}
                         </span>
                       </div>
-                    )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-4 mt-6 space-y-6">
+                  <h2 className="px-2 text-sm font-semibold text-muted-foreground uppercase tracking-[0.2em]">
+                    Additional Details
+                  </h2>
+
+                  {/* Primary Card: Aircraft & Flight Type (Matching Seat/Cabin style) */}
+                  <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                    {/* Top Section (Aircraft) */}
+                    <div className="p-5 flex justify-between items-start">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-3 text-muted-foreground">
+                          <IconPlane className="h-5 w-5" />
+                          <span className="text-sm font-medium">Aircraft</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-3xl font-bold tracking-tighter">
+                          {booking.aircraft?.registration || "TBD"}
+                        </div>
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-1">
+                          {booking.aircraft?.type || "Standard Flight"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h-[1px] bg-border mx-5" />
+
+                    {/* Bottom Section (Flight Type) */}
+                    <div className="p-5 flex justify-between items-end">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-3 text-muted-foreground">
+                          <IconBriefcase className="h-5 w-5" />
+                          <span className="text-sm font-medium">Flight Type</span>
+                        </div>
+                      </div>
+                      <div className="text-lg font-semibold text-foreground/90">
+                        {booking.flight_type?.name || "General"}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Flight Type */}
-                  {booking.flight_type && (
-                    <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
-                      <div className="text-base font-semibold text-foreground">
-                        {booking.flight_type.name}
-                      </div>
+                  {/* Participants Card (Baggage info style) */}
+                  <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="text-sm font-medium text-muted-foreground tracking-wide uppercase">Participants</div>
+                      <IconUser className="h-5 w-5 text-muted-foreground/30" />
                     </div>
-                  )}
+                    <div className="space-y-4">
+                      {instructorName !== "—" && (
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center border border-border/50 shrink-0">
+                              <IconUser className="h-4.5 w-4.5 text-muted-foreground" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Instructor</span>
+                              <span className="text-base font-semibold">{instructorName}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {studentName !== "—" && (
+                        <div className="flex justify-between items-center pt-3 border-t border-border/50">
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center border border-border/50 shrink-0">
+                              <IconUser className="h-4.5 w-4.5 text-muted-foreground" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Customer</span>
+                              <span className="text-base font-semibold">{studentName}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                  {/* Training Section */}
-                  {booking.lesson && (
-                    <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Training</div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">{booking.lesson.name}</div>
-                        <Badge variant="outline" className="text-xs border-gray-300 dark:border-gray-700">
-                          <IconCalendar className="h-3 w-3 mr-1" />
-                          Scheduled
-                        </Badge>
+                  {/* Reservation Details Card */}
+                  <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium text-muted-foreground tracking-wide uppercase">Reservation Details</div>
+                        <div className="text-base font-semibold">
+                          {booking.lesson?.name || booking.purpose || "Regular Reservation"}
+                        </div>
                       </div>
+                      <IconClock className="h-5 w-5 text-muted-foreground/30" />
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
 
@@ -886,110 +971,101 @@ export default function BookingDetailPage() {
                 <div className="px-4 py-6 space-y-4">
                   <form onSubmit={handleSubmit(onSubmit)}>
                     <FieldGroup className="space-y-4">
-                      {/* Participants Section */}
-                      <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
-                        <CardHeader className="pb-4 border-b border-gray-200 dark:border-gray-800">
-                          <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                            <IconUsers className="h-4 w-4 text-muted-foreground" />
-                            Participants
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-4 space-y-4">
-                          {/* Instructor Card - Read Only */}
+                      {/* Participants Section - Simplified Mobile View */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-1.5 px-1">
+                          <IconUsers className="h-4 w-4 text-muted-foreground" />
+                          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Participants</h2>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-2.5">
+                          {/* Instructor Card */}
                           {instructorName !== "—" && (
-                            <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                            <div className="p-3.5 bg-white dark:bg-gray-900 rounded-xl border border-border/60 shadow-sm">
                               <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3 flex-1">
-                                  <IconUser className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Instructor</div>
-                                    <div className="text-sm font-semibold text-foreground truncate">{instructorName}</div>
+                                <div className="flex items-center gap-3.5">
+                                  <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center border border-border/50">
+                                    <IconUser className="h-4.5 w-4.5 text-muted-foreground" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">Instructor</span>
+                                    <div className="text-base font-semibold text-foreground">{instructorName}</div>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-1.5 ml-2">
+                                <div className="flex items-center gap-1.5">
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="icon"
-                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
-                                    onClick={() => {
-                                      const email = booking.instructor?.user?.email
-                                      if (email) {
-                                        window.location.href = `mailto:${email}`
-                                      } else {
-                                        toast.info("Email not available")
-                                      }
+                                    className="h-8.5 w-8.5 rounded-lg border-border/50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      const email = booking.instructor?.user?.email;
+                                      if (email) window.location.href = `mailto:${email}`;
                                     }}
                                   >
-                                    <IconPhone className="h-4 w-4" />
+                                    <IconPhone className="h-4 w-4 text-muted-foreground" />
                                   </Button>
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="icon"
-                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
-                                    onClick={() => {
-                                      const email = booking.instructor?.user?.email
-                                      if (email) {
-                                        window.location.href = `mailto:${email}`
-                                      } else {
-                                        toast.info("Email not available")
-                                      }
+                                    className="h-8.5 w-8.5 rounded-lg border-border/50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      const email = booking.instructor?.user?.email;
+                                      if (email) window.location.href = `mailto:${email}`;
                                     }}
                                   >
-                                    <IconMessage className="h-4 w-4" />
+                                    <IconMessage className="h-4 w-4 text-muted-foreground" />
                                   </Button>
                                 </div>
                               </div>
                             </div>
                           )}
 
-                          {/* Customer Card - Read Only */}
+                          {/* Customer Card */}
                           {studentName !== "—" && (
-                            <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800">
+                            <div className="p-3.5 bg-white dark:bg-gray-900 rounded-xl border border-border/60 shadow-sm">
                               <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3 flex-1">
-                                  <IconUser className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Customer</div>
-                                    <div className="text-sm font-semibold text-foreground truncate">{studentName}</div>
+                                <div className="flex items-center gap-3.5">
+                                  <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center border border-border/50">
+                                    <IconUser className="h-4.5 w-4.5 text-muted-foreground" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">Customer</span>
+                                    <div className="text-base font-semibold text-foreground">{studentName}</div>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-1.5 ml-2">
+                                <div className="flex items-center gap-1.5">
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="icon"
-                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
-                                    onClick={() => {
-                                      const email = booking.student?.email
-                                      if (email) {
-                                        window.location.href = `mailto:${email}`
-                                      } else {
-                                        toast.info("Email not available")
-                                      }
+                                    className="h-8.5 w-8.5 rounded-lg border-border/50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      const email = booking.student?.email;
+                                      if (email) window.location.href = `mailto:${email}`;
                                     }}
                                   >
-                                    <IconPhone className="h-4 w-4" />
+                                    <IconPhone className="h-4 w-4 text-muted-foreground" />
                                   </Button>
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="icon"
-                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
-                                    onClick={() => {
-                                      const email = booking.student?.email
-                                      if (email) {
-                                        window.location.href = `mailto:${email}`
-                                      } else {
-                                        toast.info("Email not available")
-                                      }
+                                    className="h-8.5 w-8.5 rounded-lg border-border/50"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      const email = booking.student?.email;
+                                      if (email) window.location.href = `mailto:${email}`;
                                     }}
                                   >
-                                    <IconMessage className="h-4 w-4" />
+                                    <IconMessage className="h-4 w-4 text-muted-foreground" />
                                   </Button>
                                 </div>
                               </div>
                             </div>
                           )}
-                        </CardContent>
-                      </Card>
+                        </div>
+                      </div>
 
                       {/* Visual Separator - Booking Info to Edit Form */}
                       {isAdminOrInstructor && (
@@ -1001,7 +1077,7 @@ export default function BookingDetailPage() {
                             <div className="bg-white dark:bg-gray-900 px-4 py-2 border border-gray-200 dark:border-gray-800 rounded-md">
                               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                                 <IconFileText className="h-3.5 w-3.5" />
-                                Edit Booking Information
+                                {isReadOnly ? "Booking Information" : "Edit Booking Information"}
                               </span>
                             </div>
                           </div>
@@ -1025,6 +1101,7 @@ export default function BookingDetailPage() {
                                   <PopoverTrigger asChild>
                                     <Button
                                       variant="outline"
+                                      disabled={isReadOnly}
                                       className="w-full justify-between font-normal border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
                                     >
                                       {startDate
@@ -1057,6 +1134,7 @@ export default function BookingDetailPage() {
                                 <Select
                                   value={startTime || "none"}
                                   onValueChange={(value) => setStartTime(value === "none" ? "" : value)}
+                                  disabled={isReadOnly}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                     <SelectValue placeholder="Time">
@@ -1086,6 +1164,7 @@ export default function BookingDetailPage() {
                                   <PopoverTrigger asChild>
                                     <Button
                                       variant="outline"
+                                      disabled={isReadOnly}
                                       className="w-full justify-between font-normal border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
                                     >
                                       {endDate
@@ -1116,6 +1195,7 @@ export default function BookingDetailPage() {
                                 <Select
                                   value={endTime || "none"}
                                   onValueChange={(value) => setEndTime(value === "none" ? "" : value)}
+                                  disabled={isReadOnly}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                     <SelectValue placeholder="Time">
@@ -1162,6 +1242,7 @@ export default function BookingDetailPage() {
                                     <Button
                                       variant="outline"
                                       role="combobox"
+                                      disabled={isReadOnly}
                                       aria-expanded={memberSearchOpen}
                                       className="w-full justify-between border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
                                     >
@@ -1235,6 +1316,7 @@ export default function BookingDetailPage() {
                                 <Select
                                   value={watch("instructor_id") || "none"}
                                   onValueChange={(value) => setValue("instructor_id", value === "none" ? null : value, { shouldDirty: true })}
+                                  disabled={isReadOnly}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                     <SelectValue placeholder="Select Instructor" />
@@ -1270,6 +1352,7 @@ export default function BookingDetailPage() {
                               <Select
                                 value={watch("aircraft_id")}
                                 onValueChange={(value) => setValue("aircraft_id", value, { shouldDirty: true })}
+                                disabled={isReadOnly}
                               >
                                 <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                   <SelectValue placeholder="Select Aircraft" />
@@ -1300,6 +1383,7 @@ export default function BookingDetailPage() {
                               <Select
                                 value={watch("flight_type_id") || "none"}
                                 onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
+                                disabled={isReadOnly}
                               >
                                 <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                   <SelectValue placeholder="Select Flight Type" />
@@ -1328,6 +1412,7 @@ export default function BookingDetailPage() {
                             <Select
                               value={watch("booking_type")}
                               onValueChange={(value) => setValue("booking_type", value as BookingType, { shouldDirty: true })}
+                              disabled={isReadOnly}
                             >
                               <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                 <SelectValue />
@@ -1350,6 +1435,7 @@ export default function BookingDetailPage() {
                               <Select
                                 value={watch("lesson_id") || "none"}
                                 onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
+                                disabled={isReadOnly}
                               >
                                 <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                   <SelectValue placeholder="Select Lesson" />
@@ -1374,6 +1460,7 @@ export default function BookingDetailPage() {
                             <FieldLabel className="text-sm font-semibold text-foreground">Description</FieldLabel>
                             <Textarea
                               {...register("purpose")}
+                              disabled={isReadOnly}
                               placeholder="Enter booking description"
                               className="min-h-[100px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus-visible:ring-primary/20"
                             />
@@ -1389,6 +1476,7 @@ export default function BookingDetailPage() {
                             </FieldLabel>
                             <Textarea
                               {...register("remarks")}
+                              disabled={isReadOnly}
                               placeholder="Enter operational remarks or warnings"
                               className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 min-h-[100px] focus-visible:ring-amber-500/20"
                             />
@@ -1412,7 +1500,7 @@ export default function BookingDetailPage() {
                       : 'flex-row'
                   }`}>
                     {/* Save Changes Bar - Show when form is dirty */}
-                    {hasChanges && isAdminOrInstructor && (
+                    {hasChanges && isAdminOrInstructor && !isReadOnly && (
                       <>
                         <Button
                           variant="outline"
@@ -1524,7 +1612,7 @@ export default function BookingDetailPage() {
                                 }
                                 setCancelModalOpen(true)
                               }}
-                              disabled={!!booking?.cancelled_at}
+                              disabled={!!booking?.cancelled_at || isReadOnly}
                               className="rounded-lg px-4 py-3 cursor-pointer focus:bg-red-50 dark:focus:bg-red-950/30 transition-colors my-0.5"
                             >
                               <IconTrash className="h-4 w-4 mr-3 text-red-600 dark:text-red-400 flex-shrink-0" />
@@ -1657,7 +1745,7 @@ export default function BookingDetailPage() {
                             }
                             setCancelModalOpen(true)
                           }}
-                          disabled={!!booking?.cancelled_at}
+                          disabled={!!booking?.cancelled_at || isReadOnly}
                           className="rounded-lg px-4 py-3 cursor-pointer focus:bg-red-50 dark:focus:bg-red-950/30 transition-colors my-0.5"
                         >
                           <IconTrash className="h-4 w-4 mr-3 text-red-600 dark:text-red-400 flex-shrink-0" />
@@ -1681,7 +1769,7 @@ export default function BookingDetailPage() {
                     <CardHeader className="pb-6 border-b border-border/20">
                       <CardTitle className="flex items-center gap-3 text-2xl font-bold text-foreground">
                         <IconCalendar className="h-6 w-6 text-foreground" />
-                        Booking Details
+                        {isReadOnly ? "Booking Details" : "Edit Booking Details"}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-6 space-y-6">
@@ -1702,6 +1790,7 @@ export default function BookingDetailPage() {
                                       <PopoverTrigger asChild>
                                         <Button
                                           variant="outline"
+                                          disabled={isReadOnly}
                                           className="w-full justify-between font-normal border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
                                         >
                                           {startDate
@@ -1738,6 +1827,7 @@ export default function BookingDetailPage() {
                                     <Select
                                       value={startTime || "none"}
                                       onValueChange={(value) => setStartTime(value === "none" ? "" : value)}
+                                      disabled={isReadOnly}
                                     >
                                       <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                         <SelectValue placeholder="Time">
@@ -1767,6 +1857,7 @@ export default function BookingDetailPage() {
                                       <PopoverTrigger asChild>
                                         <Button
                                           variant="outline"
+                                          disabled={isReadOnly}
                                           className="w-full justify-between font-normal border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10"
                                         >
                                           {endDate
@@ -1800,6 +1891,7 @@ export default function BookingDetailPage() {
                                     <Select
                                       value={endTime || "none"}
                                       onValueChange={(value) => setEndTime(value === "none" ? "" : value)}
+                                      disabled={isReadOnly}
                                     >
                                       <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                         <SelectValue placeholder="Time">
@@ -1837,6 +1929,7 @@ export default function BookingDetailPage() {
                                     <Button
                                       variant="outline"
                                       role="combobox"
+                                      disabled={isReadOnly}
                                       aria-expanded={memberSearchOpen}
                                       className="w-full justify-between border-border/50 bg-background hover:bg-accent/50 transition-colors h-10"
                                     >
@@ -1907,6 +2000,7 @@ export default function BookingDetailPage() {
                                 <Select
                                   value={watch("instructor_id") || "none"}
                                   onValueChange={(value) => setValue("instructor_id", value === "none" ? null : value, { shouldDirty: true })}
+                                  disabled={isReadOnly}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Instructor" />
@@ -1941,6 +2035,7 @@ export default function BookingDetailPage() {
                                 <Select
                                   value={watch("aircraft_id")}
                                   onValueChange={(value) => setValue("aircraft_id", value, { shouldDirty: true })}
+                                  disabled={isReadOnly}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Aircraft" />
@@ -1971,6 +2066,7 @@ export default function BookingDetailPage() {
                                 <Select
                                   value={watch("flight_type_id") || "none"}
                                   onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
+                                  disabled={isReadOnly}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Flight Type" />
@@ -1999,6 +2095,7 @@ export default function BookingDetailPage() {
                               <Select
                                 value={watch("booking_type")}
                                 onValueChange={(value) => setValue("booking_type", value as BookingType, { shouldDirty: true })}
+                                disabled={isReadOnly}
                               >
                                 <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                   <SelectValue />
@@ -2021,6 +2118,7 @@ export default function BookingDetailPage() {
                                 <Select
                                   value={watch("lesson_id") || "none"}
                                   onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
+                                  disabled={isReadOnly}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Lesson" />
@@ -2045,6 +2143,7 @@ export default function BookingDetailPage() {
                               <FieldLabel className="text-sm font-medium text-foreground">Description</FieldLabel>
                               <Textarea
                                 {...register("purpose")}
+                                disabled={isReadOnly}
                                 placeholder="Enter booking description"
                                 className="min-h-[100px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus-visible:ring-primary/20"
                               />
@@ -2060,6 +2159,7 @@ export default function BookingDetailPage() {
                               </FieldLabel>
                               <Textarea
                                 {...register("remarks")}
+                                disabled={isReadOnly}
                                 placeholder="Enter operational remarks or warnings"
                                 className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 min-h-[100px] focus-visible:ring-amber-500/20"
                               />
@@ -2233,7 +2333,7 @@ export default function BookingDetailPage() {
           </div>
           
           {/* Sticky Bottom Bar - Save Changes */}
-          {hasChanges && (
+          {hasChanges && !isReadOnly && (
             <div 
               className="fixed bottom-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl"
               style={{ 

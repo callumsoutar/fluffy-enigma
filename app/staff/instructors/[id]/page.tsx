@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import * as Tabs from "@radix-ui/react-tabs"
@@ -37,7 +37,6 @@ import {
   IconBriefcase,
   IconCertificate,
   IconShieldCheck,
-  IconInfoCircle,
   IconRotateClockwise,
   IconDeviceFloppy,
   IconCurrencyDollar,
@@ -372,7 +371,6 @@ function StickyFormActions({
 
 export default function InstructorDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const rawInstructorId = params?.id
   const instructorId = Array.isArray(rawInstructorId) ? rawInstructorId[0] : rawInstructorId
   const [selectedTab, setSelectedTab] = React.useState("details")
@@ -649,7 +647,6 @@ export default function InstructorDetailPage() {
   const fullName = [instructor.user.first_name, instructor.user.last_name]
     .filter(Boolean)
     .join(" ")
-  const isActive = instructor.user.is_active
 
   return (
     <SidebarProvider
@@ -713,18 +710,6 @@ export default function InstructorDetailPage() {
                         )}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <Badge className={`rounded-md px-3 py-1 text-xs font-semibold ${isActive ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                      {isActive ? "Account Active" : "Account Inactive"}
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      onClick={() => router.push("/staff")}
-                      className="w-full sm:w-auto"
-                    >
-                      Staff list
-                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -965,33 +950,28 @@ export default function InstructorDetailPage() {
                                   name="rating"
                                   control={control}
                                   render={({ field }) => {
-                                    const selectedValue = field.value ?? undefined
                                     return (
                                       <Select
-                                        value={selectedValue}
-                                        onValueChange={(value) =>
-                                          field.onChange(value === "unassigned" ? null : value)
-                                        }
+                                        key={field.value ?? SELECT_NONE}
+                                        value={field.value ?? SELECT_NONE}
+                                        onValueChange={(val) => field.onChange(val === SELECT_NONE ? null : val)}
                                         disabled={isLoadingInstructorCategories}
                                       >
                                         <SelectTrigger className="w-full bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 transition-all">
-                                          <SelectValue
-                                            placeholder={
-                                              isLoadingInstructorCategories
-                                                ? "Loading ratings…"
-                                                : "Select rating"
-                                            }
-                                          />
+                                          <SelectValue placeholder={isLoadingInstructorCategories ? "Loading ratings…" : "Select rating"}>
+                                            {field.value
+                                              ? instructorCategories.find((category) => category.id === field.value)?.name ??
+                                                "Unknown"
+                                              : "Not set"}
+                                          </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                          <SelectItem value="unassigned">
-                                            Unassigned
-                                          </SelectItem>
-                                        {instructorCategories.map((category) => (
-                                          <SelectItem key={category.id} value={category.id}>
-                                            {category.name}
-                                          </SelectItem>
-                                        ))}
+                                          <SelectItem value={SELECT_NONE}>Not set</SelectItem>
+                                          {instructorCategories.map((category) => (
+                                            <SelectItem key={category.id} value={category.id}>
+                                              {category.name}
+                                            </SelectItem>
+                                          ))}
                                         </SelectContent>
                                       </Select>
                                     )
@@ -1078,22 +1058,6 @@ export default function InstructorDetailPage() {
                           </div>
                         </div>
 
-                        {/* System Metadata Section */}
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-gray-50/50 border border-gray-100 rounded-lg text-[10px] uppercase tracking-wider font-bold text-gray-400">
-                          <div className="flex items-center gap-4">
-                            <span className="flex items-center gap-1.5">
-                              <IconInfoCircle className="w-3.5 h-3.5" />
-                              Created: {format(new Date(instructor.created_at), "dd MMM yyyy HH:mm")}
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <IconClock className="w-3.5 h-3.5" />
-                              Last Updated: {format(new Date(instructor.updated_at), "dd MMM yyyy HH:mm")}
-                            </span>
-                          </div>
-                          <div>
-                            Instructor ID: {instructor.id.slice(0, 8)}...
-                          </div>
-                        </div>
                       </form>
                     </Tabs.Content>
                     <Tabs.Content value="rates">

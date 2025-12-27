@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server"
 import { userHasAnyRole } from "@/lib/auth/roles"
 import type { InstructorUser, InstructorWithUser, InstructorsResponse } from "@/lib/types/instructors"
 
-type InstructorRecord = Omit<InstructorWithUser, "user"> & {
+type InstructorRecord = Omit<InstructorWithUser, "user" | "rating_category"> & {
   users?: InstructorUser | InstructorUser[]
+  rating_category?: { id: string; name: string }[] | { id: string; name: string }
 }
 
 /**
@@ -41,8 +42,22 @@ export async function GET() {
       hire_date,
       termination_date,
       is_actively_instructing,
+      rating,
+      instructor_check_due_date,
+      instrument_check_due_date,
+      class_1_medical_due_date,
+      notes,
+      night_removal,
+      aerobatics_removal,
+      multi_removal,
+      tawa_removal,
+      ifr_removal,
       created_at,
       updated_at,
+      rating_category:instructor_categories (
+        id,
+        name
+      ),
       users!inner (
         id,
         email,
@@ -68,6 +83,10 @@ export async function GET() {
       const userRecord = Array.isArray(typed.users) ? typed.users[0] : typed.users
       if (!userRecord) return null
 
+      const ratingCategory = Array.isArray(typed.rating_category) 
+        ? typed.rating_category[0] 
+        : typed.rating_category
+
       return {
         id: typed.id,
         user_id: typed.user_id,
@@ -76,6 +95,17 @@ export async function GET() {
         hire_date: typed.hire_date,
         termination_date: typed.termination_date,
         is_actively_instructing: typed.is_actively_instructing,
+        rating: typed.rating,
+        rating_category: ratingCategory,
+        instructor_check_due_date: typed.instructor_check_due_date,
+        instrument_check_due_date: typed.instrument_check_due_date,
+        class_1_medical_due_date: typed.class_1_medical_due_date,
+        notes: typed.notes,
+        night_removal: typed.night_removal,
+        aerobatics_removal: typed.aerobatics_removal,
+        multi_removal: typed.multi_removal,
+        tawa_removal: typed.tawa_removal,
+        ifr_removal: typed.ifr_removal,
         created_at: typed.created_at,
         updated_at: typed.updated_at,
         user: userRecord,

@@ -11,9 +11,22 @@ import {
   IconPlane,
   IconSchool,
   IconFileText,
+  IconReportAnalytics,
+  IconTarget,
+  IconCloudStorm,
+  IconCheck,
+  IconCircleCheckFilled,
+  IconX,
+  IconNotebook,
+  IconAlertCircle,
+  IconMessage,
+  IconPlus,
+  IconTrash,
+  IconPencil,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { cn } from "@/lib/utils"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -48,15 +61,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog"
+
+import { useAuth } from "@/contexts/auth-context"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useOrganizationTaxRate } from "@/hooks/use-tax-rate"
 import type { BookingWithRelations } from "@/lib/types/bookings"
 import { bookingUpdateSchema } from "@/lib/validation/bookings"
 import { z } from "zod"
-import { useOrganizationTaxRate } from "@/hooks/use-tax-rate"
 import { InvoiceCalculations, roundToTwoDecimals } from "@/lib/invoice-calculations"
+import ChargeableSearchDropdown from "@/components/invoices/ChargeableSearchDropdown"
 
 type FlightLogCheckinFormData = z.infer<typeof bookingUpdateSchema>
-import { useAuth } from "@/contexts/auth-context"
-import { useIsMobile } from "@/hooks/use-mobile"
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
@@ -146,6 +172,8 @@ export default function BookingCheckinPage() {
   const { role } = useAuth()
   const bookingId = params.id as string
   const isMobile = useIsMobile()
+  const [activeTab, setActiveTab] = React.useState<'billing' | 'debrief'>('billing')
+  const [isPerformanceNotesOpen, setIsPerformanceNotesOpen] = React.useState(false)
 
   const queryClient = useQueryClient()
 
@@ -173,6 +201,10 @@ export default function BookingCheckinPage() {
   const tachEnd = watch("tach_end")
   const soloEndHobbs = watch("solo_end_hobbs")
   const soloEndTach = watch("solo_end_tach")
+
+  // Calculate displayed flight hours
+  const displayedHobbsHours = React.useMemo(() => calculateFlightHours(hobbsStart, hobbsEnd), [hobbsStart, hobbsEnd])
+  const displayedTachHours = React.useMemo(() => calculateFlightHours(tachStart, tachEnd), [tachStart, tachEnd])
 
   // Local state
   
@@ -223,6 +255,11 @@ export default function BookingCheckinPage() {
     lines: CalculatedInvoiceLine[]
     totals: { subtotal: number; tax_total: number; total_amount: number }
   }>(null)
+
+  const [manualItems, setManualItems] = React.useState<GeneratedInvoiceItem[]>([])
+  const [excludedGeneratedKeys, setExcludedGeneratedKeys] = React.useState<Set<string>>(new Set())
+  const [editingIdx, setEditingIdx] = React.useState<number | null>(null)
+  const [openDropdownIdx, setOpenDropdownIdx] = React.useState<number | null>(null)
 
   const selectedAircraftId =
     watch("checked_out_aircraft_id") ||
@@ -560,7 +597,21 @@ export default function BookingCheckinPage() {
   const isDraftCalculated = !!draftCalculation
   const isDraftStale = !!draftCalculation && draftCalculation.signature !== draftSignature
 
-  const updateDraftLine = React.useCallback((idx: number, patch: Partial<Pick<GeneratedInvoiceItem, "quantity" | "unit_price">>) => {
+  const updateDraftLine = React.useCallback((idx: number, patch: Partial<GeneratedInvoiceItem>) => {
+    // If it's a manual item, we also need to update the manualItems state
+    // so that subsequent calculations (buildDraftInvoiceItems() + manualItems) stay in sync.
+    const generatedItemsCount = buildDraftInvoiceItems().length
+    if (idx >= generatedItemsCount) {
+      const manualIdx = idx - generatedItemsCount
+      setManualItems(prev => {
+        const next = [...prev]
+        if (next[manualIdx]) {
+          next[manualIdx] = { ...next[manualIdx], ...patch }
+        }
+        return next
+      })
+    }
+
     setDraftCalculation((prev) => {
       if (!prev) return prev
       if (idx < 0 || idx >= prev.items.length) return prev
@@ -600,7 +651,7 @@ export default function BookingCheckinPage() {
         totals: { subtotal, tax_total, total_amount },
       }
     })
-  }, [taxRate])
+  }, [taxRate, buildDraftInvoiceItems])
 
   const isDraftValidForApproval = React.useMemo(() => {
     if (!draftCalculation) return false
@@ -612,21 +663,34 @@ export default function BookingCheckinPage() {
     return true
   }, [draftCalculation, draftSignature])
 
-  const calculateDraft = handleSubmit(() => {
-    if (!booking) throw new Error("Booking not loaded")
-    if (isApproved) throw new Error("Check-in already approved")
+  const performCalculation = React.useCallback((
+    customManualItems?: GeneratedInvoiceItem[],
+    customExcludedKeys?: Set<string>
+  ) => {
+    if (!booking) return
+    if (isApproved) return
 
-    if (!selectedAircraftId) throw new Error("Aircraft is required")
-    if (!selectedFlightTypeId) throw new Error("Flight type is required")
-    if (!aircraftChargeRate) throw new Error("Aircraft rate not configured for this aircraft + flight type.")
-    if (!aircraftBillingBasis) throw new Error("No aircraft charge basis configured")
-    if (aircraftBillingBasis === 'airswitch') throw new Error("Aircraft is configured for airswitch billing; Hobbs/Tacho only in this UI.")
-    if (billingHours <= 0) throw new Error("Billing hours must be greater than zero")
-    if (splitTimes.error) throw new Error(splitTimes.error)
-    if (instructorBasisConflictForSoloSplit) throw new Error("Instructor charge basis conflicts with aircraft charge basis for a dual+solo split.")
+    const mItems = customManualItems ?? manualItems
+    const eKeys = customExcludedKeys ?? excludedGeneratedKeys
 
-    const items = buildDraftInvoiceItems()
-    if (items.length === 0) throw new Error("No invoice items to calculate")
+    if (!selectedAircraftId || !selectedFlightTypeId || !aircraftChargeRate || !aircraftBillingBasis) {
+      return
+    }
+
+    if (aircraftBillingBasis === 'airswitch') return
+    if (billingHours <= 0) return
+    if (splitTimes.error) return
+    if (instructorBasisConflictForSoloSplit) return
+
+    const items = [
+      ...buildDraftInvoiceItems().filter(item => !eKeys.has(item.description)),
+      ...mItems
+    ]
+
+    if (items.length === 0) {
+      setDraftCalculation(null)
+      return
+    }
 
     const lines: CalculatedInvoiceLine[] = items.map((item) => {
       const calculated = InvoiceCalculations.calculateItemAmounts({
@@ -667,9 +731,40 @@ export default function BookingCheckinPage() {
       lines,
       totals: { subtotal, tax_total, total_amount },
     })
+  }, [
+    booking,
+    isApproved,
+    manualItems,
+    excludedGeneratedKeys,
+    selectedAircraftId,
+    selectedFlightTypeId,
+    aircraftChargeRate,
+    aircraftBillingBasis,
+    billingHours,
+    splitTimes,
+    instructorBasisConflictForSoloSplit,
+    buildDraftInvoiceItems,
+    taxRate,
+    setValue,
+    draftSignature
+  ])
 
-    toast.success("Draft calculated (not saved)")
+  const calculateDraft = handleSubmit(() => {
+    performCalculation()
   })
+
+  const removeManualItem = React.useCallback((manualIdx: number) => {
+    const nextManualItems = manualItems.filter((_, i) => i !== manualIdx)
+    setManualItems(nextManualItems)
+    performCalculation(nextManualItems)
+  }, [manualItems, performCalculation])
+
+  const excludeGeneratedItem = React.useCallback((description: string) => {
+    const nextExcludedKeys = new Set(excludedGeneratedKeys)
+    nextExcludedKeys.add(description)
+    setExcludedGeneratedKeys(nextExcludedKeys)
+    performCalculation(undefined, nextExcludedKeys)
+  }, [excludedGeneratedKeys, performCalculation])
 
   // Calculate flight hours from meter readings
   React.useEffect(() => {
@@ -699,6 +794,8 @@ export default function BookingCheckinPage() {
     lastInitializedKey.current = initializationKey
 
     // Reset form with initial values (use booking fields directly)
+    const lp = Array.isArray(booking.lesson_progress) ? booking.lesson_progress[0] : booking.lesson_progress
+
     const initialValues: FlightLogCheckinFormData = {
       hobbs_start: booking.hobbs_start || null,
       hobbs_end: booking.hobbs_end || null,
@@ -727,6 +824,14 @@ export default function BookingCheckinPage() {
       solo_time: booking.solo_time || null,
       total_hours_start: booking.total_hours_start || null,
       total_hours_end: booking.total_hours_end || null,
+      instructor_comments: lp?.instructor_comments || null,
+      lesson_highlights: lp?.lesson_highlights || null,
+      areas_for_improvement: lp?.areas_for_improvement || null,
+      airmanship: lp?.airmanship || null,
+      focus_next_lesson: lp?.focus_next_lesson || null,
+      safety_concerns: lp?.safety_concerns || null,
+      weather_conditions: lp?.weather_conditions || null,
+      lesson_status: lp?.status || null,
     }
     
     reset(initialValues, { keepDirty: false, keepDefaultValues: false })
@@ -779,6 +884,15 @@ export default function BookingCheckinPage() {
         billing_basis: draftCalculation.billing_basis,
         billing_hours: draftCalculation.billing_hours,
 
+        instructor_comments: watch("instructor_comments") || null,
+        lesson_highlights: watch("lesson_highlights") || null,
+        areas_for_improvement: watch("areas_for_improvement") || null,
+        airmanship: watch("airmanship") || null,
+        focus_next_lesson: watch("focus_next_lesson") || null,
+        safety_concerns: watch("safety_concerns") || null,
+        weather_conditions: watch("weather_conditions") || null,
+        lesson_status: watch("lesson_status") || null,
+
         tax_rate: taxRate,
         due_date: dueDate.toISOString(),
         reference: `Booking ${booking.id} check-in`,
@@ -805,6 +919,23 @@ export default function BookingCheckinPage() {
       await queryClient.invalidateQueries({ queryKey: ["invoices"] })
       toast.success("Check-in approved and invoice created")
       router.replace(`/invoices/${data.invoice.id}`)
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error))
+    },
+  })
+
+  const saveProgressMutation = useMutation({
+    mutationFn: async (data: Partial<FlightLogCheckinFormData>) => {
+      return fetchJson(`/api/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
+      toast.success("Progress saved")
     },
     onError: (error) => {
       toast.error(getErrorMessage(error))
@@ -903,10 +1034,6 @@ export default function BookingCheckinPage() {
 
   const aircraftRegistration = booking.aircraft?.registration || "—"
 
-  // Calculate displayed flight hours
-  const displayedHobbsHours = calculateFlightHours(hobbsStart, hobbsEnd)
-  const displayedTachHours = calculateFlightHours(tachStart, tachEnd)
-
   const aircraftRateMissing = !!selectedAircraftId && !!selectedFlightTypeId && aircraftChargeRateQuery.isFetched && !aircraftChargeRate
   const instructorRateMissing = !!selectedInstructorId && !!selectedFlightTypeId && instructorChargeRateQuery.isFetched && !instructorChargeRate
 
@@ -952,16 +1079,21 @@ export default function BookingCheckinPage() {
                 {/* Title Row */}
                 <div className="mb-6 sm:mb-8">
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight text-foreground">
-                    Flight Check-In
-                  </h1>
-                  <div className="mt-2 text-sm sm:text-base text-muted-foreground">
+                      Flight Check-In
+                    </h1>
+                  <div className="mt-2 text-sm sm:text-base text-muted-foreground flex items-center gap-2">
                     <span className="font-medium text-foreground">Member:</span> {studentName}
-                    {aircraftRegistration !== "—" && (
-                      <>
+                      {aircraftRegistration !== "—" && (
+                        <>
                         <span className="mx-2">•</span>
                         <span className="font-medium text-foreground">Aircraft:</span> {aircraftRegistration}
-                      </>
-                    )}
+                        </>
+                      )}
+                  {!isApproved && (
+                      <Badge variant="outline" className="ml-4 bg-blue-50/50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800">
+                      Check-In In Progress
+                    </Badge>
+                  )}
                   </div>
                 </div>
               </div>
@@ -974,418 +1106,698 @@ export default function BookingCheckinPage() {
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
                 {/* Left Column: Check-In Form */}
                 <div className="lg:col-span-2 space-y-6 lg:space-y-8">
-                  {/* Flight Details Form */}
-                  <Card className="bg-card shadow-md border border-border/50 rounded-xl">
-                    <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-                      <form onSubmit={(e) => e.preventDefault()}>
-                        <FieldSet className="w-full max-w-full">
-                          <FieldGroup className="w-full max-w-full">
-                            {/* Meter Readings Section */}
-                            <FieldSet className="p-4 sm:p-3 gap-4 sm:gap-3 rounded-lg w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
-                              <FieldGroup className="gap-4 sm:gap-3">
-                                {/* Charging basis indicator */}
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="text-sm font-semibold">
-                                    Charging basis:{' '}
-                                    <span className={aircraftBillingBasis === 'hobbs' || aircraftBillingBasis === 'tacho' ? 'text-primary' : 'text-destructive'}>
-                                      {aircraftBillingBasis ?? '—'}
-                                    </span>
+                  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "billing" | "debrief")} className="w-full">
+                    <TabsList className="flex w-full h-11 items-center justify-center rounded-lg bg-muted/50 p-1 text-muted-foreground mb-6 border border-border/50 shadow-sm">
+                      <TabsTrigger 
+                        value="billing" 
+                        className={cn(
+                          "flex-1 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+                          (isApproved || (isDraftCalculated && !isDraftStale)) && "text-green-600 data-[state=active]:text-green-700"
+                        )}
+                      >
+                        {(isApproved || (isDraftCalculated && !isDraftStale)) && (
+                          <IconCircleCheckFilled className="h-4 w-4 animate-in zoom-in-50 duration-300" />
+                        )}
+                        Flight & Billing
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="debrief" 
+                        className={cn(
+                          "flex-1 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm relative",
+                          (isApproved || (booking?.lesson_progress && (!Array.isArray(booking.lesson_progress) || booking.lesson_progress.length > 0)) || saveProgressMutation.isSuccess) && "text-green-600 data-[state=active]:text-green-700"
+                        )}
+                      >
+                        {(isApproved || (booking?.lesson_progress && (!Array.isArray(booking.lesson_progress) || booking.lesson_progress.length > 0)) || saveProgressMutation.isSuccess) && (
+                          <IconCircleCheckFilled className="h-4 w-4 animate-in zoom-in-50 duration-300" />
+                        )}
+                        Lesson Debrief
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="billing" className="mt-0 space-y-6">
+                      <Card className="bg-card shadow-md border border-border/50 rounded-xl">
+                        <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                          <form onSubmit={(e) => e.preventDefault()}>
+                            <FieldSet className="w-full max-w-full">
+                              <FieldGroup className="w-full max-w-full">
+                                {/* Meter Readings Section */}
+                                <FieldSet className="p-4 sm:p-3 gap-4 sm:gap-3 rounded-lg w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
+                                  <FieldGroup className="gap-4 sm:gap-3">
+                                    {/* Charging basis indicator */}
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="text-sm font-semibold">
+                                        Charging basis:{' '}
+                                        <span className={aircraftBillingBasis === 'hobbs' || aircraftBillingBasis === 'tacho' ? 'text-primary' : 'text-destructive'}>
+                                          {aircraftBillingBasis ?? '—'}
+                                        </span>
+                                      </div>
+                                      <div className="text-xs text-muted-foreground tabular-nums">
+                                        Hours used: {billingHours > 0 ? `${billingHours.toFixed(1)}h` : '—'}
+                                      </div>
+                                    </div>
+
+                                    {/* Meter inputs: show active charging basis first */}
+                                    {aircraftBillingBasis === 'hobbs' ? (
+                                      <>
+                                        {/* Hobbs Meter */}
+                                        <FieldSet className="gap-3 sm:gap-2">
+                                          <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                            <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                              <IconClock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                                              Hobbs Meter
+                                            </FieldLegend>
+                                            <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
+                                              {displayedHobbsHours > 0 ? `${displayedHobbsHours.toFixed(1)}h` : "0.0h"}
+                                            </div>
+                                          </div>
+                                          <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                            <Field data-invalid={!!errors.hobbs_start} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
+                                              <Input
+                                                id="hobbs_start"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("hobbs_start", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="8752.2"
+                                                aria-invalid={!!errors.hobbs_start}
+                                              />
+                                              <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
+                                            </Field>
+                                            <Field data-invalid={!!errors.hobbs_end} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
+                                              <Input
+                                                id="hobbs_end"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("hobbs_end", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="8754.5"
+                                                aria-invalid={!!errors.hobbs_end}
+                                              />
+                                              <FieldError errors={errors.hobbs_end ? [{ message: errors.hobbs_end.message }] : undefined} />
+                                            </Field>
+                                          </FieldGroup>
+
+                                          {/* Solo at end option - only for dual/trial flights */}
+                                          {(instructionType === 'dual' || instructionType === 'trial') && (
+                                            <div className="mt-3 space-y-2">
+                                              <div className="flex items-center justify-between">
+                                                <FieldLabel className="text-sm font-medium">Solo at end</FieldLabel>
+                                                <Switch
+                                                  checked={hasSoloAtEnd}
+                                                  disabled={isApproved}
+                                                  onCheckedChange={(next) => {
+                                                    setHasSoloAtEnd(next)
+                                                    if (!next) {
+                                                      setValue("solo_end_hobbs", null, { shouldDirty: true })
+                                                      setValue("solo_end_tach", null, { shouldDirty: true })
+                                                    }
+                                                  }}
+                                                />
+                                              </div>
+
+                                              {hasSoloAtEnd && (
+                                                <Field data-invalid={!!splitTimes.error} className="gap-2 sm:gap-1">
+                                                  <FieldLabel htmlFor="solo_end_hobbs" className="text-sm sm:text-xs font-medium">Solo End Hobbs</FieldLabel>
+                                                  <Input
+                                                    id="solo_end_hobbs"
+                                                    type="number"
+                                                    step="0.1"
+                                                    disabled={isApproved}
+                                                    {...register("solo_end_hobbs", { valueAsNumber: true })}
+                                                    className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                    placeholder="e.g. 8755.0"
+                                                  />
+                                                </Field>
+                                              )}
+
+                                              {splitTimes.error && (
+                                                <div className="text-sm text-destructive">{splitTimes.error}</div>
+                                              )}
+
+                                              {instructorBasisConflictForSoloSplit && (
+                                                <div className="text-sm text-destructive">
+                                                  Instructor charge basis differs from aircraft basis. Dual+solo split requires matching bases to stay auditable.
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </FieldSet>
+
+                                        {/* Tacho Meter */}
+                                        <FieldSet className="gap-3 sm:gap-2">
+                                          <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                            <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                              <IconPlane className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                                              Tacho Meter
+                                            </FieldLegend>
+                                            <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
+                                              {displayedTachHours > 0 ? `${displayedTachHours.toFixed(1)}h` : "0.0h"}
+                                            </div>
+                                          </div>
+                                          <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                            <Field data-invalid={!!errors.tach_start} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
+                                              <Input
+                                                id="tach_start"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("tach_start", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="8752.2"
+                                                aria-invalid={!!errors.tach_start}
+                                              />
+                                              <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
+                                            </Field>
+                                            <Field data-invalid={!!errors.tach_end} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
+                                              <Input
+                                                id="tach_end"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("tach_end", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="8754.5"
+                                                aria-invalid={!!errors.tach_end}
+                                              />
+                                              <FieldError errors={errors.tach_end ? [{ message: errors.tach_end.message }] : undefined} />
+                                            </Field>
+                                          </FieldGroup>
+                                        </FieldSet>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {/* Tacho Meter */}
+                                        <FieldSet className="gap-3 sm:gap-2">
+                                          <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                            <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                              <IconPlane className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                                              Tacho Meter
+                                            </FieldLegend>
+                                            <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
+                                              {displayedTachHours > 0 ? `${displayedTachHours.toFixed(1)}h` : "0.0h"}
+                                            </div>
+                                          </div>
+                                          <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                            <Field data-invalid={!!errors.tach_start} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
+                                              <Input
+                                                id="tach_start"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("tach_start", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="8752.2"
+                                                aria-invalid={!!errors.tach_start}
+                                              />
+                                              <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
+                                            </Field>
+                                            <Field data-invalid={!!errors.tach_end} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
+                                              <Input
+                                                id="tach_end"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("tach_end", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="8754.5"
+                                                aria-invalid={!!errors.tach_end}
+                                              />
+                                              <FieldError errors={errors.tach_end ? [{ message: errors.tach_end.message }] : undefined} />
+                                            </Field>
+                                          </FieldGroup>
+
+                                          {/* Solo at end option - only for dual/trial flights */}
+                                          {(instructionType === 'dual' || instructionType === 'trial') && (
+                                            <div className="mt-3 space-y-2">
+                                              <div className="flex items-center justify-between">
+                                                <FieldLabel className="text-sm font-medium">Solo at end</FieldLabel>
+                                                <Switch
+                                                  checked={hasSoloAtEnd}
+                                                  disabled={isApproved}
+                                                  onCheckedChange={(next) => {
+                                                    setHasSoloAtEnd(next)
+                                                    if (!next) {
+                                                      setValue("solo_end_hobbs", null, { shouldDirty: true })
+                                                      setValue("solo_end_tach", null, { shouldDirty: true })
+                                                    }
+                                                  }}
+                                                />
+                                              </div>
+
+                                              {hasSoloAtEnd && (
+                                                <Field data-invalid={!!splitTimes.error} className="gap-2 sm:gap-1">
+                                                  <FieldLabel htmlFor="solo_end_tach" className="text-sm sm:text-xs font-medium">Solo End Tacho</FieldLabel>
+                                                  <Input
+                                                    id="solo_end_tach"
+                                                    type="number"
+                                                    step="0.1"
+                                                    disabled={isApproved}
+                                                    {...register("solo_end_tach", { valueAsNumber: true })}
+                                                    className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                    placeholder="e.g. 8755.0"
+                                                  />
+                                                </Field>
+                                              )}
+
+                                              {splitTimes.error && (
+                                                <div className="text-sm text-destructive">{splitTimes.error}</div>
+                                              )}
+
+                                              {instructorBasisConflictForSoloSplit && (
+                                                <div className="text-sm text-destructive">
+                                                  Instructor charge basis differs from aircraft basis. Dual+solo split requires matching bases to stay auditable.
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </FieldSet>
+
+                                        {/* Hobbs Meter */}
+                                        <FieldSet className="gap-3 sm:gap-2">
+                                          <div className="flex items-center justify-between mb-2 sm:mb-1.5">
+                                            <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
+                                              <IconClock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                                              Hobbs Meter
+                                            </FieldLegend>
+                                            <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
+                                              {displayedHobbsHours > 0 ? `${displayedHobbsHours.toFixed(1)}h` : "0.0h"}
+                                            </div>
+                                          </div>
+                                          <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
+                                            <Field data-invalid={!!errors.hobbs_start} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
+                                              <Input
+                                                id="hobbs_start"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("hobbs_start", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="8752.2"
+                                                aria-invalid={!!errors.hobbs_start}
+                                              />
+                                              <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
+                                            </Field>
+                                            <Field data-invalid={!!errors.hobbs_end} className="gap-2 sm:gap-1">
+                                              <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
+                                              <Input
+                                                id="hobbs_end"
+                                                type="number"
+                                                step="0.1"
+                                                disabled={isApproved}
+                                                {...register("hobbs_end", { valueAsNumber: true })}
+                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
+                                                placeholder="8754.5"
+                                                aria-invalid={!!errors.hobbs_end}
+                                              />
+                                              <FieldError errors={errors.hobbs_end ? [{ message: errors.hobbs_end.message }] : undefined} />
+                                            </Field>
+                                          </FieldGroup>
+                                        </FieldSet>
+                                      </>
+                                    )}
+
+                                    {/* Calculate Button */}
+                                    <div className="pt-2">
+                                      <Button
+                                        type="button"
+                                        size="lg"
+                                        onClick={() => {
+                                          void calculateDraft().catch((err) => toast.error(getErrorMessage(err)))
+                                        }}
+                                        disabled={isApproved}
+                                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-12 sm:h-11 text-base sm:text-sm font-semibold"
+                                      >
+                                        <IconFileText className="h-5 w-5 mr-2" />
+                                        {isDraftCalculated ? "Recalculate Flight Charges" : "Calculate Flight Charges"}
+                                      </Button>
+                                    </div>
+                                  </FieldGroup>
+                                </FieldSet>
+
+                                {/* Flight Information */}
+                                <FieldSet className="pt-4">
+                                  <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                                    <Field data-invalid={!!errors.flight_type_id} className="gap-2 sm:gap-1.5">
+                                      <FieldLabel htmlFor="flight_type_id" className="flex items-center gap-2 text-base sm:text-sm font-medium text-foreground">
+                                        <IconClock className="h-5 w-5 sm:h-4 sm:w-4 text-primary" />
+                                        Flight Type
+                                      </FieldLabel>
+                                      {options ? (
+                                        <Select
+                                          disabled={isApproved}
+                                          value={watch("flight_type_id") || "none"}
+                                          onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
+                                        >
+                                          <SelectTrigger id="flight_type_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20" aria-invalid={!!errors.flight_type_id}>
+                                            <SelectValue placeholder="Select Flight Type" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">No flight type</SelectItem>
+                                            {options.flightTypes.map((ft) => (
+                                              <SelectItem key={ft.id} value={ft.id}>
+                                                {ft.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
+                                          {booking.flight_type?.name || "—"}
+                                        </div>
+                                      )}
+                                      <div className="mt-1 text-xs text-muted-foreground">
+                                        {aircraftChargeRateQuery.isLoading ? (
+                                          <span>Loading aircraft rate…</span>
+                                        ) : aircraftRatePerHourInclTax != null ? (
+                                          <span className="tabular-nums">
+                                            Aircraft rate: <span className="font-medium text-foreground">${aircraftRatePerHourInclTax.toFixed(2)}</span>/hr (inc. tax)
+                                          </span>
+                                        ) : (
+                                          <span className="text-destructive">Aircraft rate not configured for this aircraft + flight type.</span>
+                                        )}
+                                      </div>
+                                    </Field>
+
+                                    <Field className="gap-2 sm:gap-1.5">
+                                      <FieldLabel htmlFor="checked_out_instructor_id" className="flex items-center gap-2 text-base sm:text-sm font-medium text-foreground">
+                                        <IconSchool className="h-5 w-5 sm:h-4 sm:w-4 text-foreground" />
+                                        Instructor
+                                      </FieldLabel>
+                                      {isAdminOrInstructor && options ? (
+                                        <Select
+                                          disabled={isApproved}
+                                          value={watch("checked_out_instructor_id") || "none"}
+                                          onValueChange={(value) => setValue("checked_out_instructor_id", value === "none" ? null : value, { shouldDirty: true })}
+                                        >
+                                          <SelectTrigger id="checked_out_instructor_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20">
+                                            <SelectValue placeholder="Select Instructor" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">No instructor</SelectItem>
+                                            {options.instructors.map((instructor) => {
+                                              const name = [instructor.first_name, instructor.last_name]
+                                                .filter(Boolean)
+                                                .join(" ") || instructor.user?.email || "Unknown"
+                                              return (
+                                                <SelectItem key={instructor.id} value={instructor.id}>
+                                                  {name}
+                                                </SelectItem>
+                                              )
+                                            })}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
+                                          {instructorName}
+                                        </div>
+                                      )}
+                                      {!!selectedInstructorId && (
+                                        <div className="mt-1 text-xs">
+                                          {instructorChargeRateQuery.isLoading ? (
+                                            <span className="text-muted-foreground">Loading instructor rate…</span>
+                                          ) : instructorRatePerHourInclTax != null ? (
+                                            <span className="text-muted-foreground tabular-nums">
+                                              Instructor rate: <span className="font-medium text-foreground">${instructorRatePerHourInclTax.toFixed(2)}</span>/hr (inc. tax)
+                                            </span>
+                                          ) : (
+                                            <span className="text-destructive">
+                                              Instructor rate not configured for this flight type.
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </Field>
+                                  </FieldGroup>
+                                </FieldSet>
+                              </FieldGroup>
+                            </FieldSet>
+                          </form>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="debrief" className="mt-0 space-y-6">
+                      <Card className="bg-card shadow-sm border border-border/50 rounded-xl overflow-hidden">
+                        <CardContent className="p-4 sm:p-6 space-y-8">
+                          {(instructionType === 'dual' || instructionType === 'trial') && !isApproved && (
+                            <div className="space-y-3">
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                <IconTarget className="h-3 w-3 text-slate-400" />
+                                Lesson Outcome
+                              </div>
+                              
+                              <div className="flex flex-col sm:flex-row gap-3">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setValue("lesson_status", "pass", { shouldDirty: true })}
+                                  className={cn(
+                                    "flex-1 h-12 rounded-xl border-2 transition-all font-bold text-[10px] uppercase tracking-wider shadow-none",
+                                    watch("lesson_status") === "pass"
+                                      ? "bg-green-50/50 border-green-500 text-green-700 hover:bg-green-50 hover:text-green-700"
+                                      : "bg-white border-slate-100 text-slate-400 hover:border-green-200 hover:bg-green-50/30 hover:text-green-600"
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "mr-2 flex h-5 w-5 items-center justify-center rounded-full transition-colors",
+                                    watch("lesson_status") === "pass" ? "bg-green-500 text-white" : "bg-slate-100 text-slate-400"
+                                  )}>
+                                    <IconCheck className="h-3 w-3" />
                                   </div>
-                                  <div className="text-xs text-muted-foreground tabular-nums">
-                                    Hours used: {billingHours > 0 ? `${billingHours.toFixed(1)}h` : '—'}
+                                  Pass
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setValue("lesson_status", "not yet competent", { shouldDirty: true })}
+                                  className={cn(
+                                    "flex-1 h-12 rounded-xl border-2 transition-all font-bold text-[10px] uppercase tracking-wider shadow-none",
+                                    watch("lesson_status") === "not yet competent"
+                                      ? "bg-amber-50/50 border-amber-500 text-amber-700 hover:bg-amber-50 hover:text-amber-700"
+                                      : "bg-white border-slate-100 text-slate-400 hover:border-amber-200 hover:bg-amber-50/30 hover:text-amber-600"
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "mr-2 flex h-5 w-5 items-center justify-center rounded-full transition-colors",
+                                    watch("lesson_status") === "not yet competent" ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-400"
+                                  )}>
+                                    <IconX className="h-3 w-3" />
+                                  </div>
+                                  NYC
+                                </Button>
+                              </div>
+
+                              {!watch("lesson_status") && (
+                                <div className="flex items-center gap-1.5 px-1">
+                                  <div className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
+                                  <p className="text-[10px] text-amber-600 font-bold uppercase tracking-tight">
+                                    Outcome is required for dual flights
+                                </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Instructor Comments - PRIMARY */}
+                          <div className="space-y-3">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                              <IconMessage className="h-3 w-3" />
+                              Instructor Comments
+                            </div>
+                            <Textarea 
+                              {...register("instructor_comments")}
+                              placeholder="General debrief notes for the student..."
+                              className="min-h-[120px] bg-background border-border focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                            />
+                          </div>
+
+                          {/* Next Steps - SECONDARY */}
+                          <div className="space-y-3">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                              <IconNotebook className="h-3 w-3" />
+                              Next Steps
+                            </div>
+                            <Textarea 
+                              {...register("focus_next_lesson")}
+                              placeholder="What should be the priority next time?"
+                              className="min-h-[80px] bg-background border-border focus:ring-2 focus:ring-primary/20 transition-all text-sm"
+                            />
+                          </div>
+
+                          {/* Detailed Performance Notes Modal Trigger */}
+                          <Dialog open={isPerformanceNotesOpen} onOpenChange={setIsPerformanceNotesOpen}>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm" className="w-full flex items-center justify-between px-4 h-11 hover:bg-muted/50 group border-dashed rounded-xl">
+                                <div className="flex items-center gap-2">
+                                  <IconReportAnalytics className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Detailed Performance Notes</span>
+                                </div>
+                                <Badge variant="secondary" className="text-[8px] h-4 px-1.5">Optional</Badge>
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent 
+                              className={cn(
+                                "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden",
+                                "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[640px]",
+                                "top-[calc(env(safe-area-inset-top)+1rem)] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]",
+                                "h-[calc(100dvh-2rem)] sm:h-auto sm:max-h-[calc(100dvh-4rem)]"
+                              )}
+                            >
+                              <div className="flex h-full min-h-0 flex-col bg-white">
+                                <DialogHeader className="px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 text-left sm:pt-6">
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                                      <IconReportAnalytics className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                      <DialogTitle className="text-xl font-bold tracking-tight text-slate-900">
+                                        Detailed Performance Notes
+                                      </DialogTitle>
+                                      <DialogDescription className="mt-0.5 text-sm text-slate-500">
+                                        Capture specific details about the flight for the student&apos;s training record.
+                                      </DialogDescription>
+                                    </div>
+                                  </div>
+                                </DialogHeader>
+                                
+                                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 pb-6">
+                                  <div className="space-y-6">
+                                    <section>
+                                      <div className="mb-3 flex items-center gap-2">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                        <span className="text-xs font-semibold tracking-tight text-slate-900">
+                                          Training Details
+                                        </span>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 gap-5">
+                                        <div>
+                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                            LESSON HIGHLIGHTS
+                                          </label>
+                                  <Textarea 
+                                    {...register("lesson_highlights")}
+                                            placeholder="What went particularly well during the lesson?"
+                                            className="min-h-[100px] rounded-xl border-slate-200 bg-white px-3 py-2 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0 resize-none transition-all"
+                                          />
+                                        </div>
+
+                                        <div>
+                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                            AREAS FOR IMPROVEMENT
+                                          </label>
+                                  <Textarea 
+                                    {...register("areas_for_improvement")}
+                                            placeholder="What specific maneuvers or skills need more practice?"
+                                            className="min-h-[100px] rounded-xl border-slate-200 bg-white px-3 py-2 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0 resize-none transition-all"
+                                          />
+                                        </div>
+
+                                        <div>
+                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                            AIRMANSHIP & DECISION MAKING
+                                          </label>
+                                  <Textarea 
+                                    {...register("airmanship")}
+                                            placeholder="Comment on situational awareness, decision making, and safety mindset."
+                                            className="min-h-[100px] rounded-xl border-slate-200 bg-white px-3 py-2 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0 resize-none transition-all"
+                                          />
+                                        </div>
+                                      </div>
+                                    </section>
+
+                                    <section>
+                                      <div className="mb-3 flex items-center gap-2">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                        <span className="text-xs font-semibold tracking-tight text-slate-900">
+                                          Environment & Safety
+                                        </span>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                        <div>
+                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                      <IconCloudStorm className="h-3 w-3" />
+                                            WEATHER CONDITIONS
+                                          </label>
+                                    <Input 
+                                      {...register("weather_conditions")}
+                                            placeholder="e.g. Calm, Gusty 15kts, BKN025"
+                                            className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                                    />
+                                        </div>
+
+                                        <div>
+                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-destructive flex items-center gap-1.5">
+                                      <IconAlertCircle className="h-3 w-3" />
+                                            SAFETY CONCERNS
+                                          </label>
+                                    <Input 
+                                      {...register("safety_concerns")}
+                                            placeholder="Any safety events or near-misses?"
+                                            className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0 border-destructive/20"
+                                    />
+                                </div>
+                              </div>
+                                    </section>
                                   </div>
                                 </div>
 
-                                {/* Meter inputs: show active charging basis first */}
-                                {aircraftBillingBasis === 'hobbs' ? (
-                                  <>
-                                    {/* Hobbs Meter */}
-                                    <FieldSet className="gap-3 sm:gap-2">
-                                      <div className="flex items-center justify-between mb-2 sm:mb-1.5">
-                                        <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
-                                          <IconClock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                                          Hobbs Meter
-                                        </FieldLegend>
-                                        <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
-                                          {displayedHobbsHours > 0 ? `${displayedHobbsHours.toFixed(1)}h` : "0.0h"}
-                                        </div>
-                                      </div>
-                                      <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
-                                        <Field data-invalid={!!errors.hobbs_start} className="gap-2 sm:gap-1">
-                                          <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
-                                          <Input
-                                            id="hobbs_start"
-                                            type="number"
-                                            step="0.1"
-                                            disabled={isApproved}
-                                            {...register("hobbs_start", { valueAsNumber: true })}
-                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                            placeholder="8752.2"
-                                            aria-invalid={!!errors.hobbs_start}
-                                          />
-                                          <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
-                                        </Field>
-                                        <Field data-invalid={!!errors.hobbs_end} className="gap-2 sm:gap-1">
-                                          <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
-                                          <Input
-                                            id="hobbs_end"
-                                            type="number"
-                                            step="0.1"
-                                            disabled={isApproved}
-                                            {...register("hobbs_end", { valueAsNumber: true })}
-                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                            placeholder="8754.5"
-                                            aria-invalid={!!errors.hobbs_end}
-                                          />
-                                          <FieldError errors={errors.hobbs_end ? [{ message: errors.hobbs_end.message }] : undefined} />
-                                        </Field>
-                                      </FieldGroup>
-
-                                      {/* Solo at end option - only for dual/trial flights */}
-                                      {(instructionType === 'dual' || instructionType === 'trial') && (
-                                        <div className="mt-3 space-y-2">
-                                          <div className="flex items-center justify-between">
-                                            <FieldLabel className="text-sm font-medium">Solo at end</FieldLabel>
-                                            <Switch
-                                              checked={hasSoloAtEnd}
-                                              disabled={isApproved}
-                                              onCheckedChange={(next) => {
-                                                setHasSoloAtEnd(next)
-                                                if (!next) {
-                                                  setValue("solo_end_hobbs", null, { shouldDirty: true })
-                                                  setValue("solo_end_tach", null, { shouldDirty: true })
-                                                }
-                                              }}
-                                            />
-                                          </div>
-
-                                          {hasSoloAtEnd && (
-                                            <Field data-invalid={!!splitTimes.error} className="gap-2 sm:gap-1">
-                                              <FieldLabel htmlFor="solo_end_hobbs" className="text-sm sm:text-xs font-medium">Solo End Hobbs</FieldLabel>
-                                              <Input
-                                                id="solo_end_hobbs"
-                                                type="number"
-                                                step="0.1"
-                                                disabled={isApproved}
-                                                {...register("solo_end_hobbs", { valueAsNumber: true })}
-                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="e.g. 8755.0"
-                                              />
-                                            </Field>
-                                          )}
-
-                                          {splitTimes.error && (
-                                            <div className="text-sm text-destructive">{splitTimes.error}</div>
-                                          )}
-
-                                          {instructorBasisConflictForSoloSplit && (
-                                            <div className="text-sm text-destructive">
-                                              Instructor charge basis differs from aircraft basis. Dual+solo split requires matching bases to stay auditable.
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                    </FieldSet>
-
-                                    {/* Tacho Meter */}
-                                    <FieldSet className="gap-3 sm:gap-2">
-                                      <div className="flex items-center justify-between mb-2 sm:mb-1.5">
-                                        <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
-                                          <IconPlane className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                                          Tacho Meter
-                                        </FieldLegend>
-                                        <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
-                                          {displayedTachHours > 0 ? `${displayedTachHours.toFixed(1)}h` : "0.0h"}
-                                        </div>
-                                      </div>
-                                      <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
-                                        <Field data-invalid={!!errors.tach_start} className="gap-2 sm:gap-1">
-                                          <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
-                                          <Input
-                                            id="tach_start"
-                                            type="number"
-                                            step="0.1"
-                                            disabled={isApproved}
-                                            {...register("tach_start", { valueAsNumber: true })}
-                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                            placeholder="8752.2"
-                                            aria-invalid={!!errors.tach_start}
-                                          />
-                                          <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
-                                        </Field>
-                                        <Field data-invalid={!!errors.tach_end} className="gap-2 sm:gap-1">
-                                          <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
-                                          <Input
-                                            id="tach_end"
-                                            type="number"
-                                            step="0.1"
-                                            disabled={isApproved}
-                                            {...register("tach_end", { valueAsNumber: true })}
-                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                            placeholder="8754.5"
-                                            aria-invalid={!!errors.tach_end}
-                                          />
-                                          <FieldError errors={errors.tach_end ? [{ message: errors.tach_end.message }] : undefined} />
-                                        </Field>
-                                      </FieldGroup>
-                                    </FieldSet>
-                                  </>
-                                ) : (
-                                  <>
-                                    {/* Tacho Meter */}
-                                    <FieldSet className="gap-3 sm:gap-2">
-                                      <div className="flex items-center justify-between mb-2 sm:mb-1.5">
-                                        <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
-                                          <IconPlane className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                                          Tacho Meter
-                                        </FieldLegend>
-                                        <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
-                                          {displayedTachHours > 0 ? `${displayedTachHours.toFixed(1)}h` : "0.0h"}
-                                        </div>
-                                      </div>
-                                      <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
-                                        <Field data-invalid={!!errors.tach_start} className="gap-2 sm:gap-1">
-                                          <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
-                                          <Input
-                                            id="tach_start"
-                                            type="number"
-                                            step="0.1"
-                                            disabled={isApproved}
-                                            {...register("tach_start", { valueAsNumber: true })}
-                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                            placeholder="8752.2"
-                                            aria-invalid={!!errors.tach_start}
-                                          />
-                                          <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
-                                        </Field>
-                                        <Field data-invalid={!!errors.tach_end} className="gap-2 sm:gap-1">
-                                          <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
-                                          <Input
-                                            id="tach_end"
-                                            type="number"
-                                            step="0.1"
-                                            disabled={isApproved}
-                                            {...register("tach_end", { valueAsNumber: true })}
-                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                            placeholder="8754.5"
-                                            aria-invalid={!!errors.tach_end}
-                                          />
-                                          <FieldError errors={errors.tach_end ? [{ message: errors.tach_end.message }] : undefined} />
-                                        </Field>
-                                      </FieldGroup>
-
-                                      {/* Solo at end option - only for dual/trial flights */}
-                                      {(instructionType === 'dual' || instructionType === 'trial') && (
-                                        <div className="mt-3 space-y-2">
-                                          <div className="flex items-center justify-between">
-                                            <FieldLabel className="text-sm font-medium">Solo at end</FieldLabel>
-                                            <Switch
-                                              checked={hasSoloAtEnd}
-                                              disabled={isApproved}
-                                              onCheckedChange={(next) => {
-                                                setHasSoloAtEnd(next)
-                                                if (!next) {
-                                                  setValue("solo_end_hobbs", null, { shouldDirty: true })
-                                                  setValue("solo_end_tach", null, { shouldDirty: true })
-                                                }
-                                              }}
-                                            />
-                                          </div>
-
-                                          {hasSoloAtEnd && (
-                                            <Field data-invalid={!!splitTimes.error} className="gap-2 sm:gap-1">
-                                              <FieldLabel htmlFor="solo_end_tach" className="text-sm sm:text-xs font-medium">Solo End Tacho</FieldLabel>
-                                              <Input
-                                                id="solo_end_tach"
-                                                type="number"
-                                                step="0.1"
-                                                disabled={isApproved}
-                                                {...register("solo_end_tach", { valueAsNumber: true })}
-                                                className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="e.g. 8755.0"
-                                              />
-                                            </Field>
-                                          )}
-
-                                          {splitTimes.error && (
-                                            <div className="text-sm text-destructive">{splitTimes.error}</div>
-                                          )}
-
-                                          {instructorBasisConflictForSoloSplit && (
-                                            <div className="text-sm text-destructive">
-                                              Instructor charge basis differs from aircraft basis. Dual+solo split requires matching bases to stay auditable.
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                    </FieldSet>
-
-                                    {/* Hobbs Meter */}
-                                    <FieldSet className="gap-3 sm:gap-2">
-                                      <div className="flex items-center justify-between mb-2 sm:mb-1.5">
-                                        <FieldLegend className="flex items-center gap-2 sm:gap-1.5 text-base sm:text-sm font-semibold">
-                                          <IconClock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                                          Hobbs Meter
-                                        </FieldLegend>
-                                        <div className="text-sm sm:text-xs font-semibold sm:font-medium text-muted-foreground bg-white dark:bg-gray-800 px-2 py-1 rounded-md">
-                                          {displayedHobbsHours > 0 ? `${displayedHobbsHours.toFixed(1)}h` : "0.0h"}
-                                        </div>
-                                      </div>
-                                      <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2.5">
-                                        <Field data-invalid={!!errors.hobbs_start} className="gap-2 sm:gap-1">
-                                          <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
-                                          <Input
-                                            id="hobbs_start"
-                                            type="number"
-                                            step="0.1"
-                                            disabled={isApproved}
-                                            {...register("hobbs_start", { valueAsNumber: true })}
-                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                            placeholder="8752.2"
-                                            aria-invalid={!!errors.hobbs_start}
-                                          />
-                                          <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
-                                        </Field>
-                                        <Field data-invalid={!!errors.hobbs_end} className="gap-2 sm:gap-1">
-                                          <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
-                                          <Input
-                                            id="hobbs_end"
-                                            type="number"
-                                            step="0.1"
-                                            disabled={isApproved}
-                                            {...register("hobbs_end", { valueAsNumber: true })}
-                                            className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                            placeholder="8754.5"
-                                            aria-invalid={!!errors.hobbs_end}
-                                          />
-                                          <FieldError errors={errors.hobbs_end ? [{ message: errors.hobbs_end.message }] : undefined} />
-                                        </Field>
-                                      </FieldGroup>
-                                    </FieldSet>
-                                  </>
-                                )}
-
-                                {/* Calculate Button */}
-                                <div className="pt-2">
-                                  <Button
-                                    type="button"
-                                    size="lg"
-                                    onClick={() => {
-                                      void calculateDraft().catch((err) => toast.error(getErrorMessage(err)))
-                                    }}
-                                    disabled={isApproved}
-                                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-12 sm:h-11 text-base sm:text-sm font-semibold"
-                                  >
-                                    <IconFileText className="h-5 w-5 mr-2" />
-                                    {isDraftCalculated ? "Recalculate Flight Charges" : "Calculate Flight Charges"}
+                                <div className="border-t bg-white px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] sm:pb-4">
+                                  <Button type="button" onClick={() => setIsPerformanceNotesOpen(false)} className="w-full h-10 rounded-xl bg-slate-900 text-xs font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800 transition-all">
+                                    Done
                                   </Button>
                                 </div>
-                              </FieldGroup>
-                            </FieldSet>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
 
-                            {/* Flight Information */}
-                            <FieldSet>
-                              <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                                <Field data-invalid={!!errors.flight_type_id} className="gap-2 sm:gap-1.5">
-                                  <FieldLabel htmlFor="flight_type_id" className="flex items-center gap-2 text-base sm:text-sm font-medium text-foreground">
-                                    <IconClock className="h-5 w-5 sm:h-4 sm:w-4 text-primary" />
-                                    Flight Type
-                                  </FieldLabel>
-                                  {options ? (
-                                    <Select
-                                      disabled={isApproved}
-                                      value={watch("flight_type_id") || "none"}
-                                      onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
-                                    >
-                                      <SelectTrigger id="flight_type_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20" aria-invalid={!!errors.flight_type_id}>
-                                        <SelectValue placeholder="Select Flight Type" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">No flight type</SelectItem>
-                                        {options.flightTypes.map((ft) => (
-                                          <SelectItem key={ft.id} value={ft.id}>
-                                            {ft.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {booking.flight_type?.name || "—"}
-                                    </div>
-                                  )}
-                                  {errors.flight_type_id && (
-                                    <p className="text-sm text-destructive mt-1">{errors.flight_type_id.message}</p>
-                                  )}
-                                  <div className="mt-1 text-xs text-muted-foreground">
-                                    {aircraftChargeRateQuery.isLoading ? (
-                                      <span>Loading aircraft rate…</span>
-                                    ) : aircraftRatePerHourInclTax != null ? (
-                                      <span className="tabular-nums">
-                                        Aircraft rate: <span className="font-medium text-foreground">${aircraftRatePerHourInclTax.toFixed(2)}</span>/hr (inc. tax)
-                                      </span>
-                                    ) : (
-                                      <span className="text-destructive">Aircraft rate not configured for this aircraft + flight type.</span>
-                                    )}
-                                  </div>
-                                </Field>
-
-                                <Field className="gap-2 sm:gap-1.5">
-                                  <FieldLabel htmlFor="checked_out_instructor_id" className="flex items-center gap-2 text-base sm:text-sm font-medium text-foreground">
-                                    <IconSchool className="h-5 w-5 sm:h-4 sm:w-4 text-foreground" />
-                                    Instructor
-                                  </FieldLabel>
-                                  {isAdminOrInstructor && options ? (
-                                    <Select
-                                      disabled={isApproved}
-                                      value={watch("checked_out_instructor_id") || "none"}
-                                      onValueChange={(value) => setValue("checked_out_instructor_id", value === "none" ? null : value, { shouldDirty: true })}
-                                    >
-                                      <SelectTrigger id="checked_out_instructor_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20">
-                                        <SelectValue placeholder="Select Instructor" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">No instructor</SelectItem>
-                                        {options.instructors.map((instructor) => {
-                                          const name = [instructor.first_name, instructor.last_name]
-                                            .filter(Boolean)
-                                            .join(" ") || instructor.user?.email || "Unknown"
-                                          return (
-                                            <SelectItem key={instructor.id} value={instructor.id}>
-                                              {name}
-                                            </SelectItem>
-                                          )
-                                        })}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {instructorName}
-                                    </div>
-                                  )}
-                                  {!!selectedInstructorId && (
-                                    <div className="mt-1 text-xs">
-                                      {instructorChargeRateQuery.isLoading ? (
-                                        <span className="text-muted-foreground">Loading instructor rate…</span>
-                                      ) : instructorRatePerHourInclTax != null ? (
-                                        <span className="text-muted-foreground tabular-nums">
-                                          Instructor rate: <span className="font-medium text-foreground">${instructorRatePerHourInclTax.toFixed(2)}</span>/hr (inc. tax)
-                                        </span>
-                                      ) : (
-                                        <span className="text-destructive">
-                                          Instructor rate not configured for this flight type.
-                                        </span>
-                                      )}
-                                    </div>
-                                  )}
-                                </Field>
-                              </FieldGroup>
-                            </FieldSet>
-                          </FieldGroup>
-                        </FieldSet>
-                      </form>
-                    </CardContent>
-                  </Card>
+                          {/* Save Debrief Progress Button */}
+                          <div className="pt-4 border-t border-border/10">
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                const data = {
+                                  instructor_comments: watch("instructor_comments"),
+                                  focus_next_lesson: watch("focus_next_lesson"),
+                                  lesson_highlights: watch("lesson_highlights"),
+                                  areas_for_improvement: watch("areas_for_improvement"),
+                                  airmanship: watch("airmanship"),
+                                  weather_conditions: watch("weather_conditions"),
+                                  safety_concerns: watch("safety_concerns"),
+                                  lesson_status: watch("lesson_status"),
+                                }
+                                saveProgressMutation.mutate(data)
+                              }}
+                              disabled={saveProgressMutation.isPending || isApproved}
+                              className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-900/10 transition-all"
+                            >
+                              {saveProgressMutation.isPending ? (
+                                <>
+                                  <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin mr-2"></div>
+                                  Saving Progress...
+                                </>
+                              ) : (
+                                "Save Debrief Progress"
+                              )}
+                            </Button>
+                            <p className="mt-2 text-[10px] text-center text-muted-foreground uppercase tracking-wider font-medium px-4">
+                              Use this to save your notes while you work. Final approval still required below.
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+                  </Tabs>
                 </div>
 
                 {/* Right Column: Invoice Panel */}
@@ -1455,62 +1867,204 @@ export default function BookingCheckinPage() {
                                         <TableHead className="text-right w-[110px]">Qty (hrs)</TableHead>
                                         <TableHead className="text-right w-[160px]">Rate (inc. tax)</TableHead>
                                         <TableHead className="text-right w-[120px]">Line total</TableHead>
+                                        <TableHead className="w-[90px] text-right">Actions</TableHead>
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {draftCalculation!.lines.map((line, idx) => (
-                                        <TableRow key={`${line.description}-${idx}`}>
-                                          <TableCell className="font-medium">
-                                            <div className="min-w-0 truncate">{line.description}</div>
-                                          </TableCell>
-                                          <TableCell className="text-right">
-                                            <Input
-                                              type="number"
-                                              step="0.1"
-                                              inputMode="decimal"
-                                              value={Number.isFinite(line.quantity) ? String(line.quantity) : ""}
-                                              onChange={(e) => {
-                                                const v = e.target.value === "" ? NaN : Number(e.target.value)
-                                                updateDraftLine(idx, { quantity: v })
-                                              }}
-                                              className="h-9 text-right tabular-nums"
-                                            />
-                                          </TableCell>
-                                          <TableCell className="text-right">
-                                            <div className="relative">
-                                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                              <Input
-                                                type="number"
-                                                step="0.01"
-                                                inputMode="decimal"
-                                                value={(() => {
-                                                  const effectiveTaxRate = (line.tax_rate ?? taxRate) || 0
-                                                  if (!Number.isFinite(line.unit_price)) return ""
-                                                  if (!Number.isFinite(effectiveTaxRate) || effectiveTaxRate <= 0) return String(line.unit_price)
-                                                  return String(roundToTwoDecimals(line.unit_price * (1 + effectiveTaxRate)))
-                                                })()}
-                                                onChange={(e) => {
-                                                  const effectiveTaxRate = (line.tax_rate ?? taxRate) || 0
-                                                  const vInc = e.target.value === "" ? NaN : Number(e.target.value)
-                                                  if (!Number.isFinite(vInc)) {
-                                                    updateDraftLine(idx, { unit_price: NaN })
-                                                    return
-                                                  }
-                                                  const divisor = 1 + (Number.isFinite(effectiveTaxRate) ? effectiveTaxRate : 0)
-                                                  const vEx = divisor <= 0 ? vInc : (vInc / divisor)
-                                                  updateDraftLine(idx, { unit_price: roundToTwoDecimals(vEx) })
-                                                }}
-                                                className="h-9 pl-7 text-right tabular-nums"
-                                              />
-                                            </div>
-                                          </TableCell>
-                                          <TableCell className="text-right tabular-nums font-medium">
-                                            ${Number(line.line_total ?? 0).toFixed(2)}
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
+                                      {draftCalculation!.lines.map((line, idx) => {
+                                        const generatedItems = buildDraftInvoiceItems().filter(item => !excludedGeneratedKeys.has(item.description));
+                                        const generatedItemsCount = generatedItems.length;
+                                        const isManualItem = idx >= generatedItemsCount;
+                                        const manualIdx = isManualItem ? idx - generatedItemsCount : -1;
+                                        const isEditing = editingIdx === idx;
+
+                                        return (
+                                          <TableRow key={`${line.description}-${idx}`} className="group hover:bg-muted/10">
+                                            <TableCell className="font-medium py-2">
+                                              {isEditing && isManualItem ? (
+                                                <ChargeableSearchDropdown
+                                                  value={line.description}
+                                                  taxRate={taxRate}
+                                                  open={openDropdownIdx === idx}
+                                                  onOpenChange={(open) => {
+                                                    if (open) {
+                                                      setOpenDropdownIdx(idx)
+                                                    } else {
+                                                      setOpenDropdownIdx(null)
+                                                    }
+                                                  }}
+                                                  onSelect={(chargeable) => {
+                                                    const effectiveTaxRate = chargeable.is_taxable ? taxRate : 0;
+                                                    updateDraftLine(idx, {
+                                                      chargeable_id: chargeable.id,
+                                                      description: chargeable.name,
+                                                      quantity: 1,
+                                                      unit_price: (chargeable.rate || 0) / (1 + effectiveTaxRate),
+                                                      tax_rate: effectiveTaxRate
+                                                    });
+                                                    setOpenDropdownIdx(null);
+                                                  }}
+                                                />
+                                              ) : (
+                                                <div className="min-w-0 truncate px-0 py-1">{line.description}</div>
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="text-right py-2">
+                                              {isEditing ? (
+                                                <Input
+                                                  type="number"
+                                                  step="0.1"
+                                                  inputMode="decimal"
+                                                  value={Number.isFinite(line.quantity) ? String(line.quantity) : ""}
+                                                  onChange={(e) => {
+                                                    const v = e.target.value === "" ? NaN : Number(e.target.value)
+                                                    updateDraftLine(idx, { quantity: v })
+                                                  }}
+                                                  className="h-8 text-right tabular-nums w-full"
+                                                />
+                                              ) : (
+                                                <div className="py-1 tabular-nums">{line.quantity?.toFixed(1) ?? "0.0"}</div>
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="text-right py-2">
+                                              {isEditing ? (
+                                                <div className="relative">
+                                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                                  <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    inputMode="decimal"
+                                                    value={(() => {
+                                                      const effectiveTaxRate = (line.tax_rate ?? taxRate) || 0
+                                                      if (!Number.isFinite(line.unit_price)) return ""
+                                                      if (!Number.isFinite(effectiveTaxRate) || effectiveTaxRate <= 0) return String(line.unit_price)
+                                                      return String(roundToTwoDecimals(line.unit_price * (1 + effectiveTaxRate)))
+                                                    })()}
+                                                    onChange={(e) => {
+                                                      const effectiveTaxRate = (line.tax_rate ?? taxRate) || 0
+                                                      const vInc = e.target.value === "" ? NaN : Number(e.target.value)
+                                                      if (!Number.isFinite(vInc)) {
+                                                        updateDraftLine(idx, { unit_price: NaN })
+                                                        return
+                                                      }
+                                                      const divisor = 1 + (Number.isFinite(effectiveTaxRate) ? effectiveTaxRate : 0)
+                                                      const vEx = divisor <= 0 ? vInc : (vInc / divisor)
+                                                      updateDraftLine(idx, { unit_price: roundToTwoDecimals(vEx) })
+                                                    }}
+                                                    className="h-8 pl-5 text-right tabular-nums w-full"
+                                                  />
+                                                </div>
+                                              ) : (
+                                                <div className="py-1 tabular-nums">
+                                                  ${(() => {
+                                                    const effectiveTaxRate = (line.tax_rate ?? taxRate) || 0
+                                                    const priceInc = Number.isFinite(line.unit_price) 
+                                                      ? roundToTwoDecimals(line.unit_price * (1 + (effectiveTaxRate || 0)))
+                                                      : 0
+                                                    return priceInc.toFixed(2)
+                                                  })()}
+                                                </div>
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="text-right py-2 tabular-nums font-semibold">
+                                              ${Number(line.line_total ?? 0).toFixed(2)}
+                                            </TableCell>
+                                            <TableCell className="text-right py-2">
+                                              <div className="flex justify-end gap-1">
+                                                {isEditing ? (
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => {
+                                                      setEditingIdx(null);
+                                                      setOpenDropdownIdx(null);
+                                                    }}
+                                                    className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                  >
+                                                    <IconCheck className="h-4 w-4" />
+                                                  </Button>
+                                                ) : (
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => {
+                                                      setEditingIdx(idx);
+                                                      // If it's a manual item with no description, open the dropdown
+                                                      if (isManualItem && !line.description) {
+                                                        setOpenDropdownIdx(idx);
+                                                      }
+                                                    }}
+                                                    className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  >
+                                                    <IconPencil className="h-4 w-4" />
+                                                  </Button>
+                                                )}
+                                                
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  onClick={() => {
+                                                    if (editingIdx === idx) {
+                                                      setEditingIdx(null);
+                                                      setOpenDropdownIdx(null);
+                                                    }
+                                                    if (isManualItem) {
+                                                      removeManualItem(manualIdx)
+                                                    } else {
+                                                      excludeGeneratedItem(line.description)
+                                                    }
+                                                  }}
+                                                  className={cn(
+                                                    "h-7 w-7 text-muted-foreground hover:text-destructive",
+                                                    !isEditing && "opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  )}
+                                                >
+                                                  <IconTrash className="h-4 w-4" />
+                                                </Button>
+                                              </div>
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
                                     </TableBody>
                                   </Table>
+                                </div>
+
+                                <div className="mt-4 pt-4 border-t">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full justify-start border-dashed"
+                                    onClick={() => {
+                                      const newItem: GeneratedInvoiceItem = {
+                                        chargeable_id: null,
+                                        description: "",
+                                        quantity: 1,
+                                        unit_price: 0,
+                                        tax_rate: taxRate
+                                      };
+                                      
+                                      const generatedItems = buildDraftInvoiceItems().filter(item => !excludedGeneratedKeys.has(item.description));
+                                      const currentGeneratedCount = generatedItems.length;
+                                      const currentManualCount = manualItems.length;
+                                      
+                                      const nextManualItems = [...manualItems, newItem];
+                                      setManualItems(nextManualItems);
+                                      const newItemIdx = currentGeneratedCount + currentManualCount;
+                                      setEditingIdx(newItemIdx);
+
+                                      // Perform synchronous-like calculation update
+                                      performCalculation(nextManualItems);
+                                      
+                                      // Open dropdown after calculation completes and component re-renders
+                                      setTimeout(() => {
+                                        setOpenDropdownIdx(newItemIdx);
+                                      }, 0);
+                                    }}
+                                  >
+                                    <IconPlus className="mr-2 h-4 w-4" />
+                                    Add Item
+                                  </Button>
                                 </div>
 
                                 <div className="mt-4 border-t pt-4 space-y-2 text-sm">

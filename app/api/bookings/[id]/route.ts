@@ -97,6 +97,18 @@ export async function GET(
           last_name,
           email
         )
+      ),
+      lesson_progress:lesson_progress (
+        id,
+        instructor_comments,
+        lesson_highlights,
+        areas_for_improvement,
+        airmanship,
+        focus_next_lesson,
+        safety_concerns,
+        weather_conditions,
+        status,
+        attempt
       )
     `)
     .eq('id', bookingId)
@@ -437,6 +449,18 @@ export async function PATCH(
           last_name,
           email
         )
+      ),
+      lesson_progress:lesson_progress (
+        id,
+        instructor_comments,
+        lesson_highlights,
+        areas_for_improvement,
+        airmanship,
+        focus_next_lesson,
+        safety_concerns,
+        weather_conditions,
+        status,
+        attempt
       )
     `)
     .single()

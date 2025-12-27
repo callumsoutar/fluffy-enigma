@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   IconArrowLeft,
   IconCalendar,
@@ -47,6 +47,11 @@ import { MemberContactDetails } from "@/components/members/member-contact-detail
 import { MemberMemberships } from "@/components/members/member-memberships"
 import { MemberAccountTab } from "@/components/members/member-account-tab"
 import { MemberFlightHistoryTab } from "@/components/members/member-flight-history-tab"
+import { MemberTrainingTab } from "@/components/members/member-training-tab"
+import { useAuth } from "@/contexts/auth-context"
+import { isValidRole, type UserRole } from "@/lib/types/roles"
+import { CreateInstructorProfileDialog } from "@/components/members/CreateInstructorProfileDialog"
+import { StickyFormActions } from "@/components/ui/sticky-form-actions"
 
 async function fetchMember(id: string): Promise<MemberWithRelations> {
   const response = await fetch(`/api/members/${id}`)
@@ -94,12 +99,27 @@ export default function MemberDetailPage() {
   const params = useParams()
   const router = useRouter()
   const memberId = params.id as string
+  const queryClient = useQueryClient()
+  const { role: viewerRole } = useAuth()
+  const isStaffViewer = viewerRole === "admin" || viewerRole === "owner"
   const [activeTab, setActiveTab] = React.useState("contact")
   const [underlineStyle, setUnderlineStyle] = React.useState({ left: 0, width: 0 })
   const tabRefs = React.useRef<Record<string, HTMLButtonElement | null>>({})
   const tabsListRef = React.useRef<HTMLDivElement>(null)
   const [showScrollLeft, setShowScrollLeft] = React.useState(false)
   const [showScrollRight, setShowScrollRight] = React.useState(false)
+  const [isUpdatingRole, setIsUpdatingRole] = React.useState(false)
+  const [roleUpdateError, setRoleUpdateError] = React.useState<string | null>(null)
+  const [showCreateInstructorDialog, setShowCreateInstructorDialog] = React.useState(false)
+
+  // Form states for sticky banner
+  const [isContactDirty, setIsContactDirty] = React.useState(false)
+  const [isContactSaving, setIsContactSaving] = React.useState(false)
+  const contactUndoRef = React.useRef<(() => void) | null>(null)
+
+  const [isPilotDirty, setIsPilotDirty] = React.useState(false)
+  const [isPilotSaving, setIsPilotSaving] = React.useState(false)
+  const pilotUndoRef = React.useRef<(() => void) | null>(null)
 
   const {
     data: member,
@@ -193,6 +213,7 @@ export default function MemberDetailPage() {
     { id: "flights", label: "Flight Management", icon: IconPlane },
     { id: "training", label: "Training", icon: IconChartBar },
     { id: "history", label: "History", icon: IconClock },
+    { id: "permissions", label: "Permissions", icon: IconUser },
   ]
 
   if (isLoading) {
@@ -233,6 +254,43 @@ export default function MemberDetailPage() {
   const membershipStartDate = member.membership?.start_date
     ? formatDate(member.membership.start_date)
     : null
+
+  const memberRole: UserRole | null =
+    member.role?.role && isValidRole(member.role.role) ? member.role.role : null
+  const isInstructorRole = memberRole === "instructor"
+  const hasInstructorProfile = Boolean(member.instructor?.id)
+
+  const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+    { value: "member", label: "Member" },
+    { value: "student", label: "Student" },
+    { value: "instructor", label: "Instructor" },
+    { value: "admin", label: "Admin" },
+    { value: "owner", label: "Owner" },
+  ]
+
+  async function updateMemberRole(nextRole: UserRole) {
+    if (!isStaffViewer) return
+    setRoleUpdateError(null)
+    setIsUpdatingRole(true)
+    try {
+      const res = await fetch(`/api/members/${memberId}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: nextRole }),
+      })
+
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(payload?.error || "Failed to update role")
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["member", memberId] })
+    } catch (e) {
+      setRoleUpdateError(e instanceof Error ? e.message : "Failed to update role")
+    } finally {
+      setIsUpdatingRole(false)
+    }
+  }
 
   return (
     <SidebarProvider
@@ -279,6 +337,11 @@ export default function MemberDetailPage() {
                         >
                           {isActive ? "Active" : "Inactive"}
                         </Badge>
+                        {memberRole && (
+                          <Badge className="rounded-md px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border-0">
+                            {memberRole}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                         {member.email && (
@@ -320,7 +383,7 @@ export default function MemberDetailPage() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <Button
-                      className="bg-gray-900 hover:bg-gray-800 text-white gap-2 font-semibold shadow-sm w-full sm:w-auto"
+                      className="bg-[#6564db] hover:bg-[#232ed1] text-white gap-2 font-semibold shadow-sm w-full sm:w-auto"
                       onClick={() => router.push(`/bookings/new?member_id=${memberId}`)}
                     >
                       <IconCalendar className="h-4 w-4" />
@@ -330,6 +393,15 @@ export default function MemberDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <CreateInstructorProfileDialog
+              open={showCreateInstructorDialog}
+              onOpenChange={setShowCreateInstructorDialog}
+              userId={memberId}
+              onCreated={async () => {
+                await queryClient.invalidateQueries({ queryKey: ["member", memberId] })
+              }}
+            />
 
             {/* Tabbed Content */}
             <Card className="shadow-sm border border-border/50 bg-card">
@@ -430,12 +502,141 @@ export default function MemberDetailPage() {
 
                       {/* Tab Content */}
                       <div className="w-full p-4 sm:p-6">
+                        <Tabs.Content value="permissions">
+                          <div className="space-y-6">
+                            <Card className="shadow-sm border border-border/50 bg-card">
+                              <CardContent className="p-4 sm:p-6">
+                                <div className="mb-5">
+                                  <h2 className="text-lg font-semibold text-gray-900">
+                                    Permissions & Instructor Profile
+                                  </h2>
+                                  <p className="text-sm text-muted-foreground">
+                                    Keep roles and staff profiles explicit and intentional.
+                                  </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                  {/* Role */}
+                                  <div className="rounded-xl border border-border/60 bg-white p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold text-gray-900">Primary role</div>
+                                        <div className="mt-1 text-sm text-muted-foreground">
+                                          Controls system access. Changing role has no side effects.
+                                        </div>
+                                      </div>
+                                      {memberRole && (
+                                        <Badge className="rounded-md px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border-0">
+                                          {memberRole}
+                                        </Badge>
+                                      )}
+                                    </div>
+
+                                    <div className="mt-4">
+                                      <Select
+                                        value={memberRole ?? "member"}
+                                        onValueChange={(value) => updateMemberRole(value as UserRole)}
+                                        disabled={!isStaffViewer || isUpdatingRole}
+                                      >
+                                        <SelectTrigger className="w-full h-10 bg-white border-gray-300">
+                                          <SelectValue placeholder="Select role" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {ROLE_OPTIONS.map((opt) => (
+                                            <SelectItem key={opt.value} value={opt.value}>
+                                              {opt.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      {!isStaffViewer && (
+                                        <div className="mt-2 text-xs text-muted-foreground">
+                                          Only admins/owners can change roles.
+                                        </div>
+                                      )}
+                                      {roleUpdateError && (
+                                        <div className="mt-2 text-xs text-red-700">{roleUpdateError}</div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Instructor */}
+                                  <div className="rounded-xl border border-border/60 bg-white p-4">
+                                    <div className="text-sm font-semibold text-gray-900">
+                                      Instructor profile
+                                    </div>
+                                    <div className="mt-1 text-sm text-muted-foreground">
+                                      Domain profile for rostering and instructor operational data.
+                                    </div>
+
+                                    <div className="mt-4">
+                                      {hasInstructorProfile ? (
+                                        <div className="text-sm text-green-800">
+                                          Instructor profile configured
+                                          {memberRole && (
+                                            <span className="text-gray-600"> (primary role: {memberRole})</span>
+                                          )}
+                                        </div>
+                                      ) : isInstructorRole ? (
+                                        <div className="text-sm text-amber-800">
+                                          This user is marked as an Instructor but does not yet have an Instructor profile.
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-gray-700">
+                                          No instructor profile configured yet.
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                                      {!hasInstructorProfile ? (
+                                        <Button
+                                          onClick={() => setShowCreateInstructorDialog(true)}
+                                          disabled={!isStaffViewer}
+                                          className="bg-amber-600 hover:bg-amber-700 text-white"
+                                        >
+                                          Create Instructor Profile
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          variant="outline"
+                                          onClick={() => router.push(`/staff/instructors/${member.instructor!.id}`)}
+                                        >
+                                          Edit Instructor Profile
+                                        </Button>
+                                      )}
+                                      {!isStaffViewer && (
+                                        <div className="text-xs text-muted-foreground">
+                                          Only admins/owners can create instructor profiles.
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        </Tabs.Content>
+
                         <Tabs.Content value="contact">
-                          <MemberContactDetails memberId={memberId} member={member} />
+                          <MemberContactDetails 
+                            memberId={memberId} 
+                            member={member} 
+                            onDirtyChange={setIsContactDirty}
+                            onSavingChange={setIsContactSaving}
+                            onUndoRef={contactUndoRef}
+                            formId="contact-details-form"
+                          />
                         </Tabs.Content>
 
                         <Tabs.Content value="pilot">
-                          <MemberPilotDetails memberId={memberId} />
+                          <MemberPilotDetails 
+                            memberId={memberId} 
+                            onDirtyChange={setIsPilotDirty}
+                            onSavingChange={setIsPilotSaving}
+                            onUndoRef={pilotUndoRef}
+                            formId="pilot-details-form"
+                          />
                         </Tabs.Content>
 
                         <Tabs.Content value="memberships">
@@ -451,10 +652,7 @@ export default function MemberDetailPage() {
                         </Tabs.Content>
 
                         <Tabs.Content value="training">
-                          <div>
-                            <h2 className="text-lg font-semibold mb-4">Training</h2>
-                            <p className="text-muted-foreground">Training information coming soon...</p>
-                          </div>
+                          <MemberTrainingTab memberId={memberId} />
                         </Tabs.Content>
 
                         <Tabs.Content value="history">
@@ -469,6 +667,26 @@ export default function MemberDetailPage() {
                 </Card>
           </div>
         </div>
+        {activeTab === "contact" && (
+          <StickyFormActions
+            formId="contact-details-form"
+            isDirty={isContactDirty}
+            isSaving={isContactSaving}
+            onUndo={() => contactUndoRef.current?.()}
+            message="You have unsaved contact details."
+            saveLabel="Save Changes"
+          />
+        )}
+        {activeTab === "pilot" && (
+          <StickyFormActions
+            formId="pilot-details-form"
+            isDirty={isPilotDirty}
+            isSaving={isPilotSaving}
+            onUndo={() => pilotUndoRef.current?.()}
+            message="You have unsaved pilot details."
+            saveLabel="Save Changes"
+          />
+        )}
       </SidebarInset>
     </SidebarProvider>
   )

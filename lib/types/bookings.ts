@@ -139,6 +139,18 @@ export interface BookingWithRelations extends Booking {
       email: string
     } | null
   } | null
+  lesson_progress?: {
+    id: string
+    instructor_comments: string | null
+    lesson_highlights: string | null
+    areas_for_improvement: string | null
+    airmanship: string | null
+    focus_next_lesson: string | null
+    safety_concerns: string | null
+    weather_conditions: string | null
+    status: 'pass' | 'not yet competent' | null
+    attempt: number | null
+  } | null
 }
 
 export interface BookingsFilter {

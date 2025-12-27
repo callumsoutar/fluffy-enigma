@@ -191,6 +191,15 @@ export const bookingUpdateSchema = z.object({
   solo_time: numericSchema,
   total_hours_start: numericSchema,
   total_hours_end: numericSchema,
+  // Lesson progress fields
+  instructor_comments: z.string().max(2000).optional().nullable(),
+  lesson_highlights: z.string().max(2000).optional().nullable(),
+  areas_for_improvement: z.string().max(2000).optional().nullable(),
+  airmanship: z.string().max(2000).optional().nullable(),
+  focus_next_lesson: z.string().max(2000).optional().nullable(),
+  safety_concerns: z.string().max(2000).optional().nullable(),
+  weather_conditions: z.string().max(2000).optional().nullable(),
+  lesson_status: z.enum(['pass', 'not yet competent']).optional().nullable(),
   // Cancellation fields
   cancellation_category_id: z.union([uuidSchema, z.null()]).optional(),
   cancellation_reason: z.string().max(500).optional().nullable(),
@@ -228,6 +237,16 @@ export const bookingCheckinApproveSchema = z.object({
   solo_end_tach: numericSchema,
   dual_time: numericSchema,
   solo_time: numericSchema,
+  
+  // Lesson progress fields
+  instructor_comments: z.string().max(2000).optional().nullable(),
+  lesson_highlights: z.string().max(2000).optional().nullable(),
+  areas_for_improvement: z.string().max(2000).optional().nullable(),
+  airmanship: z.string().max(2000).optional().nullable(),
+  focus_next_lesson: z.string().max(2000).optional().nullable(),
+  safety_concerns: z.string().max(2000).optional().nullable(),
+  weather_conditions: z.string().max(2000).optional().nullable(),
+  lesson_status: z.enum(['pass', 'not yet competent']).optional().nullable(),
 
   billing_basis: z.enum(['hobbs', 'tacho', 'airswitch']),
   billing_hours: z.coerce.number().positive(),

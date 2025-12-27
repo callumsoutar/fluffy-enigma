@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { userHasAnyRole } from '@/lib/auth/roles'
 import type { AircraftFilter, AircraftWithType } from '@/lib/types/aircraft'
+import { aircraftCreateSchema } from '@/lib/validation/aircraft'
 
 /**
  * GET /api/aircraft
@@ -127,4 +128,114 @@ export async function GET(request: NextRequest) {
     aircraft: filteredAircraft,
     total: filteredAircraft.length,
   })
+}
+
+/**
+ * POST /api/aircraft
+ *
+ * Create an aircraft record.
+ * Requires authentication and instructor/admin/owner role.
+ */
+export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  if (!hasAccess) {
+    return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 })
+  }
+
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 })
+  }
+
+  const parsed = aircraftCreateSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid request data', details: parsed.error.issues },
+      { status: 400 }
+    )
+  }
+
+  const v = parsed.data
+
+  // Normalize empty strings to null for nullable fields
+  const aircraftToInsert = {
+    registration: v.registration.trim(),
+    type: v.type.trim(),
+    model: v.model && v.model.trim() ? v.model.trim() : null,
+    manufacturer: v.manufacturer && v.manufacturer.trim() ? v.manufacturer.trim() : null,
+    year_manufactured: v.year_manufactured ?? null,
+    status: v.status && v.status.trim() ? v.status.trim() : 'active',
+    capacity: v.capacity ?? null,
+    on_line: v.on_line ?? true,
+    for_ato: v.for_ato ?? false,
+    prioritise_scheduling: v.prioritise_scheduling ?? false,
+    aircraft_image_url: v.aircraft_image_url && v.aircraft_image_url.trim() ? v.aircraft_image_url.trim() : null,
+    total_hours: v.total_hours ?? null,
+    current_tach: v.current_tach ?? 0,
+    current_hobbs: v.current_hobbs ?? 0,
+    record_tacho: v.record_tacho ?? false,
+    record_hobbs: v.record_hobbs ?? false,
+    record_airswitch: v.record_airswitch ?? false,
+    fuel_consumption: v.fuel_consumption ?? null,
+    total_time_method: v.total_time_method ?? null,
+    aircraft_type_id: v.aircraft_type_id ?? null,
+    notes: v.notes && v.notes.trim() ? v.notes.trim() : null,
+  }
+
+  const { data: aircraft, error } = await supabase
+    .from('aircraft')
+    .insert(aircraftToInsert)
+    .select(`
+      *,
+      aircraft_type:aircraft_types (
+        id,
+        name,
+        category,
+        description,
+        created_at,
+        updated_at
+      )
+    `)
+    .single()
+
+  if (error) {
+    if ((error as { code?: string })?.code === '23505') {
+      return NextResponse.json(
+        { error: 'An aircraft with that registration already exists.' },
+        { status: 409 }
+      )
+    }
+    console.error('Error creating aircraft:', error)
+    return NextResponse.json({ error: 'Failed to create aircraft' }, { status: 500 })
+  }
+
+  // Handle case where aircraft_type might be an array or single object
+  const aircraftRaw = aircraft as Record<string, unknown> & { aircraft_type?: unknown }
+  const aircraftTypeRaw = aircraftRaw.aircraft_type
+  const aircraftType = Array.isArray(aircraftTypeRaw)
+    ? aircraftTypeRaw[0]
+    : aircraftTypeRaw
+
+  const aircraftWithType: AircraftWithType = {
+    ...(aircraft as Record<string, unknown>),
+    aircraft_type: aircraftType ? {
+      id: (aircraftType as Record<string, unknown>).id as string,
+      name: (aircraftType as Record<string, unknown>).name as string,
+      category: (aircraftType as Record<string, unknown>).category as string,
+      description: (aircraftType as Record<string, unknown>).description as string | null,
+      created_at: (aircraftType as Record<string, unknown>).created_at as string,
+      updated_at: (aircraftType as Record<string, unknown>).updated_at as string,
+    } : null,
+  } as AircraftWithType
+
+  return NextResponse.json({ aircraft: aircraftWithType }, { status: 201 })
 }

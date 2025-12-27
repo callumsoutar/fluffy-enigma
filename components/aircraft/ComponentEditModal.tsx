@@ -241,7 +241,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                         onChange={e => setName(e.target.value)} 
                         placeholder="e.g. 100 Hour Inspection" 
                         required 
-                        className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                        className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
                       />
                     </div>
                   </div>
@@ -250,7 +250,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       Component Type <span className="text-destructive">*</span>
                     </label>
                     <Select value={componentType} onValueChange={v => setComponentType(v as ComponentType)}>
-                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                         <div className="flex items-center gap-2">
                           <Settings className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <SelectValue placeholder="Select type" />
@@ -258,7 +258,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       </SelectTrigger>
                       <SelectContent className="rounded-xl border-slate-200 shadow-xl">
                         {COMPONENT_TYPE_OPTIONS.map((type) => (
-                          <SelectItem key={type} value={type} className="rounded-lg py-2 text-xs">
+                          <SelectItem key={type} value={type} className="rounded-lg py-2 text-base">
                             {type.charAt(0).toUpperCase() + type.slice(1).replace("_", " ")}
                           </SelectItem>
                         ))}
@@ -274,7 +274,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       value={description} 
                       onChange={e => setDescription(e.target.value)} 
                       placeholder="Add any notes or details..." 
-                      className="rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[80px] resize-none" 
+                      className="rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[80px] resize-none" 
                     />
                   </div>
                 </div>
@@ -295,7 +295,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                         type="number" 
                         value={lastCompletedHours ?? ""} 
                         onChange={e => setLastCompletedHours(e.target.value ? Number(e.target.value) : null)} 
-                        className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                        className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
                       />
                     </div>
                   </div>
@@ -306,7 +306,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                         <Button
                           variant="outline"
                           className={cn(
-                            "h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0",
+                            "h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0",
                             !lastCompletedDate && "text-slate-400"
                           )}
                         >
@@ -338,7 +338,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                           type="number" 
                           value={currentDueHours ?? ""} 
                           onChange={e => setCurrentDueHours(e.target.value ? Number(e.target.value) : null)} 
-                          className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0" 
+                          className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0" 
                         />
                       </div>
                     </div>
@@ -349,7 +349,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                           <Button
                             variant="outline"
                             className={cn(
-                              "h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0",
+                              "h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0",
                               !currentDueDate && "text-slate-400"
                             )}
                           >
@@ -376,7 +376,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       type="button"
                       onClick={handleExtend}
                       disabled={loadingExtend || !component || component.extension_limit_hours !== null}
-                      className="h-9 flex-1 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100 border-none shadow-none"
+                      className="h-9 flex-1 rounded-xl bg-indigo-50 text-indigo-700 text-sm font-bold hover:bg-indigo-100 border-none shadow-none"
                     >
                       {loadingExtend ? (
                         <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
@@ -391,7 +391,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                         variant="destructive"
                         disabled={revertLoading}
                         onClick={() => setShowRevertConfirm(true)}
-                        className="h-9 flex-1 rounded-xl text-xs font-bold shadow-none"
+                        className="h-9 flex-1 rounded-xl text-sm font-bold shadow-none"
                       >
                         {revertLoading ? (
                           <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
@@ -445,7 +445,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       Interval Type <span className="text-destructive">*</span>
                     </label>
                     <Select value={intervalType} onValueChange={v => setIntervalType(v as IntervalType)}>
-                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                         <div className="flex items-center gap-2">
                           <Repeat className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <SelectValue placeholder="Select interval" />
@@ -453,7 +453,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       </SelectTrigger>
                       <SelectContent className="rounded-xl border-slate-200 shadow-xl">
                         {INTERVAL_TYPE_OPTIONS.map((type) => (
-                          <SelectItem key={type} value={type} className="rounded-lg py-2 text-xs">
+                          <SelectItem key={type} value={type} className="rounded-lg py-2 text-base">
                             {type.charAt(0) + type.slice(1).toLowerCase()}
                           </SelectItem>
                         ))}
@@ -474,7 +474,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                             onChange={e => setIntervalHours(e.target.value ? Number(e.target.value) : null)} 
                             placeholder="e.g. 100" 
                             required={intervalType === "HOURS" || intervalType === "BOTH"}
-                            className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                            className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
                           />
                         </div>
                       </div>
@@ -492,7 +492,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                             onChange={e => setIntervalDays(e.target.value ? Number(e.target.value) : null)} 
                             placeholder="e.g. 365" 
                             required={intervalType === "CALENDAR" || intervalType === "BOTH"}
-                            className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                            className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
                           />
                         </div>
                       </div>
@@ -513,7 +513,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       Status <span className="text-destructive">*</span>
                     </label>
                     <Select value={status} onValueChange={v => setStatus(v as ComponentStatus)}>
-                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                         <div className="flex items-center gap-2">
                           <Settings className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <SelectValue placeholder="Select status" />
@@ -521,7 +521,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       </SelectTrigger>
                       <SelectContent className="rounded-xl border-slate-200 shadow-xl">
                         {STATUS_OPTIONS.map((statusOption) => (
-                          <SelectItem key={statusOption} value={statusOption} className="rounded-lg py-2 text-xs">
+                          <SelectItem key={statusOption} value={statusOption} className="rounded-lg py-2 text-base">
                             {statusOption.charAt(0).toUpperCase() + statusOption.slice(1)}
                           </SelectItem>
                         ))}
@@ -531,7 +531,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Priority</label>
                     <Select value={priority || ""} onValueChange={v => setPriority(v)}>
-                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                         <div className="flex items-center gap-2">
                           <Tag className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <SelectValue placeholder="Select priority" />
@@ -539,7 +539,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       </SelectTrigger>
                       <SelectContent className="rounded-xl border-slate-200 shadow-xl">
                         {PRIORITY_OPTIONS.map((p) => (
-                          <SelectItem key={p} value={p} className="rounded-lg py-2 text-xs">
+                          <SelectItem key={p} value={p} className="rounded-lg py-2 text-base">
                             {p.charAt(0) + p.slice(1).toLowerCase()}
                           </SelectItem>
                         ))}
@@ -563,7 +563,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                       value={notes} 
                       onChange={e => setNotes(e.target.value)} 
                       placeholder="Any additional notes..." 
-                      className="rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[100px] resize-none" 
+                      className="rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[100px] resize-none" 
                     />
                   </div>
                 </div>
@@ -578,7 +578,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                 type="button" 
                 variant="outline" 
                 onClick={() => onOpenChange(false)} 
-                className="h-10 flex-1 rounded-xl border-slate-200 text-xs font-bold shadow-none hover:bg-slate-50"
+                className="h-10 flex-1 rounded-xl border-slate-200 text-sm font-bold shadow-none hover:bg-slate-50"
               >
                 Cancel
               </Button>
@@ -586,7 +586,7 @@ const ComponentEditModal: React.FC<ComponentEditModalProps> = ({ open, onOpenCha
                 type="submit" 
                 onClick={handleSave}
                 disabled={!component}
-                className="h-10 flex-[1.4] rounded-xl bg-slate-900 text-xs font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
+                className="h-10 flex-[1.4] rounded-xl bg-slate-900 text-sm font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
               >
                 Save Changes
               </Button>

@@ -350,6 +350,7 @@ export default function BookingCheckoutPage() {
   const [openActualEndDate, setOpenActualEndDate] = React.useState(false)
   const [openEtaDate, setOpenEtaDate] = React.useState(false)
   const [isInitialized, setIsInitialized] = React.useState(false)
+  const [isCheckingOut, setIsCheckingOut] = React.useState(false)
   
   // Use a ref to track if we're currently initializing (prevents effects from running during init)
   const isInitializingRef = React.useRef(false)
@@ -649,12 +650,21 @@ export default function BookingCheckoutPage() {
       return bookingResult
     },
     onSuccess: async () => {
+      // Simulate a delay for the loading screen (minimum 2 seconds for UX)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
       await queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
       await queryClient.invalidateQueries({ queryKey: ["bookings"] })
-      toast.success("Booking updated successfully")
-      // Don't redirect - stay on checkout page so user can continue editing
+      toast.success("Flight checked out successfully!")
+      
+      // Refresh the page to reset form state and show updated booking
+      router.refresh()
+      
+      // Clear checking out state
+      setIsCheckingOut(false)
     },
     onError: (error) => {
+      setIsCheckingOut(false)
       toast.error(getErrorMessage(error))
     },
   })
@@ -665,6 +675,12 @@ export default function BookingCheckoutPage() {
   
   // Create a properly typed submit handler
   const handleFormSubmit = handleSubmit(onSubmit)
+  
+  // Handle Check Out button click - always submits form
+  const handleCheckOut = () => {
+    setIsCheckingOut(true)
+    handleFormSubmit()
+  }
 
   const handleUndo = () => {
     if (!booking) return
@@ -842,19 +858,17 @@ export default function BookingCheckoutPage() {
 
             {/* Main Content */}
             {/* Calculate bottom padding based on sticky bar height on mobile:
-                - 3 stacked buttons (hasChanges + confirmed/flying): ~208px (144px buttons + 32px gaps + 32px padding)
-                - 2 stacked buttons (hasChanges only): ~144px (96px buttons + 16px gap + 32px padding)  
-                - 1 button (Check Out/Check In only): ~80px (48px button + 32px padding)
-                Add extra padding (40-50px) for comfortable scrolling */}
+                - When status is 'confirmed': only Check Out button shows (~140px)
+                - When status is 'flying' with changes: 3 stacked buttons (~260px)
+                - When status is 'flying' no changes: only Check In button shows (~140px)
+                Add extra padding (40-60px) for comfortable scrolling */}
             <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 ${
               isMobile 
-                ? hasChanges && (booking?.status === 'confirmed' || booking?.status === 'flying')
-                  ? "pt-8 pb-[260px]" // 3 stacked buttons: 208px + 52px extra
-                  : hasChanges
-                    ? "pt-8 pb-[200px]" // 2 stacked buttons: 144px + 56px extra
-                    : (booking?.status === 'confirmed' || booking?.status === 'flying')
-                      ? "pt-8 pb-[140px]" // 1 button: 80px + 60px extra
-                      : "pt-8 pb-24" // Fallback: no buttons or minimal
+                ? hasChanges && booking?.status === 'flying'
+                  ? "pt-8 pb-[260px]" // 3 stacked buttons (Save/Undo/Check In): 208px + 52px extra
+                  : (booking?.status === 'confirmed' || booking?.status === 'flying')
+                    ? "pt-8 pb-[140px]" // 1 button (Check Out or Check In): 80px + 60px extra
+                    : "pt-8 pb-24" // Fallback: no buttons or minimal
                 : "pt-10 pb-28"
             }`}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
@@ -869,9 +883,6 @@ export default function BookingCheckoutPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-6 space-y-6">
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Please fill out all the details for this flight, including booking times, meter readings, and any other relevant information. All fields marked with required indicators must be completed before checking out.
-                      </p>
                       <form onSubmit={handleFormSubmit}>
                         <FieldSet className="w-full max-w-full">
                           <FieldGroup className="w-full max-w-full">
@@ -1432,6 +1443,8 @@ export default function BookingCheckoutPage() {
     </SidebarProvider>
     
     {/* Sticky Bottom Bar - Save Changes & Check Out */}
+    {/* When status is 'confirmed', only show Check Out button (no Save/Undo) */}
+    {/* When status is 'flying', show Save/Undo (if dirty) + Check In button */}
     <div 
       className="fixed border-t shadow-xl bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800"
       role="banner"
@@ -1456,16 +1469,17 @@ export default function BookingCheckoutPage() {
       }}
     >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-          {/* On mobile: stack vertically when all 3 buttons are visible, otherwise horizontal */}
+          {/* On mobile: stack vertically when multiple buttons, otherwise horizontal */}
           {/* On desktop: always horizontal */}
           <div className={`flex items-center gap-4 ${
-            isMobile && hasChanges && booking?.status === 'confirmed' 
+            isMobile && hasChanges && booking?.status === 'flying'
               ? 'flex-col' 
               : isMobile 
                 ? 'flex-col sm:flex-row sm:justify-end' 
                 : 'flex-row justify-end'
           }`}>
-            {hasChanges && (
+            {/* Only show Save/Undo when status is 'flying' (not 'confirmed') */}
+            {hasChanges && booking?.status !== 'confirmed' && (
               <>
                 <Button
                   variant="outline"
@@ -1473,7 +1487,7 @@ export default function BookingCheckoutPage() {
                   onClick={handleUndo}
                   disabled={checkoutMutation.isPending}
                   className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${
-                    isMobile && hasChanges && booking?.status === 'confirmed'
+                    isMobile && hasChanges && booking?.status === 'flying'
                       ? 'w-full'
                       : isMobile
                         ? 'w-full sm:w-auto sm:flex-1 sm:max-w-[200px]'
@@ -1488,7 +1502,7 @@ export default function BookingCheckoutPage() {
                   onClick={handleFormSubmit}
                   disabled={checkoutMutation.isPending}
                   className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${
-                    isMobile && hasChanges && booking?.status === 'confirmed'
+                    isMobile && hasChanges && booking?.status === 'flying'
                       ? 'w-full'
                       : isMobile
                         ? 'w-full sm:w-auto sm:flex-1 sm:max-w-[200px]'
@@ -1504,18 +1518,16 @@ export default function BookingCheckoutPage() {
             {booking?.status === 'confirmed' && (
               <Button
                 size="lg"
-                onClick={handleFormSubmit}
-                disabled={checkoutMutation.isPending}
+                onClick={handleCheckOut}
+                disabled={checkoutMutation.isPending || isCheckingOut}
                 className={`h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg hover:shadow-xl transition-all ${
-                  isMobile && hasChanges && booking?.status === 'confirmed'
-                    ? 'w-full'
-                    : isMobile
-                      ? 'w-full sm:w-auto sm:flex-1 sm:max-w-[200px]'
-                      : 'px-8 min-w-[160px]'
+                  isMobile
+                    ? 'w-full sm:w-auto sm:flex-1 sm:max-w-[200px]'
+                    : 'px-8 min-w-[160px]'
                 }`}
               >
                 <IconPlane className="h-4 w-4 mr-2" />
-                {checkoutMutation.isPending ? "Checking Out..." : "Check Out"}
+                {checkoutMutation.isPending || isCheckingOut ? "Checking Out..." : "Check Out"}
               </Button>
             )}
             {/* Show Check In button if booking status is 'flying' */}
@@ -1538,6 +1550,63 @@ export default function BookingCheckoutPage() {
           </div>
         </div>
       </div>
+    
+    {/* Loading Screen - Shows when checking out */}
+    {isCheckingOut && (
+      <div 
+        className="fixed inset-0 z-[100000] flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-indigo-950 dark:to-purple-950"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="checkout-loading-title"
+      >
+        <div className="relative flex flex-col items-center gap-8 p-8">
+          {/* Animated Plane Icon */}
+          <div className="relative">
+            {/* Outer ring - pulsing */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-32 w-32 rounded-full bg-primary/20 animate-ping" style={{ animationDuration: '2s' }} />
+            </div>
+            
+            {/* Middle ring - rotating */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-24 w-24 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
+            </div>
+            
+            {/* Plane icon */}
+            <div className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full bg-primary shadow-2xl">
+              <IconPlane className="h-12 w-12 text-primary-foreground animate-bounce" style={{ animationDuration: '1.5s' }} />
+            </div>
+          </div>
+          
+          {/* Text */}
+          <div className="text-center space-y-3">
+            <h2 
+              id="checkout-loading-title"
+              className="text-3xl font-bold text-foreground animate-pulse"
+            >
+              Checking Flight Out
+            </h2>
+            <p className="text-lg text-muted-foreground">
+              Preparing aircraft and updating flight records...
+            </p>
+          </div>
+          
+          {/* Progress dots */}
+          <div className="flex gap-2">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-3 w-3 rounded-full bg-primary animate-bounce"
+                style={{
+                  animationDelay: `${i * 0.15}s`,
+                  animationDuration: '0.6s'
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
     </>
   )
 }

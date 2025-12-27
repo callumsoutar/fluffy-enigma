@@ -2,12 +2,11 @@
 
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { DollarSign, FileText, Loader2 } from "lucide-react"
+import { DollarSign, Loader2 } from "lucide-react"
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { MemberWithRelations } from "@/lib/types/members"
 import type { AccountStatementEntry, AccountStatementResponse } from "@/lib/types/account-statement"
-import type { InvoiceWithRelations } from "@/lib/types/invoices"
 
 export type MemberAccountTabProps = {
   memberId: string
@@ -51,13 +50,6 @@ async function fetchAccountStatement(memberId: string): Promise<AccountStatement
   return payload as AccountStatementResponse
 }
 
-async function fetchOutstandingInvoices(memberId: string): Promise<InvoiceWithRelations[]> {
-  const res = await fetch(`/api/invoices?user_id=${memberId}&status=pending,overdue`)
-  const payload = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(payload?.error || "Failed to load invoices")
-  return (Array.isArray(payload?.invoices) ? payload.invoices : []) as InvoiceWithRelations[]
-}
-
 export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
   const statementQuery = useQuery({
     queryKey: ["account-statement", memberId],
@@ -66,17 +58,8 @@ export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
     refetchOnWindowFocus: true,
   })
 
-  const invoicesQuery = useQuery({
-    queryKey: ["member-outstanding-invoices", memberId],
-    queryFn: () => fetchOutstandingInvoices(memberId),
-    enabled: !!memberId,
-    refetchOnWindowFocus: true,
-  })
-
   const statement = statementQuery.data?.statement ?? []
   const closingBalance = statementQuery.data?.closing_balance ?? 0
-
-  const outstandingInvoicesCount = invoicesQuery.data?.length ?? 0
 
   // Pagination (client-side for now; easy to move server-side later)
   const [page, setPage] = React.useState(0)
@@ -92,8 +75,8 @@ export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
   return (
     <div className="flex flex-col gap-8">
       {/* Summary bar */}
-      <div className="flex flex-col md:flex-row items-stretch gap-4 md:gap-0 bg-gray-50 rounded-lg p-4 md:p-6 border border-gray-100">
-        <div className="flex-1 flex flex-col items-center justify-center py-4 md:py-0">
+      <div className="flex flex-col items-stretch bg-gray-50 rounded-lg p-4 md:p-6 border border-gray-100">
+        <div className="flex flex-col items-center justify-center py-4">
           <DollarSign className="w-6 h-6 mb-2 text-green-500" />
           <div className="text-xs text-muted-foreground mb-2">Account Balance</div>
           {!member || statementQuery.isLoading ? (
@@ -117,22 +100,6 @@ export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
                 </>
               )}
             </div>
-          )}
-        </div>
-
-        <div className="hidden md:block w-px bg-gray-200 mx-2" />
-
-        <div className="flex-1 flex flex-col items-center justify-center py-4 md:py-0">
-          <FileText className="w-6 h-6 mb-2 text-orange-500" />
-          <div className="text-xs text-muted-foreground mb-2">Outstanding Invoices</div>
-          {invoicesQuery.isLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground my-2" />
-          ) : invoicesQuery.isError ? (
-            <div className="text-destructive text-sm">
-              {invoicesQuery.error instanceof Error ? invoicesQuery.error.message : "Failed to load invoices"}
-            </div>
-          ) : (
-            <div className="text-2xl md:text-3xl font-bold text-orange-600">{outstandingInvoicesCount}</div>
           )}
         </div>
       </div>

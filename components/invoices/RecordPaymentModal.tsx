@@ -6,10 +6,8 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -29,8 +27,12 @@ import {
   Landmark,
   Receipt,
   Wallet,
+  CalendarIcon,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import { roundToTwoDecimals } from "@/lib/invoice-calculations"
+import { cn } from "@/lib/utils"
 
 type PaymentMethod =
   | "cash"
@@ -98,6 +100,7 @@ export default function RecordPaymentModal({
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState(false)
   const [receiptId, setReceiptId] = React.useState<string | null>(null)
+  const [showNotes, setShowNotes] = React.useState(false)
 
   const willFullyPay = amount > 0 && computedRemaining > 0 && roundToTwoDecimals(amount) === roundToTwoDecimals(computedRemaining)
 
@@ -111,6 +114,7 @@ export default function RecordPaymentModal({
     setError(null)
     setSuccess(false)
     setReceiptId(null)
+    setShowNotes(false)
   }, [computedRemaining])
 
   React.useEffect(() => {
@@ -182,195 +186,266 @@ export default function RecordPaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-xl flex flex-col justify-between rounded-2xl p-0 overflow-visible">
-        <DialogHeader className="px-6 pt-6 pb-3 border-b flex flex-row items-center gap-3">
-          <span className="bg-green-100 text-green-700 rounded-full p-2 ring-1 ring-green-200">
-            <BadgeCheck className="w-6 h-6" />
-          </span>
-          <div className="flex-1">
-            <DialogTitle className="text-xl font-bold">Record Payment</DialogTitle>
-            <DialogDescription className="text-sm mt-1">
-              Apply a payment to this invoice (saved atomically with a ledger transaction).
-            </DialogDescription>
-          </div>
-        </DialogHeader>
-
-        {/* Invoice summary */}
-        <div className="px-6 py-4 bg-muted/30 border-b">
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <div className="text-xs text-muted-foreground">Invoice</div>
-              <div className="text-base font-semibold tracking-tight">
-                {invoiceNumber || `#${invoiceId.slice(0, 8)}`}
+      <DialogContent
+        className={cn(
+          "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden",
+          "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[720px]",
+          "top-[calc(env(safe-area-inset-top)+1rem)] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]",
+          "h-[calc(100dvh-2rem)] sm:h-auto sm:max-h-[calc(100dvh-4rem)]"
+        )}
+      >
+        <div className="flex h-full min-h-0 flex-col bg-white">
+          <DialogHeader className="px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 text-left sm:pt-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-600">
+                <BadgeCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-bold tracking-tight text-slate-900">
+                  Record Payment
+                </DialogTitle>
+                <DialogDescription className="mt-0.5 text-sm text-slate-500">
+                  Apply a payment to this invoice. Required fields are marked with{" "}
+                  <span className="text-destructive">*</span>.
+                </DialogDescription>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">Remaining balance</div>
-              <div className="text-lg font-bold text-green-700">{formatCurrency(computedRemaining)}</div>
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className="rounded-lg border bg-background px-3 py-2">
-              <div className="text-xs text-muted-foreground">Total</div>
-              <div className="font-medium">{formatCurrency(totalAmount ?? null)}</div>
-            </div>
-            <div className="rounded-lg border bg-background px-3 py-2">
-              <div className="text-xs text-muted-foreground">Paid</div>
-              <div className="font-medium">{formatCurrency(totalPaid ?? 0)}</div>
-            </div>
-          </div>
-        </div>
+          </DialogHeader>
 
-        {success ? (
-          <div className="flex flex-col items-center justify-center py-12 px-6">
-            <div className="bg-green-100 text-green-700 rounded-full p-4 mb-4 ring-1 ring-green-200">
-              <CheckCircle2 className="w-12 h-12" />
-            </div>
-            <h3 className="text-xl font-bold text-green-700 mb-2">Payment recorded</h3>
-            <p className="text-sm text-muted-foreground text-center mb-4">
-              {formatCurrency(amount)} has been applied to this invoice.
-            </p>
-            {receiptId && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-white border border-green-200 rounded-lg">
-                <Receipt className="w-4 h-4 text-green-700" />
-                <div className="text-left">
-                  <div className="text-xs text-muted-foreground">Receipt</div>
-                  <div className="font-mono font-semibold text-green-800">{receiptId}</div>
+          {success ? (
+            <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
+              <div className="bg-green-100 text-green-700 rounded-full p-4 mb-4 ring-1 ring-green-200">
+                <CheckCircle2 className="w-12 h-12" />
+              </div>
+              <h3 className="text-xl font-bold text-green-700 mb-2">Payment recorded</h3>
+              <p className="text-sm text-slate-500 text-center mb-4">
+                {formatCurrency(amount)} has been applied to this invoice.
+              </p>
+              {receiptId && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-white border border-green-200 rounded-xl">
+                  <Receipt className="w-4 h-4 text-green-700" />
+                  <div className="text-left">
+                    <div className="text-xs text-slate-500">Receipt</div>
+                    <div className="font-mono font-semibold text-green-800">{receiptId}</div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <form className="flex flex-col gap-4 px-6 py-5" onSubmit={onSubmit}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Payment Amount <span className="text-destructive">*</span>
-                </label>
-                <div className="relative flex items-center">
-                  <span className="pointer-events-none select-none absolute left-3 text-muted-foreground text-lg">$</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={amount === 0 ? "" : String(amount)}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      if (value === "" || value === ".") {
-                        setAmount(0)
-                        return
-                      }
-                      const numValue = parseFloat(value)
-                      setAmount(Number.isFinite(numValue) ? numValue : 0)
-                    }}
-                    className="pl-8 pr-3 py-2 text-lg font-semibold h-11"
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Max: {formatCurrency(computedRemaining)}</span>
-                  <button
-                    type="button"
-                    className="underline underline-offset-4 hover:text-foreground"
-                    onClick={() => setAmount(roundToTwoDecimals(computedRemaining))}
-                    disabled={loading}
-                  >
-                    Use full balance
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Payment Method <span className="text-destructive">*</span>
-                </label>
-                <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)} disabled={loading}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select method..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {paymentMethods.map((pm) => (
-                      <SelectItem key={pm.value} value={pm.value}>
-                        <span className="flex items-center gap-2">
-                          <pm.icon className="h-4 w-4" />
-                          <span>{pm.label}</span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              )}
             </div>
+          ) : (
+            <form onSubmit={onSubmit} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 pb-6">
+              <div className="space-y-6">
+                {/* Invoice Summary */}
+                <section>
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                    <span className="text-xs font-semibold tracking-tight text-slate-900">Invoice Summary</span>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50/50 border border-slate-100 p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-6">
+                      <div className="flex-1">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Invoice</div>
+                        <div className="text-base font-semibold tracking-tight text-slate-900">
+                          {invoiceNumber || `#${invoiceId.slice(0, 8)}`}
+                        </div>
+                      </div>
+                      <div className="flex-1 sm:text-right">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Remaining Balance</div>
+                        <div className="text-xl sm:text-lg font-bold text-green-700">{formatCurrency(computedRemaining)}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total</div>
+                        <div className="text-sm sm:text-base font-medium text-slate-900">{formatCurrency(totalAmount ?? null)}</div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Paid</div>
+                        <div className="text-sm sm:text-base font-medium text-slate-900">{formatCurrency(totalPaid ?? 0)}</div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Reference Number</label>
-                <Input
-                  placeholder="Transaction ID, check #, etc."
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Payment Date</label>
-                <Input
-                  type="date"
-                  value={paidDate}
-                  onChange={(e) => setPaidDate(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
+                {/* Payment Details */}
+                <section>
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                    <span className="text-xs font-semibold tracking-tight text-slate-900">Payment Details</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                        Payment Amount <span className="text-destructive">*</span>
+                      </label>
+                      <div className="relative flex items-center">
+                        <DollarSign className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                        <Input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={amount === 0 ? "" : String(amount)}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === "" || value === ".") {
+                              setAmount(0)
+                              return
+                            }
+                            const numValue = parseFloat(value)
+                            setAmount(Number.isFinite(numValue) ? numValue : 0)
+                          }}
+                          className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                          required
+                          disabled={loading}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500">
+                        <span>Max: {formatCurrency(computedRemaining)}</span>
+                        <button
+                          type="button"
+                          className="underline underline-offset-4 hover:text-slate-900 transition-colors"
+                          onClick={() => setAmount(roundToTwoDecimals(computedRemaining))}
+                          disabled={loading}
+                        >
+                          Use full balance
+                        </button>
+                      </div>
+                    </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Notes</label>
-              <Textarea
-                placeholder="Optional notes about this payment..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                disabled={loading}
-                className="min-h-[90px]"
-              />
-            </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                        Payment Method <span className="text-destructive">*</span>
+                      </label>
+                      <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)} disabled={loading}>
+                        <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                          <SelectValue placeholder="Select method" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-slate-200 shadow-xl">
+                          {paymentMethods.map((pm) => (
+                            <SelectItem key={pm.value} value={pm.value} className="rounded-lg py-2 text-base">
+                              <span className="flex items-center gap-2">
+                                <pm.icon className="h-3.5 w-3.5" />
+                                <span>{pm.label}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </section>
 
-            {error && (
-              <div className="text-destructive text-sm p-3 bg-destructive/10 rounded-md border border-destructive/20">
-                {error}
-              </div>
-            )}
+                {/* Additional Information */}
+                <section>
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                    <span className="text-xs font-semibold tracking-tight text-slate-900">Additional Information</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Reference Number</label>
+                      <div className="relative">
+                        <Receipt className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                        <Input
+                          placeholder="Transaction ID, check #, etc."
+                          value={reference}
+                          onChange={(e) => setReference(e.target.value)}
+                          disabled={loading}
+                          className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Payment Date</label>
+                      <div className="relative">
+                        <CalendarIcon className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                        <Input
+                          type="date"
+                          value={paidDate}
+                          onChange={(e) => setPaidDate(e.target.value)}
+                          disabled={loading}
+                          className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowNotes(!showNotes)}
+                      className="flex items-center justify-between w-full text-left py-2 px-3 rounded-xl hover:bg-slate-50 transition-colors"
+                    >
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 cursor-pointer">
+                        Add Notes (Optional)
+                      </label>
+                      {showNotes ? (
+                        <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                      )}
+                    </button>
+                    {showNotes && (
+                      <div className="mt-2">
+                        <Textarea
+                          placeholder="Optional notes about this payment..."
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          disabled={loading}
+                          className="rounded-xl border-slate-200 bg-white text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[100px] resize-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </section>
 
-            <div className="rounded-lg border bg-muted/30 px-4 py-3 flex items-center justify-between">
-              <div>
-                <div className="text-xs text-muted-foreground">Payment amount</div>
-                <div className="text-lg font-bold text-foreground">{formatCurrency(amount)}</div>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {willFullyPay ? (
-                  <span className="text-green-700 font-medium">This will mark the invoice as paid</span>
-                ) : (
-                  <span>Remaining after payment: {formatCurrency(roundToTwoDecimals(computedRemaining - Math.max(0, amount)))}</span>
+                {error && (
+                  <div className="rounded-xl bg-destructive/5 p-3 flex items-center gap-3 text-destructive border border-destructive/10">
+                    <Receipt className="h-4 w-4 shrink-0" />
+                    <p className="text-sm font-medium">{error}</p>
+                  </div>
                 )}
-              </div>
-            </div>
 
-            <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-4">
-              <DialogClose asChild>
-                <Button variant="outline" type="button" className="flex-1" disabled={loading}>
+                {/* Payment Summary */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/50 px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Payment Amount</div>
+                    <div className="text-lg font-bold text-slate-900">{formatCurrency(amount)}</div>
+                  </div>
+                  <div className="text-sm text-slate-600">
+                    {willFullyPay ? (
+                      <span className="text-green-700 font-medium">✓ This will mark the invoice as paid</span>
+                    ) : (
+                      <span>Remaining: {formatCurrency(roundToTwoDecimals(computedRemaining - Math.max(0, amount)))}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {!success && (
+            <div className="border-t bg-white px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] sm:pb-4">
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={loading}
+                  className="h-10 flex-1 rounded-xl border-slate-200 text-sm font-bold shadow-none hover:bg-slate-50"
+                >
                   Cancel
                 </Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold"
-                disabled={loading || !method || amount <= 0}
-              >
-                {loading ? "Recording..." : "Record Payment"}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
+                <Button
+                  type="submit"
+                  onClick={onSubmit}
+                  disabled={loading || !method || amount <= 0}
+                  className="h-10 flex-[1.4] rounded-xl bg-green-600 text-sm font-bold text-white shadow-lg shadow-green-600/10 hover:bg-green-700"
+                >
+                  {loading ? "Recording..." : "Record Payment"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   )

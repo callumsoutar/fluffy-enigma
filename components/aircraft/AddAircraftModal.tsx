@@ -220,7 +220,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                     </label>
                     <Input
                       autoFocus
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. ZK-ABC"
                       {...form.register("registration")}
                     />
@@ -234,7 +234,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                       TYPE <span className="text-destructive">*</span>
                     </label>
                     <Input
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. C172"
                       {...form.register("type")}
                     />
@@ -248,7 +248,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                       MODEL
                     </label>
                     <Input
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. 172S"
                       {...form.register("model")}
                     />
@@ -262,7 +262,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                       MANUFACTURER
                     </label>
                     <Input
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. Cessna"
                       {...form.register("manufacturer")}
                     />
@@ -277,7 +277,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                     </label>
                     <Input
                       type="number"
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. 2008"
                       {...form.register("year_manufactured")}
                     />
@@ -294,7 +294,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                       value={form.watch("status") || "active"}
                       onValueChange={(v) => form.setValue("status", v, { shouldDirty: true })}
                     >
-                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                         <SelectValue placeholder="Select status..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -316,7 +316,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                       value={form.watch("aircraft_type_id") || undefined}
                       onValueChange={(v) => form.setValue("aircraft_type_id", v || undefined, { shouldDirty: true })}
                     >
-                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                         <SelectValue placeholder="Select aircraft type..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -344,7 +344,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                         })
                       }
                     >
-                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                         <SelectValue placeholder="Select a method..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -380,7 +380,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                     <Input
                       type="number"
                       step="0.1"
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. 1234.5"
                       {...form.register("current_hobbs")}
                     />
@@ -396,7 +396,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                     <Input
                       type="number"
                       step="0.1"
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. 987.6"
                       {...form.register("current_tach")}
                     />

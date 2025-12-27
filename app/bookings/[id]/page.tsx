@@ -1494,11 +1494,7 @@ export default function BookingDetailPage() {
                   className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl z-50"
                   style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
                 >
-                  <div className={`px-4 py-3 flex items-center gap-3 ${
-                    hasChanges && isAdminOrInstructor && booking.status === 'confirmed'
-                      ? 'flex-col'
-                      : 'flex-row'
-                  }`}>
+                  <div className="px-4 py-3 flex items-center gap-3 flex-row">
                     {/* Save Changes Bar - Show when form is dirty */}
                     {hasChanges && isAdminOrInstructor && !isReadOnly && (
                       <>
@@ -1507,11 +1503,7 @@ export default function BookingDetailPage() {
                           size="lg"
                           onClick={handleUndo}
                           disabled={updateMutation.isPending}
-                          className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${
-                            hasChanges && booking.status === 'confirmed'
-                              ? 'w-full'
-                              : 'flex-1'
-                          }`}
+                          className="h-12 flex-1 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium"
                         >
                           <IconRotateClockwise className="h-4 w-4 mr-2" />
                           Undo Changes
@@ -1520,11 +1512,7 @@ export default function BookingDetailPage() {
                           size="lg"
                           onClick={handleSubmit(onSubmit)}
                           disabled={updateMutation.isPending}
-                          className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${
-                            hasChanges && booking.status === 'confirmed'
-                              ? 'w-full'
-                              : 'flex-1'
-                          }`}
+                          className="h-12 flex-1 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all"
                         >
                           <IconDeviceFloppy className="h-4 w-4 mr-2" />
                           {updateMutation.isPending ? "Saving..." : "Save Changes"}
@@ -1532,8 +1520,8 @@ export default function BookingDetailPage() {
                       </>
                     )}
                     
-                    {/* Conditional Status Buttons */}
-                    {isAdminOrInstructor && (
+                    {/* Conditional Status Buttons - Hide when there are unsaved changes */}
+                    {isAdminOrInstructor && !hasChanges && (
                       <>
                         {booking.status === 'unconfirmed' && (
                           <Button 
@@ -1549,12 +1537,12 @@ export default function BookingDetailPage() {
                         {booking.status === 'confirmed' && (
                           <Button 
                             size="lg" 
-                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all h-12 flex-1 px-6 text-base font-semibold"
+                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all h-12 w-full px-6 text-base font-semibold"
                             onClick={handleCheckFlightOut}
                             disabled={statusUpdateMutation.isPending}
                           >
                             <IconPlane className="h-5 w-5 mr-2" />
-                            {statusUpdateMutation.isPending ? "Checking..." : "Check Out"}
+                            {statusUpdateMutation.isPending ? "Checking..." : "Check Flight Out"}
                           </Button>
                         )}
                         {booking.status === 'flying' && (
@@ -2332,27 +2320,26 @@ export default function BookingDetailPage() {
             )}
           </div>
           
-          {/* Sticky Bottom Bar - Save Changes */}
-          {hasChanges && !isReadOnly && (
+          {/* Sticky Bottom Bar - Save Changes (Desktop Only) */}
+          {hasChanges && !isReadOnly && !isMobile && (
             <div 
               className="fixed bottom-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl"
               style={{ 
                 position: 'fixed',
                 bottom: 0,
-                // On mobile: full width, on desktop: start after sidebar (adjusts dynamically)
-                left: isMobile ? 0 : `${sidebarLeft}px`,
+                left: `${sidebarLeft}px`,
                 right: 0,
                 zIndex: 50
               }}
             >
-              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4">
                 <div className="flex items-center justify-end gap-4">
                   <Button
                     variant="outline"
                     size="lg"
                     onClick={handleUndo}
                     disabled={updateMutation.isPending}
-                    className={`h-12 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+                    className="h-12 px-8 min-w-[160px] border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-medium"
                   >
                     <IconRotateClockwise className="h-4 w-4 mr-2" />
                     Undo Changes
@@ -2361,7 +2348,7 @@ export default function BookingDetailPage() {
                     size="lg"
                     onClick={handleSubmit(onSubmit)}
                     disabled={updateMutation.isPending}
-                    className={`h-12 bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${isMobile ? "flex-1 max-w-[200px]" : "px-8 min-w-[160px]"}`}
+                    className="h-12 px-8 min-w-[160px] bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-lg hover:shadow-xl transition-all"
                   >
                     <IconDeviceFloppy className="h-4 w-4 mr-2" />
                     {updateMutation.isPending ? "Saving..." : "Save Changes"}

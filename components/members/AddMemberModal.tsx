@@ -150,7 +150,7 @@ export function AddMemberModal(props: {
                     </label>
                     <Input
                       autoFocus
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="First name"
                       {...form.register("first_name")}
                     />
@@ -164,7 +164,7 @@ export function AddMemberModal(props: {
                       LAST NAME
                     </label>
                     <Input
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="Last name"
                       {...form.register("last_name")}
                     />
@@ -179,7 +179,7 @@ export function AddMemberModal(props: {
                     </label>
                     <Input
                       type="email"
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="name@example.com"
                       {...form.register("email")}
                     />
@@ -193,7 +193,7 @@ export function AddMemberModal(props: {
                       PHONE
                     </label>
                     <Input
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="Optional"
                       {...form.register("phone")}
                     />
@@ -207,7 +207,7 @@ export function AddMemberModal(props: {
                       STREET ADDRESS
                     </label>
                     <Input
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="Optional"
                       {...form.register("street_address")}
                     />

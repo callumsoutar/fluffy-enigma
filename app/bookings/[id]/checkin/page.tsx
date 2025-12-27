@@ -23,6 +23,7 @@ import {
   IconPlus,
   IconTrash,
   IconPencil,
+  IconLoader2,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -174,6 +175,7 @@ export default function BookingCheckinPage() {
   const isMobile = useIsMobile()
   const [activeTab, setActiveTab] = React.useState<'billing' | 'debrief'>('billing')
   const [isPerformanceNotesOpen, setIsPerformanceNotesOpen] = React.useState(false)
+  const [isCalculating, setIsCalculating] = React.useState(false)
 
   const queryClient = useQueryClient()
 
@@ -749,8 +751,12 @@ export default function BookingCheckinPage() {
     draftSignature
   ])
 
-  const calculateDraft = handleSubmit(() => {
+  const calculateDraft = handleSubmit(async () => {
+    setIsCalculating(true)
+    // Add a small delay for better UX (shows loading state)
+    await new Promise((resolve) => setTimeout(resolve, 500))
     performCalculation()
+    setIsCalculating(false)
   })
 
   const removeManualItem = React.useCallback((manualIdx: number) => {
@@ -1078,22 +1084,30 @@ export default function BookingCheckinPage() {
 
                 {/* Title Row */}
                 <div className="mb-6 sm:mb-8">
-                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-tight text-foreground">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight leading-tight text-foreground">
                       Flight Check-In
                     </h1>
-                  <div className="mt-2 text-sm sm:text-base text-muted-foreground flex items-center gap-2">
-                    <span className="font-medium text-foreground">Member:</span> {studentName}
-                      {aircraftRegistration !== "—" && (
-                        <>
-                        <span className="mx-2">•</span>
-                        <span className="font-medium text-foreground">Aircraft:</span> {aircraftRegistration}
-                        </>
-                      )}
-                  {!isApproved && (
-                      <Badge variant="outline" className="ml-4 bg-blue-50/50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800">
-                      Check-In In Progress
-                    </Badge>
-                  )}
+                    {!isApproved && (
+                      <Badge variant="outline" className="self-start sm:self-center bg-blue-50/50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800">
+                        Check-In In Progress
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 text-sm sm:text-base text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-foreground">Member:</span>
+                      <span>{studentName}</span>
+                    </div>
+                    {aircraftRegistration !== "—" && (
+                      <>
+                        <span className="hidden sm:inline mx-2">•</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">Aircraft:</span>
+                          <span>{aircraftRegistration}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1433,11 +1447,19 @@ export default function BookingCheckinPage() {
                                         onClick={() => {
                                           void calculateDraft().catch((err) => toast.error(getErrorMessage(err)))
                                         }}
-                                        disabled={isApproved}
+                                        disabled={isApproved || isCalculating}
                                         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-12 sm:h-11 text-base sm:text-sm font-semibold"
                                       >
-                                        <IconFileText className="h-5 w-5 mr-2" />
-                                        {isDraftCalculated ? "Recalculate Flight Charges" : "Calculate Flight Charges"}
+                                        {isCalculating ? (
+                                          <IconLoader2 className="h-5 w-5 mr-2 animate-spin" />
+                                        ) : (
+                                          <IconFileText className="h-5 w-5 mr-2" />
+                                        )}
+                                        {isCalculating 
+                                          ? "Calculating..." 
+                                          : isDraftCalculated 
+                                            ? "Recalculate Flight Charges" 
+                                            : "Calculate Flight Charges"}
                                       </Button>
                                     </div>
                                   </FieldGroup>
@@ -1903,6 +1925,8 @@ export default function BookingCheckinPage() {
                                                       tax_rate: effectiveTaxRate
                                                     });
                                                     setOpenDropdownIdx(null);
+                                                    // Automatically exit edit mode after selecting a chargeable
+                                                    setEditingIdx(null);
                                                   }}
                                                 />
                                               ) : (

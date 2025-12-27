@@ -134,7 +134,7 @@ function LocalCombobox<T extends { id: string }>(props: {
           type="button"
           variant="outline"
           disabled={disabled}
-          className="h-10 w-full justify-between rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+          className="h-10 w-full justify-between rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
           aria-expanded={open}
         >
           <span className="flex min-w-0 items-center gap-2">
@@ -463,7 +463,7 @@ export function NewBookingModal(props: {
                           <Button 
                             type="button" 
                             variant="outline" 
-                            className="h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                            className="h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
                           >
                             <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span className="truncate">{format(form.watch("date"), "dd MMM yyyy")}</span>
@@ -490,7 +490,7 @@ export function NewBookingModal(props: {
                         value={form.watch("startTime")}
                         onValueChange={(v) => form.setValue("startTime", v, { shouldValidate: true })}
                       >
-                        <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                        <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                           <SelectValue placeholder="Time" />
                         </SelectTrigger>
                         <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
@@ -520,7 +520,7 @@ export function NewBookingModal(props: {
                           <Button 
                             type="button" 
                             variant="outline" 
-                            className="h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                            className="h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
                           >
                             <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span className="truncate">{format(form.watch("date"), "dd MMM yyyy")}</span>
@@ -544,7 +544,7 @@ export function NewBookingModal(props: {
                         value={form.watch("endTime")}
                         onValueChange={(v) => form.setValue("endTime", v, { shouldValidate: true })}
                       >
-                        <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                        <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                           <SelectValue placeholder="Time" />
                         </SelectTrigger>
                         <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
@@ -610,7 +610,7 @@ export function NewBookingModal(props: {
                     value={form.watch("instructorId") || "none"}
                     onValueChange={(id) => form.setValue("instructorId", id === "none" ? null : id, { shouldValidate: true })}
                   >
-                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                       <div className="flex items-center gap-2 truncate">
                         <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                         <SelectValue placeholder={
@@ -652,7 +652,7 @@ export function NewBookingModal(props: {
                     value={form.watch("aircraftId") || undefined}
                     onValueChange={(id) => form.setValue("aircraftId", id, { shouldValidate: true })}
                   >
-                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                       <div className="flex items-center gap-2 truncate">
                         <Plane className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                         <SelectValue placeholder={optionsLoading ? "Loading..." : "Select aircraft"} />
@@ -683,7 +683,7 @@ export function NewBookingModal(props: {
                       }
                     }}
                   >
-                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                       <SelectValue placeholder="Type" />
                     </SelectTrigger>
                     <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
@@ -707,7 +707,7 @@ export function NewBookingModal(props: {
                     value={form.watch("flightTypeId") || "none"}
                     onValueChange={(id) => form.setValue("flightTypeId", id === "none" ? null : id, { shouldValidate: true })}
                   >
-                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                       <div className="flex items-center gap-2 truncate">
                         <Plane className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                         <SelectValue placeholder={
@@ -776,7 +776,7 @@ export function NewBookingModal(props: {
                   <Textarea
                     rows={3}
                     placeholder="e.g. Dual circuits..."
-                    className="rounded-xl border-slate-200 focus:ring-slate-900 text-xs"
+                    className="rounded-xl border-slate-200 focus:ring-slate-900 text-base"
                     {...form.register("purpose")}
                   />
                   {errors.purpose ? <p className="text-[10px] text-destructive mt-1">{errors.purpose.message}</p> : null}
@@ -789,7 +789,7 @@ export function NewBookingModal(props: {
                   <Textarea 
                     rows={3} 
                     placeholder="Internal notes..." 
-                    className="rounded-xl border-slate-200 focus:ring-slate-900 text-xs"
+                    className="rounded-xl border-slate-200 focus:ring-slate-900 text-base"
                     {...form.register("remarks")} 
                   />
                   {errors.remarks ? <p className="text-[10px] text-destructive mt-1">{errors.remarks.message}</p> : null}

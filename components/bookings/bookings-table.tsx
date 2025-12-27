@@ -21,11 +21,9 @@ import {
   IconUser,
   IconSchool,
   IconCircleCheck,
-  IconAlertCircle,
-  IconChevronRight
+  IconAlertCircle
 } from "@tabler/icons-react"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { Card } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -271,7 +269,7 @@ const columns: ColumnDef<BookingWithRelations>[] = [
   },
 ]
 
-// Mobile Booking Card Component
+// Mobile Booking Card Component (matching screenshot design)
 function BookingCard({ booking }: { booking: BookingWithRelations }) {
   const router = useRouter()
   const start = new Date(booking.start_time)
@@ -284,105 +282,135 @@ function BookingCard({ booking }: { booking: BookingWithRelations }) {
   const isConfirmed = status === "confirmed"
   const isComplete = status === "complete"
 
+  // Format names
+  const studentName = booking.student 
+    ? `${booking.student.first_name} ${booking.student.last_name}`.trim() 
+    : null
+  const instructorName = booking.instructor
+    ? `${booking.instructor.first_name} ${booking.instructor.last_name}`.trim()
+    : null
+
   return (
-    <Card 
-      className="group relative transition-all hover:shadow-md cursor-pointer border bg-card hover:bg-accent/5"
+    <div 
+      className="group relative transition-all cursor-pointer bg-background border-b last:border-b-0 hover:bg-accent/5"
       onClick={() => router.push(`/bookings/${booking.id}`)}
     >
-      <div className="p-4">
-        <div className="flex flex-col gap-3">
-          {/* Top row: Aircraft & Status */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="shrink-0 p-1.5 rounded-md bg-primary/5 text-primary border border-primary/10">
-                <IconPlane className="h-4 w-4" />
-              </div>
+      <div className="px-4 py-3">
+        <div className="flex items-start gap-4">
+          {/* Left: Time */}
+          <div className="flex flex-col text-sm font-semibold text-foreground min-w-[50px]">
+            <span>
+              {start.toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: false
+              })}
+            </span>
+            <span className="text-muted-foreground">
+              {end.toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: false
+              })}
+            </span>
+          </div>
+
+          {/* Middle: Details */}
+          <div className="flex-1 min-w-0 space-y-2">
+            {/* Aircraft info */}
+            <div className="flex items-start justify-between gap-2">
               <div className="flex flex-col min-w-0">
-                <span className="font-bold text-base truncate tracking-tight">
-                  {booking.aircraft?.registration || "No Aircraft"}
+                <span className="font-bold text-base truncate">
+                  {booking.aircraft?.registration || getBookingTypeLabel(booking.booking_type)}
                 </span>
-                <span className="text-[10px] text-muted-foreground truncate font-medium">
+                <span className="text-sm text-muted-foreground truncate">
                   {booking.aircraft ? (
                     `${booking.aircraft.manufacturer} ${booking.aircraft.type}`
                   ) : (
-                    getBookingTypeLabel(booking.booking_type)
+                    "No Aircraft"
                   )}
                 </span>
               </div>
+              
+              {/* Status badge */}
+              <Badge 
+                variant={variant} 
+                className={cn(
+                  "shrink-0 font-medium px-3 py-0.5 rounded-full text-xs border",
+                  isFlying && "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-300/50",
+                  isUnconfirmed && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300/50",
+                  isConfirmed && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-300/50",
+                  isComplete && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-300/50",
+                  !isFlying && !isUnconfirmed && !isConfirmed && !isComplete && "border-muted"
+                )}
+              >
+                {label}
+              </Badge>
             </div>
-            <Badge 
-              variant={variant} 
-              className={cn(
-                "shrink-0 font-semibold px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide",
-                "shadow-sm border",
-                isFlying && "bg-orange-500 text-white border-orange-600 shadow-sm",
-                isUnconfirmed && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300/50 dark:border-amber-700/50",
-                isConfirmed && "bg-blue-600 text-white border-blue-700 shadow-sm",
-                isComplete && "bg-green-600 text-white border-green-700 shadow-sm"
-              )}
-            >
-              {isFlying && <IconPlane className="h-3 w-3 mr-1.5 animate-pulse" />}
-              {isUnconfirmed && <IconAlertCircle className="h-3 w-3 mr-1.5" />}
-              {isConfirmed && <IconCircleCheck className="h-3 w-3 mr-1.5" />}
-              {label}
-            </Badge>
-          </div>
 
-          {/* Middle row: Date & Time inline */}
-          <div className="flex items-center gap-3 text-sm text-foreground/80 font-medium">
-            <div className="flex items-center gap-1.5">
-              <IconCalendar className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>
-                {start.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric"
-                })}
-              </span>
-            </div>
-            <div className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-            <div className="flex items-center gap-1.5">
-              <IconClock className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>
-                {start.toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })} - {end.toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-              </span>
-            </div>
-          </div>
+            {/* People info with icons */}
+            {(studentName || instructorName) && (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <IconUser className="h-4 w-4 shrink-0" />
+                <span className="truncate">
+                  {[studentName, instructorName].filter(Boolean).join(", ")}
+                </span>
+              </div>
+            )}
 
-          {/* Bottom row: People side by side */}
-          <div className="flex items-center gap-4 pt-2 border-t border-border/50">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="shrink-0 h-6 w-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                {booking.student?.first_name?.[0] || "?"}
-              </div>
-              <span className="text-xs font-medium truncate text-muted-foreground group-hover:text-foreground transition-colors">
-                {booking.student ? `${booking.student.first_name} ${booking.student.last_name}` : "—"}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="shrink-0 h-6 w-6 rounded-full bg-muted border flex items-center justify-center text-[10px] font-bold">
-                {booking.instructor?.first_name?.[0] || "?"}
-              </div>
-              <span className="text-xs font-medium truncate text-muted-foreground group-hover:text-foreground transition-colors">
-                {booking.instructor ? `${booking.instructor.first_name} ${booking.instructor.last_name}` : "—"}
+            {/* Training/Type indicator */}
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <IconSchool className="h-4 w-4 shrink-0" />
+              <span className="truncate">
+                {getBookingTypeLabel(booking.booking_type)}
               </span>
             </div>
           </div>
-        </div>
-        
-        {/* Subtle Chevron */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/20 group-hover:text-primary/40 transition-all group-hover:translate-x-0.5">
-          <IconChevronRight className="h-5 w-5" />
         </div>
       </div>
-    </Card>
+    </div>
   )
+}
+
+// Date header component
+function DateHeader({ date }: { date: string }) {
+  const dateObj = new Date(date)
+  return (
+    <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm px-4 py-2.5 text-sm font-medium text-muted-foreground border-b">
+      {dateObj.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      })}
+    </div>
+  )
+}
+
+// Group bookings by date
+function groupBookingsByDate(bookings: BookingWithRelations[]) {
+  const groups = new Map<string, BookingWithRelations[]>()
+  
+  bookings.forEach((booking) => {
+    const date = new Date(booking.start_time)
+    // Get date string in YYYY-MM-DD format for grouping
+    const dateKey = date.toISOString().split('T')[0]
+    
+    if (!groups.has(dateKey)) {
+      groups.set(dateKey, [])
+    }
+    groups.get(dateKey)!.push(booking)
+  })
+  
+  // Sort groups by date (ascending - soonest first)
+  return Array.from(groups.entries())
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, bookings]) => ({
+      date,
+      bookings: bookings.sort((a, b) => 
+        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      )
+    }))
 }
 
 export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps) {
@@ -515,24 +543,41 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
 
       {/* Mobile Card View - Only render after mount to prevent hydration mismatch */}
       {mounted && isMobile ? (
-        <div className="space-y-3">
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
           {filteredBookings.length > 0 ? (
-            filteredBookings
-              .slice(
+            (() => {
+              // Get paginated bookings
+              const paginatedBookings = filteredBookings.slice(
                 table.getState().pagination.pageIndex * table.getState().pagination.pageSize,
                 (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize
               )
-              .map((booking) => (
-                <BookingCard key={booking.id} booking={booking} />
-              ))
+              
+              // Group by date
+              const groupedBookings = groupBookingsByDate(paginatedBookings)
+              
+              return (
+                <div>
+                  {groupedBookings.map(({ date, bookings }) => (
+                    <div key={date}>
+                      <DateHeader date={date} />
+                      <div>
+                        {bookings.map((booking) => (
+                          <BookingCard key={booking.id} booking={booking} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()
           ) : (
-            <Card className="p-12">
+            <div className="p-12">
               <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
                 <IconPlane className="h-10 w-10 opacity-50" />
                 <p className="text-sm font-medium">No bookings found</p>
                 <p className="text-xs text-center">Try adjusting your filters</p>
               </div>
-            </Card>
+            </div>
           )}
         </div>
       ) : mounted ? (

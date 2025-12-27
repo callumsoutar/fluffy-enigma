@@ -146,7 +146,7 @@ export function AddObservationModal({
                         placeholder="e.g., Landing light U/S"
                         required
                         autoFocus
-                        className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                        className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
                       />
                     </div>
                   </div>
@@ -166,7 +166,7 @@ export function AddObservationModal({
                       Priority <span className="text-destructive">*</span>
                     </Label>
                     <Select value={priority} onValueChange={(val) => setPriority(val as ObservationPriority)}>
-                      <SelectTrigger id="priority" className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectTrigger id="priority" className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                         <div className="flex items-center gap-2">
                           <AlertCircle className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <SelectValue />
@@ -174,7 +174,7 @@ export function AddObservationModal({
                       </SelectTrigger>
                       <SelectContent className="rounded-xl border-slate-200 shadow-xl">
                         {OBSERVATION_PRIORITIES.map((p) => (
-                          <SelectItem key={p} value={p} className="capitalize rounded-lg py-2 text-xs">
+                          <SelectItem key={p} value={p} className="capitalize rounded-lg py-2 text-base">
                             <div className="flex items-center gap-2">
                               <div
                                 className={`w-2 h-2 rounded-full ${
@@ -198,7 +198,7 @@ export function AddObservationModal({
                       Current Stage <span className="text-destructive">*</span>
                     </Label>
                     <Select value={stage} onValueChange={(val) => setStage(val as ObservationStage)}>
-                      <SelectTrigger id="stage" className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                      <SelectTrigger id="stage" className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                         <div className="flex items-center gap-2">
                           <ClipboardList className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <SelectValue />
@@ -206,7 +206,7 @@ export function AddObservationModal({
                       </SelectTrigger>
                       <SelectContent className="rounded-xl border-slate-200 shadow-xl">
                         {OBSERVATION_STAGES.map((s) => (
-                          <SelectItem key={s} value={s} className="capitalize rounded-lg py-2 text-xs">
+                          <SelectItem key={s} value={s} className="capitalize rounded-lg py-2 text-base">
                             {s}
                           </SelectItem>
                         ))}
@@ -235,7 +235,7 @@ export function AddObservationModal({
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="Provide additional details about this observation..."
                       rows={4}
-                      className="rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[120px]"
+                      className="rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[120px]"
                     />
                   </div>
                 </div>
@@ -243,7 +243,7 @@ export function AddObservationModal({
 
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-                  <p className="text-red-800 text-[11px] font-medium">{error}</p>
+                  <p className="text-red-800 text-sm font-medium">{error}</p>
                 </div>
               )}
             </div>
@@ -257,7 +257,7 @@ export function AddObservationModal({
                 variant="outline"
                 onClick={onClose}
                 disabled={loading}
-                className="h-10 flex-1 rounded-xl border-slate-200 text-xs font-bold shadow-none hover:bg-slate-50"
+                className="h-10 flex-1 rounded-xl border-slate-200 text-sm font-bold shadow-none hover:bg-slate-50"
               >
                 Cancel
               </Button>
@@ -268,7 +268,7 @@ export function AddObservationModal({
                   e.preventDefault();
                   handleSubmit(e as React.FormEvent<HTMLButtonElement>);
                 }}
-                className="h-10 flex-[1.4] rounded-xl bg-slate-900 text-xs font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
+                className="h-10 flex-[1.4] rounded-xl bg-slate-900 text-sm font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
               >
                 {loading ? "Creating..." : "Create Observation"}
               </Button>

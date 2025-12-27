@@ -1092,7 +1092,7 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
           )}
         >
           <div className="flex h-full min-h-0 flex-col bg-white">
-            <DialogHeader className="px-6 pt-6 pb-4 text-left">
+            <DialogHeader className="px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 text-left sm:pt-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
                   <GraduationCap className="h-5 w-5" />
@@ -1102,7 +1102,8 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                     Log Exam Result
                   </DialogTitle>
                   <DialogDescription className="mt-0.5 text-sm text-slate-500">
-                    Record a new theory exam result for this member.
+                    Record a new theory exam result for this member. Required fields are marked with{" "}
+                    <span className="text-destructive">*</span>.
                   </DialogDescription>
                 </div>
               </div>
@@ -1114,7 +1115,7 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
             >
               <div className="space-y-6">
                 <section>
-                  <div className="mb-4 flex items-center gap-2">
+                  <div className="mb-3 flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
                     <span className="text-xs font-semibold tracking-tight text-slate-900">Exam Details</span>
                   </div>
@@ -1131,15 +1132,15 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                           onValueChange={setSelectedSyllabusId}
                           disabled={logSubmitting}
                         >
-                          <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-1 focus:ring-indigo-100 transition-all">
+                          <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-1 focus:ring-indigo-100 transition-all">
                             <SelectValue placeholder="All exams" />
                           </SelectTrigger>
                           <SelectContent className="rounded-xl border-slate-200 shadow-xl">
-                            <SelectItem value="all" className="text-xs font-medium rounded-lg mx-1 focus:bg-indigo-50 focus:text-indigo-600">
+                            <SelectItem value="all" className="text-base font-medium rounded-lg mx-1 focus:bg-indigo-50 focus:text-indigo-600">
                               All Exams
                             </SelectItem>
                             {syllabi.map((s) => (
-                              <SelectItem key={s.id} value={s.id} className="text-xs font-medium rounded-lg mx-1 focus:bg-indigo-50 focus:text-indigo-600">
+                              <SelectItem key={s.id} value={s.id} className="text-base font-medium rounded-lg mx-1 focus:bg-indigo-50 focus:text-indigo-600">
                                 {s.name}
                               </SelectItem>
                             ))}
@@ -1157,12 +1158,12 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                           onValueChange={(val) => logExamForm.setValue("exam_id", val, { shouldValidate: true })}
                           disabled={logSubmitting}
                         >
-                          <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-1 focus:ring-indigo-100 transition-all">
+                          <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-1 focus:ring-indigo-100 transition-all">
                             <SelectValue placeholder={availableExams.length ? "Select exam" : "No exams available"} />
                           </SelectTrigger>
                           <SelectContent className="rounded-xl border-slate-200 shadow-xl">
                             {availableExams.map((e) => (
-                              <SelectItem key={e.id} value={e.id} className="text-xs font-medium rounded-lg mx-1 focus:bg-indigo-50 focus:text-indigo-600">
+                              <SelectItem key={e.id} value={e.id} className="text-base font-medium rounded-lg mx-1 focus:bg-indigo-50 focus:text-indigo-600">
                                 {e.name}
                               </SelectItem>
                             ))}
@@ -1185,12 +1186,12 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                           onValueChange={(val) => logExamForm.setValue("result", val as "PASS" | "FAIL", { shouldValidate: true })}
                           disabled={logSubmitting}
                         >
-                          <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-1 focus:ring-indigo-100 transition-all">
+                          <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-1 focus:ring-indigo-100 transition-all">
                             <SelectValue placeholder="Select result" />
                           </SelectTrigger>
                           <SelectContent className="rounded-xl border-slate-200 shadow-xl">
-                            <SelectItem value="PASS" className="text-xs font-medium rounded-lg mx-1 focus:bg-emerald-50 focus:text-emerald-600">Pass</SelectItem>
-                            <SelectItem value="FAIL" className="text-xs font-medium rounded-lg mx-1 focus:bg-rose-50 focus:text-rose-600">Fail</SelectItem>
+                            <SelectItem value="PASS" className="text-base font-medium rounded-lg mx-1 focus:bg-emerald-50 focus:text-emerald-600">Pass</SelectItem>
+                            <SelectItem value="FAIL" className="text-base font-medium rounded-lg mx-1 focus:bg-rose-50 focus:text-rose-600">Fail</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -1208,7 +1209,7 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                           onChange={(e) => logExamForm.setValue("score", e.target.value ? Number(e.target.value) : null)}
                           disabled={logSubmitting}
                           placeholder="e.g. 85"
-                          className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-1 focus-visible:ring-indigo-100 transition-all"
+                          className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-1 focus-visible:ring-indigo-100 transition-all"
                         />
                       </div>
                     </div>
@@ -1224,7 +1225,7 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                           value={logExamForm.watch("exam_date") || ""}
                           onChange={(e) => logExamForm.setValue("exam_date", e.target.value)}
                           disabled={logSubmitting}
-                          className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-1 focus-visible:ring-indigo-100 transition-all"
+                          className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-1 focus-visible:ring-indigo-100 transition-all"
                         />
                       </div>
                     </div>
@@ -1238,7 +1239,7 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                         value={logExamForm.watch("notes") || ""}
                         onChange={(e) => logExamForm.setValue("notes", e.target.value, { shouldValidate: true })}
                         placeholder="Add any additional context about this exam attempt..."
-                        className="min-h-[100px] rounded-xl border-slate-200 bg-white px-3 py-2.5 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-1 focus-visible:ring-indigo-100 transition-all resize-none"
+                        className="min-h-[100px] rounded-xl border-slate-200 bg-white px-3 py-2.5 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-1 focus-visible:ring-indigo-100 transition-all resize-none"
                         disabled={logSubmitting}
                       />
                     </div>
@@ -1247,14 +1248,14 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
               </div>
             </form>
 
-            <div className="border-t bg-white px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+            <div className="border-t bg-white px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] sm:pb-4">
               <div className="flex items-center justify-between gap-3">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setLogExamOpen(false)}
                   disabled={logSubmitting}
-                  className="h-10 flex-1 rounded-xl border-slate-200 text-xs font-bold shadow-none hover:bg-slate-50"
+                  className="h-10 flex-1 rounded-xl border-slate-200 text-sm font-bold shadow-none hover:bg-slate-50"
                 >
                   Cancel
                 </Button>
@@ -1262,7 +1263,7 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                   type="submit"
                   disabled={logSubmitting}
                   onClick={logExamForm.handleSubmit((values) => logExamMutation.mutate(values))}
-                  className="h-10 flex-[1.4] rounded-xl bg-slate-900 text-xs font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
+                  className="h-10 flex-[1.4] rounded-xl bg-slate-900 text-sm font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
                 >
                   {logSubmitting ? "Logging..." : "Log Result"}
                 </Button>

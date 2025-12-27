@@ -56,13 +56,6 @@ export default function StaffPage() {
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <div className="px-4 lg:px-6">
                 <div className="flex flex-col gap-4">
-                  <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Staff</h1>
-                    <p className="text-muted-foreground">
-                      Manage your organization&apos;s instructors and staff members.
-                    </p>
-                  </div>
-
                   {isLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <div className="text-muted-foreground">Loading staff...</div>

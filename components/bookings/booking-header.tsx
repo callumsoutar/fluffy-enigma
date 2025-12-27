@@ -48,17 +48,17 @@ function getStatusLabel(status: BookingStatus) {
 function getStatusBadgeStyles(status: BookingStatus): string {
   switch (status) {
     case "flying":
-      return "bg-blue-600 text-white border-blue-700 hover:bg-blue-700"
+      return "bg-orange-500 text-white border-orange-600 hover:bg-orange-600 shadow-sm"
     case "confirmed":
-      return "bg-green-600 text-white border-green-700 hover:bg-green-700"
+      return "bg-blue-600 text-white border-blue-700 hover:bg-blue-700 shadow-sm"
     case "unconfirmed":
-      return "bg-amber-500 text-white border-amber-600 hover:bg-amber-600"
+      return "bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-sm"
     case "briefing":
-      return "bg-purple-600 text-white border-purple-700 hover:bg-purple-700"
+      return "bg-purple-600 text-white border-purple-700 hover:bg-purple-700 shadow-sm"
     case "complete":
-      return "bg-gray-600 text-white border-gray-700 hover:bg-gray-700"
+      return "bg-green-600 text-white border-green-700 hover:bg-green-700 shadow-sm"
     case "cancelled":
-      return "bg-red-600 text-white border-red-700 hover:bg-red-700"
+      return "bg-red-600 text-white border-red-700 hover:bg-red-700 shadow-sm"
     default:
       return ""
   }

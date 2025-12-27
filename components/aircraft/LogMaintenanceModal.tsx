@@ -7,8 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -16,9 +14,10 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon } from "lucide-react"
+import { CalendarIcon, Wrench, Clock, FileText, Settings, DollarSign, Info } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import type { AircraftComponent } from "@/lib/types/aircraft_components"
 import type { VisitType } from "@/lib/types/maintenance_visits"
@@ -74,7 +73,7 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
   useEffect(() => {
     if (open) {
       // Reset form
-      setVisitDate(null)
+      setVisitDate(new Date())
       setVisitType("")
       setDescription("")
       setTotalCost("")
@@ -148,18 +147,14 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
     }
   }, [open, component_id])
   
-  // Calculate next due hours from component's base due (without extension) + interval
-  // This ensures extensions never become cumulative
+  // Calculate next due hours from hours at visit + interval
   useEffect(() => {
-    if (componentData && componentData.interval_hours && componentData.current_due_hours !== null) {
-      // Next due = component's BASE due (without extension) + interval
-      // Example: Due at 17715.5 (extended to 17725.5), done at 17717.4
-      // Next due = 17715.5 + 100 = 17815.5 (NOT 17717.4 + 100 = 17817.4)
-      const baseDueHours = Number(componentData.current_due_hours)
-      const nextDue = baseDueHours + Number(componentData.interval_hours)
+    if (componentData && componentData.interval_hours && hoursAtVisit) {
+      // Next due = hours at visit + interval
+      const nextDue = Number(hoursAtVisit) + Number(componentData.interval_hours)
       setNextDueHours(String(nextDue))
     }
-  }, [componentData])
+  }, [componentData, hoursAtVisit])
   
   // Calculate next due date when visitDate changes
   useEffect(() => {
@@ -229,240 +224,337 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[700px] max-w-[98vw] mx-auto p-8 bg-white rounded-2xl shadow-xl border border-muted overflow-y-auto max-h-[90vh]">
-        <DialogHeader className="mb-2">
-          <DialogTitle className="text-2xl font-bold mb-1 tracking-tight">Log Maintenance Visit</DialogTitle>
-          <DialogDescription className="mb-2 text-base text-muted-foreground font-normal">
-            Record a completed maintenance visit for this aircraft.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-1 block">
-                Visit Date <span className="text-red-500">*</span>
-              </label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={
-                      "w-full justify-start text-left font-normal " +
-                      (!visitDate ? "text-muted-foreground" : "")
-                    }
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {visitDate ? format(visitDate, "dd MMM yyyy") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={visitDate ?? undefined}
-                    onSelect={date => setVisitDate(date ?? null)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+      <DialogContent
+        className={cn(
+          "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden flex flex-col",
+          "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[700px]",
+          "top-[calc(env(safe-area-inset-top)+1rem)] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]",
+          "h-[calc(100dvh-2rem)] sm:h-[min(calc(100dvh-4rem),850px)]"
+        )}
+      >
+        <div className="flex h-full min-h-0 flex-col bg-white">
+          <DialogHeader className="px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 text-left sm:pt-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <Wrench className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-bold tracking-tight text-slate-900">
+                  Log Maintenance Visit
+                </DialogTitle>
+                <DialogDescription className="mt-0.5 text-sm text-slate-500">
+                  Record a completed maintenance visit for this aircraft.
+                </DialogDescription>
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">
-                Visit Type <span className="text-red-500">*</span>
-              </label>
-              <Select value={visitType} onValueChange={v => setVisitType(v as VisitType)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select visit type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {VISIT_TYPE_OPTIONS.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium mb-1 block">
-              Description <span className="text-red-500">*</span>
-            </label>
-            <Textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Describe the maintenance work performed..."
-              className="min-h-[60px]"
-              required
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-1 block">Total Cost</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={totalCost}
-                onChange={e => setTotalCost(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Hours at Visit</label>
-              <Input
-                type="number"
-                step="0.1"
-                value={hoursAtVisit}
-                onChange={e => setHoursAtVisit(e.target.value)}
-                placeholder="0.0"
-              />
-            </div>
-          </div>
-          
-          {/* Component Due Tracking - Only show if logging maintenance for a component */}
-          {component_id && (
-            <>
-              <div className="border-t pt-4 mt-2">
-                <h3 className="text-sm font-semibold mb-3 text-muted-foreground">Component Due At Maintenance</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Component Due Hours</label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={componentDueHours}
-                      onChange={e => setComponentDueHours(e.target.value)}
-                      placeholder="Component due hours"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Hours component was due (including extension)</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Component Due Date</label>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 pb-6">
+            <div className="space-y-6">
+              {/* Visit Details */}
+              <section>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  <span className="text-xs font-semibold tracking-tight text-slate-900">Visit Details</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      Visit Date <span className="text-destructive">*</span>
+                    </label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={
-                            "w-full justify-start text-left font-normal " +
-                            (!componentDueDate ? "text-muted-foreground" : "")
-                          }
+                          className={cn(
+                            "h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0",
+                            !visitDate && "text-slate-400"
+                          )}
                         >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {componentDueDate ? format(componentDueDate, "dd MMM yyyy") : <span>Pick a date</span>}
+                          <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">
+                            {visitDate ? format(visitDate, "dd MMM yyyy") : "Pick a date"}
+                          </span>
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent className="w-auto p-0 rounded-xl border-slate-200 shadow-xl" align="start">
                         <CalendarComponent
                           mode="single"
-                          selected={componentDueDate ?? undefined}
-                          onSelect={date => setComponentDueDate(date ?? null)}
+                          selected={visitDate ?? undefined}
+                          onSelect={date => setVisitDate(date ?? null)}
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
-                    <p className="text-xs text-muted-foreground mt-1">Date component was due</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      Visit Type <span className="text-destructive">*</span>
+                    </label>
+                    <Select value={visitType} onValueChange={v => setVisitType(v as VisitType)}>
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                        <div className="flex items-center gap-2">
+                          <Settings className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <SelectValue placeholder="Select type" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-slate-200 shadow-xl">
+                        {VISIT_TYPE_OPTIONS.map((type) => (
+                          <SelectItem key={type} value={type} className="rounded-lg py-2 text-xs">
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-              </div>
-              
-              <div className="border-t pt-4 mt-4">
-                <h3 className="text-sm font-semibold mb-3 text-green-600">Next Due Values (After This Maintenance)</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Next Due Hours</label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={nextDueHours}
-                      onChange={e => setNextDueHours(e.target.value)}
-                      placeholder="Next due hours"
+                <div className="mt-4 space-y-1.5">
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    Description <span className="text-destructive">*</span>
+                  </label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                    <Textarea 
+                      value={description} 
+                      onChange={e => setDescription(e.target.value)} 
+                      placeholder="Describe the maintenance work performed..." 
+                      required 
+                      className="rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[80px] resize-none" 
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Calculated: base due + interval (extensions not cumulative)</p>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Next Due Date</label>
+                </div>
+              </section>
+
+              {/* Cost & Usage */}
+              <section>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  <span className="text-xs font-semibold tracking-tight text-slate-900">Cost & Usage</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total Cost</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                      <Input 
+                        type="number" 
+                        step="0.01"
+                        value={totalCost} 
+                        onChange={e => setTotalCost(e.target.value)} 
+                        placeholder="0.00" 
+                        className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Hours at Visit</label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                      <Input 
+                        type="number" 
+                        step="0.1"
+                        value={hoursAtVisit} 
+                        onChange={e => setHoursAtVisit(e.target.value)} 
+                        placeholder="0.0" 
+                        className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Component Due Tracking */}
+              {component_id && (
+                <>
+                  <section>
+                    <div className="mb-3 flex items-center gap-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                      <span className="text-xs font-semibold tracking-tight text-slate-900">Component Due At Maintenance</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Due Hours</label>
+                        <div className="relative">
+                          <Clock className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                          <Input 
+                            type="number" 
+                            step="0.1"
+                            value={componentDueHours} 
+                            onChange={e => setComponentDueHours(e.target.value)} 
+                            placeholder="Due hours" 
+                            className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                          />
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1">Including extension</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Due Date</label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0",
+                                !componentDueDate && "text-slate-400"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate">
+                                {componentDueDate ? format(componentDueDate, "dd MMM yyyy") : "Pick a date"}
+                              </span>
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0 rounded-xl border-slate-200 shadow-xl" align="start">
+                            <CalendarComponent
+                              mode="single"
+                              selected={componentDueDate ?? undefined}
+                              onSelect={date => setComponentDueDate(date ?? null)}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="mb-3 flex items-center gap-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                      <span className="text-xs font-semibold tracking-tight text-slate-900">Next Due Values</span>
+                    </div>
+                    <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Next Due Hours</label>
+                          <div className="relative">
+                            <Clock className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                            <Input 
+                              type="number" 
+                              step="0.1"
+                              value={nextDueHours} 
+                              onChange={e => setNextDueHours(e.target.value)} 
+                              placeholder="Next due hours" 
+                              className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Next Due Date</label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0",
+                                  !nextDueDate && "text-slate-400"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className="truncate">
+                                  {nextDueDate ? format(nextDueDate, "dd MMM yyyy") : "Pick a date"}
+                                </span>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0 rounded-xl border-slate-200 shadow-xl" align="start">
+                              <CalendarComponent
+                                mode="single"
+                                selected={nextDueDate ?? undefined}
+                                onSelect={date => setNextDueDate(date ?? null)}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-500 italic px-1">
+                        Calculated: visit date/hours + interval
+                      </p>
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {/* Return to Service */}
+              <section>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  <span className="text-xs font-semibold tracking-tight text-slate-900">Return to Service</span>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Date Out of Maintenance</label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={
-                            "w-full justify-start text-left font-normal " +
-                            (!nextDueDate ? "text-muted-foreground" : "")
-                          }
+                          className={cn(
+                            "h-10 w-full justify-start rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0",
+                            !dateOutOfMaintenance && "text-slate-400"
+                          )}
                         >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {nextDueDate ? format(nextDueDate, "dd MMM yyyy") : <span>Pick a date</span>}
+                          <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">
+                            {dateOutOfMaintenance ? format(dateOutOfMaintenance, "dd MMM yyyy") : "Pick a date"}
+                          </span>
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent className="w-auto p-0 rounded-xl border-slate-200 shadow-xl" align="start">
                         <CalendarComponent
                           mode="single"
-                          selected={nextDueDate ?? undefined}
-                          onSelect={date => setNextDueDate(date ?? null)}
+                          selected={dateOutOfMaintenance ?? undefined}
+                          onSelect={date => setDateOutOfMaintenance(date ?? null)}
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
-                    <p className="text-xs text-muted-foreground mt-1">Calculated: visit date + interval (editable)</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Internal Notes</label>
+                    <div className="relative">
+                      <FileText className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                      <Textarea 
+                        value={notes} 
+                        onChange={e => setNotes(e.target.value)} 
+                        placeholder="Any additional notes..." 
+                        className="rounded-xl border-slate-200 bg-white pl-9 text-xs font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[100px] resize-none" 
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </>
-          )}
-          <div>
-            <label className="text-sm font-medium mb-1 block">Date Out of Maintenance</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={
-                    "w-full justify-start text-left font-normal " +
-                    (!dateOutOfMaintenance ? "text-muted-foreground" : "")
-                  }
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateOutOfMaintenance ? format(dateOutOfMaintenance, "dd MMM yyyy") : <span>Pick a date</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={dateOutOfMaintenance ?? undefined}
-                  onSelect={date => setDateOutOfMaintenance(date ?? null)}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div>
-            <label className="text-sm font-medium mb-1 block">Notes</label>
-            <Textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Additional notes..."
-              className="min-h-[60px]"
-            />
-          </div>
-          {error && <div className="text-red-600 text-sm text-center">{error}</div>}
-          <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2 sm:gap-4 w-full">
-            <DialogClose asChild>
+              </section>
+
+              {error && (
+                <div className="rounded-xl bg-destructive/5 p-3 flex items-center gap-3 text-destructive border border-destructive/10">
+                  <Info className="h-4 w-4 shrink-0" />
+                  <p className="text-xs font-medium">{error}</p>
+                </div>
+              )}
+            </div>
+          </form>
+
+          {/* Footer */}
+          <div className="border-t bg-white px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] sm:pb-4">
+            <div className="flex items-center justify-between gap-3">
               <Button 
-                variant="outline" 
                 type="button" 
-                className="w-full sm:w-auto border border-muted hover:border-[#89d2dc]" 
+                variant="outline" 
+                onClick={() => onOpenChange(false)} 
                 disabled={loading}
+                className="h-10 flex-1 rounded-xl border-slate-200 text-xs font-bold shadow-none hover:bg-slate-50"
               >
                 Cancel
               </Button>
-            </DialogClose>
-            <Button 
-              type="submit" 
-              className="w-full sm:w-auto bg-[#6564db] hover:bg-[#232ed1] text-white font-semibold shadow-md" 
-              disabled={loading}
-            >
-              {loading ? "Logging..." : "Log Visit"}
-            </Button>
-          </DialogFooter>
-        </form>
+              <Button 
+                type="submit" 
+                onClick={handleSubmit}
+                disabled={loading}
+                className="h-10 flex-[1.4] rounded-xl bg-slate-900 text-xs font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
+              >
+                {loading ? "Logging..." : "Log Visit"}
+              </Button>
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )

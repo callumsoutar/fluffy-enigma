@@ -17,26 +17,35 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Plus } from "lucide-react"
+import { cn } from "@/lib/utils"
 import type { Chargeable } from "@/lib/types/database"
 
 interface ChargeableSearchDropdownProps {
-  onAdd: (chargeable: Chargeable, quantity: number) => void
+  onSelect: (chargeable: Chargeable) => void
   taxRate?: number
   disabled?: boolean
+  placeholder?: string
+  value?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 export default function ChargeableSearchDropdown({
-  onAdd,
+  onSelect,
   taxRate = 0.15,
   disabled = false,
+  placeholder = "Search chargeables...",
+  value = "",
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: ChargeableSearchDropdownProps) {
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [chargeables, setChargeables] = useState<Chargeable[]>([])
   const [loading, setLoading] = useState(false)
-  const [quantity, setQuantity] = useState(1)
+
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+  const setOpen = controlledOnOpenChange || setInternalOpen
 
   const debouncedSearch = useDebounce(search, 300)
 
@@ -71,12 +80,9 @@ export default function ChargeableSearchDropdown({
   }, [debouncedSearch, open])
 
   const handleSelect = (chargeable: Chargeable) => {
-    if (quantity > 0) {
-      onAdd(chargeable, quantity)
-      setSearch("")
-      setQuantity(1)
-      setOpen(false)
-    }
+    onSelect(chargeable)
+    setSearch("")
+    setOpen(false)
   }
 
   return (
@@ -84,12 +90,14 @@ export default function ChargeableSearchDropdown({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           disabled={disabled}
-          className="w-full justify-start"
+          className={cn(
+            "w-full justify-start font-normal text-left h-9 px-3",
+            !value && "text-muted-foreground"
+          )}
         >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Item
+          {value || placeholder}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[400px] p-0" align="start">
@@ -135,22 +143,6 @@ export default function ChargeableSearchDropdown({
             )}
           </CommandList>
         </Command>
-        <div className="border-t p-2 flex items-center gap-2">
-          <label className="text-sm text-muted-foreground">Quantity:</label>
-          <Input
-            type="number"
-            min="1"
-            value={quantity}
-            onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-            className="w-20"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && chargeables.length > 0) {
-                e.preventDefault()
-                handleSelect(chargeables[0])
-              }
-            }}
-          />
-        </div>
       </PopoverContent>
     </Popover>
   )

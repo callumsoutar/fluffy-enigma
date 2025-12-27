@@ -49,17 +49,20 @@ export function calculateItemAmounts(params: CalculateItemAmountsParams): Calcul
     throw new Error('Tax rate must be between 0 and 1')
   }
 
-  // Calculate tax-inclusive rate (display rate)
+  // IMPROVED ROUNDING LOGIC:
+  // Calculate tax-inclusive rate first (this is what users see and expect)
   const rateInclusive = roundToTwoDecimals(unit_price * (1 + tax_rate))
 
-  // Calculate tax-exclusive amount (quantity × unit_price)
-  const amount = roundToTwoDecimals(quantity * unit_price)
+  // Calculate line_total from the rounded tax-inclusive rate
+  // This ensures the total matches user expectations
+  const lineTotal = roundToTwoDecimals(quantity * rateInclusive)
 
-  // Calculate tax amount
-  const taxAmount = roundToTwoDecimals(amount * tax_rate)
+  // Back-calculate the tax-exclusive amount from line_total
+  // amount = line_total / (1 + tax_rate)
+  const amount = roundToTwoDecimals(lineTotal / (1 + tax_rate))
 
-  // Calculate line total (tax-inclusive)
-  const lineTotal = roundToTwoDecimals(amount + taxAmount)
+  // Calculate tax amount as the difference
+  const taxAmount = roundToTwoDecimals(lineTotal - amount)
 
   return {
     amount,

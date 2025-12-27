@@ -6,9 +6,7 @@ import { z } from "zod"
 import { useState, useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { User as UserIcon, Building, Users } from "lucide-react"
-import { IconRotateClockwise, IconDeviceFloppy } from "@tabler/icons-react"
 import {
   Select,
   SelectTrigger,
@@ -40,9 +38,20 @@ type ContactFormValues = z.infer<typeof contactSchema>
 interface MemberContactDetailsProps {
   memberId: string
   member: MemberWithRelations | null
+  onDirtyChange?: (isDirty: boolean) => void
+  onSavingChange?: (isSaving: boolean) => void
+  onUndoRef?: React.MutableRefObject<(() => void) | null>
+  formId?: string
 }
 
-export function MemberContactDetails({ memberId, member }: MemberContactDetailsProps) {
+export function MemberContactDetails({ 
+  memberId, 
+  member,
+  onDirtyChange,
+  onSavingChange,
+  onUndoRef,
+  formId
+}: MemberContactDetailsProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -96,6 +105,23 @@ export function MemberContactDetails({ memberId, member }: MemberContactDetailsP
     }
   }, [member, reset])
 
+  // Notify parent of dirty state changes
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
+
+  // Notify parent of saving state changes
+  useEffect(() => {
+    onSavingChange?.(isSaving)
+  }, [isSaving, onSavingChange])
+
+  // Expose undo to parent
+  useEffect(() => {
+    if (onUndoRef) {
+      onUndoRef.current = () => reset()
+    }
+  }, [onUndoRef, reset])
+
   const onSubmit = async (data: ContactFormValues) => {
     setIsSaving(true)
     setError(null)
@@ -138,33 +164,9 @@ export function MemberContactDetails({ memberId, member }: MemberContactDetailsP
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form id={formId} onSubmit={handleSubmit(onSubmit)} className="pb-32">
       <div className="flex flex-row items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-900">Contact Information</h3>
-        {isDirty && (
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="default"
-              onClick={() => reset()}
-              disabled={isSaving}
-              className="border-border/50 hover:bg-accent/80 h-10 px-5"
-            >
-              <IconRotateClockwise className="h-4 w-4 mr-2" />
-              Undo Changes
-            </Button>
-            <Button
-              type="submit"
-              size="default"
-              disabled={isSaving}
-              className="bg-[#6564db] hover:bg-[#232ed1] text-white shadow-md hover:shadow-lg transition-all h-10 px-5"
-            >
-              <IconDeviceFloppy className="h-4 w-4 mr-2" />
-              {isSaving ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Personal Details Section */}

@@ -248,14 +248,16 @@ const columns: ColumnDef<BookingWithRelations>[] = [
       const isFlying = status === "flying"
       const isUnconfirmed = status === "unconfirmed"
       const isConfirmed = status === "confirmed"
+      const isComplete = status === "complete"
       
       return (
         <Badge 
           variant={variant} 
           className={`font-medium ${
-            isFlying ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800" :
+            isFlying ? "bg-orange-500 text-white border-orange-600 shadow-sm" :
             isUnconfirmed ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800" :
-            isConfirmed ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800" :
+            isConfirmed ? "bg-blue-600 text-white border-blue-700 shadow-sm" :
+            isComplete ? "bg-green-600 text-white border-green-700 shadow-sm" :
             ""
           }`}
         >
@@ -313,10 +315,10 @@ function BookingCard({ booking }: { booking: BookingWithRelations }) {
               className={cn(
                 "shrink-0 font-semibold px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wide",
                 "shadow-sm border",
-                isFlying && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-300/50 dark:border-blue-700/50",
+                isFlying && "bg-orange-500 text-white border-orange-600 shadow-sm",
                 isUnconfirmed && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-300/50 dark:border-amber-700/50",
-                isConfirmed && "bg-green-500/10 text-green-700 dark:text-green-400 border-green-300/50 dark:border-green-700/50",
-                isComplete && "bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-300/50 dark:border-slate-700/50"
+                isConfirmed && "bg-blue-600 text-white border-blue-700 shadow-sm",
+                isComplete && "bg-green-600 text-white border-green-700 shadow-sm"
               )}
             >
               {isFlying && <IconPlane className="h-3 w-3 mr-1.5 animate-pulse" />}

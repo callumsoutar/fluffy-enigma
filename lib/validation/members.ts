@@ -41,5 +41,14 @@ export const membersQuerySchema = z.object({
   membership_type_id: uuidSchema.optional(),
 })
 
+// Request body schema for POST /api/members
+export const memberCreateSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Invalid email address'),
+  first_name: z.string().trim().max(100, 'First name too long').optional().nullable(),
+  last_name: z.string().trim().max(100, 'Last name too long').optional().nullable(),
+  phone: z.string().trim().max(20, 'Phone number too long').optional().nullable(),
+  street_address: z.string().trim().max(200, 'Street address too long').optional().nullable(),
+}).strict()
+
 // Member ID parameter schema
 export const memberIdSchema = uuidSchema

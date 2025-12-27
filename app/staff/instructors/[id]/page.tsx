@@ -956,33 +956,28 @@ export default function InstructorDetailPage() {
                                   name="rating"
                                   control={control}
                                   render={({ field }) => {
-                                    const selectedValue = field.value ?? "unassigned"
                                     return (
                                       <Select
-                                        value={selectedValue}
-                                        onValueChange={(value) =>
-                                          field.onChange(value === "unassigned" ? null : value)
-                                        }
+                                        key={field.value ?? SELECT_NONE}
+                                        value={field.value ?? SELECT_NONE}
+                                        onValueChange={(val) => field.onChange(val === SELECT_NONE ? null : val)}
                                         disabled={isLoadingInstructorCategories}
                                       >
                                         <SelectTrigger className="w-full bg-white border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 transition-all">
-                                          <SelectValue
-                                            placeholder={
-                                              isLoadingInstructorCategories
-                                                ? "Loading ratings…"
-                                                : "Select rating"
-                                            }
-                                          />
+                                          <SelectValue placeholder={isLoadingInstructorCategories ? "Loading ratings…" : "Select rating"}>
+                                            {field.value
+                                              ? instructorCategories.find((category) => category.id === field.value)?.name ??
+                                                "Unknown"
+                                              : "Not set"}
+                                          </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                          <SelectItem value="unassigned">
-                                            Unassigned
-                                          </SelectItem>
-                                        {instructorCategories.map((category) => (
-                                          <SelectItem key={String(category.id)} value={String(category.id)}>
-                                            {category.name}
-                                          </SelectItem>
-                                        ))}
+                                          <SelectItem value={SELECT_NONE}>Not set</SelectItem>
+                                          {instructorCategories.map((category) => (
+                                            <SelectItem key={category.id} value={category.id}>
+                                              {category.name}
+                                            </SelectItem>
+                                          ))}
                                         </SelectContent>
                                       </Select>
                                     )

@@ -20,13 +20,16 @@ import {
 } from "@/components/ui/alert-dialog"
 import { format, isBefore, addDays } from "date-fns"
 import { Plane, Heart, AlertTriangle, CalendarIcon, CheckCircle, XCircle, Award, Plus, X } from "lucide-react"
-import { IconRotateClockwise, IconDeviceFloppy } from "@tabler/icons-react"
 import { toast } from "sonner"
 import type { License } from "@/lib/types/licenses"
 import type { Endorsement, UserEndorsement } from "@/lib/types/database"
 
 interface MemberPilotDetailsProps {
   memberId: string
+  onDirtyChange?: (isDirty: boolean) => void
+  onSavingChange?: (isSaving: boolean) => void
+  onUndoRef?: React.MutableRefObject<(() => void) | null>
+  formId?: string
 }
 
 // Type for user endorsement with endorsement relation
@@ -50,7 +53,13 @@ type PilotDetailsFormValues = {
   medical_certificate_expiry?: string
 }
 
-export function MemberPilotDetails({ memberId }: MemberPilotDetailsProps) {
+export function MemberPilotDetails({ 
+  memberId,
+  onDirtyChange,
+  onSavingChange,
+  onUndoRef,
+  formId
+}: MemberPilotDetailsProps) {
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -145,6 +154,23 @@ export function MemberPilotDetails({ memberId }: MemberPilotDetailsProps) {
       fetchData()
     }
   }, [memberId, reset])
+
+  // Notify parent of dirty state changes
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
+
+  // Notify parent of saving state changes
+  useEffect(() => {
+    onSavingChange?.(isSaving)
+  }, [isSaving, onSavingChange])
+
+  // Expose undo to parent
+  useEffect(() => {
+    if (onUndoRef) {
+      onUndoRef.current = () => reset()
+    }
+  }, [onUndoRef, reset])
 
   // Refresh user endorsements after adding/removing
   const refreshUserEndorsements = async () => {
@@ -306,176 +332,174 @@ export function MemberPilotDetails({ memberId }: MemberPilotDetailsProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form id={formId} onSubmit={handleSubmit(onSubmit)} className="pb-32">
       <div className="flex flex-row items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-900">Pilot Details & Certifications</h3>
-        {isDirty && (
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="default"
-              onClick={() => reset()}
-              disabled={isSaving}
-              className="border-border/50 hover:bg-accent/80 h-10 px-5"
-            >
-              <IconRotateClockwise className="h-4 w-4 mr-2" />
-              Undo Changes
-            </Button>
-            <Button
-              type="submit"
-              size="default"
-              disabled={isSaving}
-              className="bg-[#6564db] hover:bg-[#232ed1] text-white shadow-md hover:shadow-lg transition-all h-10 px-5"
-            >
-              <IconDeviceFloppy className="h-4 w-4 mr-2" />
-              {isSaving ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Pilot License Section */}
-      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
-        <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
-          <Plane className="w-5 h-5 text-indigo-500" />
-          Pilot License Information
-        </h4>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700">License Type</label>
-              <Select 
-                value={watch("pilot_license_id") || ""} 
-                onValueChange={(value) => {
-                  setValue("pilot_license_id", value, { shouldDirty: true })
-                  // Also update the legacy field for backward compatibility
-                  const selectedLicense = availableLicenses.find(license => license.id === value)
-                  if (selectedLicense) {
-                    setValue("pilot_license_type", selectedLicense.name, { shouldDirty: true })
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full bg-white">
-                  <SelectValue placeholder="Select license type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableLicenses.map((license) => (
-                    <SelectItem key={license.id} value={license.id}>
-                      {license.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.pilot_license_id && <p className="text-xs text-red-500 mt-1">{errors.pilot_license_id.message}</p>}
+      <div className="mb-8 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50">
+          <h4 className="flex items-center gap-2 text-base font-semibold text-gray-900 tracking-tight">
+            <div className="p-1.5 bg-indigo-50 rounded-md">
+              <Plane className="w-4 h-4 text-indigo-500" />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700">License Number</label>
-              <Input 
-                {...register("pilot_license_number")}
-                className="bg-white"
-                placeholder="e.g., PPL-123456"
-              />
-              {errors.pilot_license_number && <p className="text-xs text-red-500 mt-1">{errors.pilot_license_number.message}</p>}
+            Pilot License Information
+          </h4>
+          {watch("pilot_license_expiry") && (() => {
+            const expiryStatus = getExpiryStatus(watch("pilot_license_expiry"))
+            const Icon = expiryStatus.icon
+            return (
+              <Badge className={`${expiryStatus.color} flex items-center gap-1.5 px-3 py-1 border-none shadow-none`}>
+                <Icon className="w-3.5 h-3.5" />
+                {expiryStatus.status === 'expired' ? 'Expired' : 
+                 expiryStatus.status === 'expiring' ? 'Expiring Soon' : 'Valid'}
+              </Badge>
+            )
+          })()}
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-600">License Type</label>
+                <Select 
+                  value={watch("pilot_license_id") || ""} 
+                  onValueChange={(value) => {
+                    setValue("pilot_license_id", value, { shouldDirty: true })
+                    // Also update the legacy field for backward compatibility
+                    const selectedLicense = availableLicenses.find(license => license.id === value)
+                    if (selectedLicense) {
+                      setValue("pilot_license_type", selectedLicense.name, { shouldDirty: true })
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full bg-white h-11 border-gray-200 focus:ring-indigo-500 rounded-lg">
+                    <SelectValue placeholder="Select license type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableLicenses.map((license) => (
+                      <SelectItem key={license.id} value={license.id}>
+                        {license.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.pilot_license_id && <p className="text-xs text-red-500 mt-1.5">{errors.pilot_license_id.message}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-600">License Number</label>
+                <div className="relative">
+                  <Input 
+                    {...register("pilot_license_number")}
+                    className="bg-white pl-10 h-11 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg"
+                    placeholder="e.g., PPL-123456"
+                  />
+                  <Award className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+                {errors.pilot_license_number && <p className="text-xs text-red-500 mt-1.5">{errors.pilot_license_number.message}</p>}
+              </div>
             </div>
 
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700">License Expiry Date</label>
-              <div className="flex gap-2">
-                <Input
-                  type="date"
-                  value={watch("pilot_license_expiry") || ""}
-                  onChange={(e) => setValue("pilot_license_expiry", e.target.value, { shouldDirty: true })}
-                  className="bg-white flex-1"
-                  placeholder="yyyy-mm-dd"
-                />
-                {watch("pilot_license_expiry") && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setValue("pilot_license_expiry", undefined as unknown as string, { shouldDirty: true })}
-                    className="px-3"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                )}
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-600">License Expiry Date</label>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="relative flex-1">
+                    <Input
+                      type="date"
+                      value={watch("pilot_license_expiry") || ""}
+                      onChange={(e) => setValue("pilot_license_expiry", e.target.value, { shouldDirty: true })}
+                      className="bg-white pl-10 h-11 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg"
+                      placeholder="yyyy-mm-dd"
+                    />
+                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                  {watch("pilot_license_expiry") && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setValue("pilot_license_expiry", undefined as unknown as string, { shouldDirty: true })}
+                      className="h-11 px-4 text-gray-500 hover:text-red-600 hover:bg-red-50 border-gray-200 rounded-lg shrink-0"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                {errors.pilot_license_expiry && <p className="text-xs text-red-500 mt-1.5">{errors.pilot_license_expiry.message}</p>}
               </div>
-              {errors.pilot_license_expiry && <p className="text-xs text-red-500 mt-1">{errors.pilot_license_expiry.message}</p>}
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              {watch("pilot_license_expiry") && (() => {
-                const expiryStatus = getExpiryStatus(watch("pilot_license_expiry"))
-                const Icon = expiryStatus.icon
-                return (
-                  <Badge className={`${expiryStatus.color} flex items-center gap-1 px-3 py-1`}>
-                    <Icon className="w-3 h-3" />
-                    {expiryStatus.status === 'expired' ? 'Expired' : 
-                     expiryStatus.status === 'expiring' ? 'Expiring Soon' : 'Valid'}
-                  </Badge>
-                )
-              })()}
             </div>
           </div>
         </div>
       </div>
 
       {/* Medical Certificate Section */}
-      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-lg p-6 shadow-sm">
-        <h4 className="flex items-center gap-2 text-base font-semibold mb-4 text-gray-900 tracking-tight">
-          <Heart className="w-5 h-5 text-indigo-500" />
-          Medical Certificate Expiry
-        </h4>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-700">Medical Certificate Expiry Date</label>
-              <div className="flex items-center gap-2">
+      <div className="mb-8 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50">
+          <h4 className="flex items-center gap-2 text-base font-semibold text-gray-900 tracking-tight">
+            <div className="p-1.5 bg-rose-50 rounded-md">
+              <Heart className="w-4 h-4 text-rose-500" />
+            </div>
+            Medical Certificate Expiry
+          </h4>
+          {watch("medical_certificate_expiry") && (() => {
+            const expiryStatus = getExpiryStatus(watch("medical_certificate_expiry"))
+            const Icon = expiryStatus.icon
+            return (
+              <Badge className={`${expiryStatus.color} flex items-center gap-1.5 px-3 py-1 border-none shadow-none`}>
+                <Icon className="w-3.5 h-3.5" />
+                {expiryStatus.status === 'expired' ? 'Expired' :
+                 expiryStatus.status === 'expiring' ? 'Expiring Soon' : 'Valid'}
+              </Badge>
+            )
+          })()}
+        </div>
+        <div className="p-6">
+          <div className="max-w-md">
+            <label className="block text-sm font-medium mb-2 text-gray-600">Medical Certificate Expiry Date</label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative flex-1">
                 <Input
                   type="date"
                   value={watch("medical_certificate_expiry") || ""}
                   onChange={(e) => setValue("medical_certificate_expiry", e.target.value, { shouldDirty: true })}
-                  className="bg-white flex-1"
+                  className="bg-white pl-10 h-11 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 transition-all rounded-lg"
                   placeholder="yyyy-mm-dd"
                 />
-                {watch("medical_certificate_expiry") && (
-                  <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setValue("medical_certificate_expiry", undefined as unknown as string, { shouldDirty: true })}
-                      className="px-3"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                    {(() => {
-                      const expiryStatus = getExpiryStatus(watch("medical_certificate_expiry"))
-                      const Icon = expiryStatus.icon
-                      return (
-                        <Badge className={`${expiryStatus.color} flex items-center gap-1 px-3 py-1 flex-shrink-0`}>
-                          <Icon className="w-3 h-3" />
-                          {expiryStatus.status === 'expired' ? 'Expired' :
-                           expiryStatus.status === 'expiring' ? 'Expiring Soon' : 'Valid'}
-                        </Badge>
-                      )
-                    })()}
-                  </>
-                )}
+                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               </div>
-              {errors.medical_certificate_expiry && <p className="text-xs text-red-500 mt-1">{errors.medical_certificate_expiry.message}</p>}
+              {watch("medical_certificate_expiry") && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setValue("medical_certificate_expiry", undefined as unknown as string, { shouldDirty: true })}
+                  className="h-11 px-4 text-gray-500 hover:text-red-600 hover:bg-red-50 border-gray-200 rounded-lg shrink-0"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Clear
+                </Button>
+              )}
             </div>
+            {errors.medical_certificate_expiry && (
+              <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {errors.medical_certificate_expiry.message}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
       {/* User Endorsements Section */}
-      <div className="mb-8 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
-        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+      <div className="mb-8 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
           <h4 className="flex items-center gap-2 text-base font-semibold text-gray-900 tracking-tight">
-            <Award className="w-5 h-5 text-indigo-500" />
+            <div className="p-1.5 bg-indigo-50 rounded-md">
+              <Award className="w-4 h-4 text-indigo-500" />
+            </div>
             Endorsements & Ratings
           </h4>
           {!showAddEndorsement && (
@@ -484,38 +508,38 @@ export function MemberPilotDetails({ memberId }: MemberPilotDetailsProps) {
               variant="outline"
               size="sm"
               onClick={() => setShowAddEndorsement(true)}
-              className="h-8 px-3"
+              className="h-9 px-4 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 transition-colors rounded-lg font-medium"
             >
-              <Plus className="w-3 h-3 mr-1" />
+              <Plus className="w-4 h-4 mr-1.5" />
               Add
             </Button>
           )}
         </div>
 
-        <div className="p-4">
+        <div className="p-5">
           {/* Add New Endorsement - Inline Form */}
           {showAddEndorsement && (
-            <div className="mb-4 p-4 bg-white rounded-lg border border-gray-300 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-semibold text-gray-900">Add New Endorsement</span>
+            <div className="mb-6 p-5 bg-indigo-50/30 rounded-xl border border-indigo-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between mb-5">
+                <span className="text-sm font-bold text-indigo-900 uppercase tracking-wider">Add New Endorsement</span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={resetAddEndorsementForm}
-                  className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                  className="h-8 w-8 p-0 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-100/50 rounded-full"
                 >
                   <X className="w-4 h-4" />
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
                 <div className="lg:col-span-4">
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  <label className="block text-xs font-bold text-indigo-700 mb-1.5 uppercase tracking-wide">
                     Endorsement Type
                   </label>
                   <Select value={selectedEndorsement} onValueChange={setSelectedEndorsement}>
-                    <SelectTrigger className="h-9 bg-white">
+                    <SelectTrigger className="h-10 bg-white border-indigo-100 focus:ring-indigo-500 rounded-lg shadow-sm">
                       <SelectValue placeholder="Select endorsement" />
                     </SelectTrigger>
                     <SelectContent>
@@ -538,40 +562,30 @@ export function MemberPilotDetails({ memberId }: MemberPilotDetailsProps) {
                 </div>
 
                 <div className="lg:col-span-3">
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  <label className="block text-xs font-bold text-indigo-700 mb-1.5 uppercase tracking-wide">
                     Expiry Date (Optional)
                   </label>
-                  <div className="flex gap-2">
+                  <div className="relative">
                     <Input
                       type="date"
                       value={endorsementExpiryDate ? format(endorsementExpiryDate, 'yyyy-MM-dd') : ''}
                       onChange={(e) => setEndorsementExpiryDate(e.target.value ? new Date(e.target.value) : undefined)}
-                      className="h-9 text-sm bg-white flex-1"
+                      className="h-10 text-sm bg-white border-indigo-100 focus:ring-indigo-500 rounded-lg shadow-sm pl-10"
                       placeholder="yyyy-mm-dd"
                     />
-                    {endorsementExpiryDate && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEndorsementExpiryDate(undefined)}
-                        className="h-9 px-2"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
+                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-300 pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="lg:col-span-3">
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  <label className="block text-xs font-bold text-indigo-700 mb-1.5 uppercase tracking-wide">
                     Notes (Optional)
                   </label>
                   <Input
                     value={endorsementNotes}
                     onChange={(e) => setEndorsementNotes(e.target.value)}
                     placeholder="Additional notes..."
-                    className="h-9 text-sm bg-white"
+                    className="h-10 text-sm bg-white border-indigo-100 focus:ring-indigo-500 rounded-lg shadow-sm"
                   />
                 </div>
 
@@ -581,18 +595,9 @@ export function MemberPilotDetails({ memberId }: MemberPilotDetailsProps) {
                     onClick={addEndorsement}
                     disabled={!selectedEndorsement || endorsementsLoading}
                     size="sm"
-                    className="h-9 flex-1 font-semibold"
+                    className="h-10 flex-1 font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 rounded-lg"
                   >
                     {endorsementsLoading ? "Adding..." : "Add"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={resetAddEndorsementForm}
-                    className="h-9 px-3"
-                  >
-                    <X className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
@@ -601,7 +606,7 @@ export function MemberPilotDetails({ memberId }: MemberPilotDetailsProps) {
 
           {/* Current Endorsements */}
           {userEndorsements.length > 0 ? (
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {userEndorsements
                 .filter(ue => ue.endorsement) // Only show endorsements with valid endorsement data
                 .map((userEndorsement) => {
@@ -610,26 +615,38 @@ export function MemberPilotDetails({ memberId }: MemberPilotDetailsProps) {
                   const endorsementName = userEndorsement.endorsement?.name || "Unknown"
 
                   return (
-                    <div key={userEndorsement.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                    <div 
+                      key={userEndorsement.id} 
+                      className="group flex items-start justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-50/50 transition-all duration-200"
+                    >
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900 text-sm">{endorsementName}</span>
-                          <Badge className={`${expiryStatus.color} flex items-center gap-1 px-2 py-0.5 text-xs`}>
+                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                          <span className="font-semibold text-gray-900 text-sm leading-none">{endorsementName}</span>
+                          <Badge className={`${expiryStatus.color} flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border-none shadow-none`}>
                             <Icon className="w-3 h-3" />
                             {expiryStatus.status === 'expired' ? 'Expired' :
                              expiryStatus.status === 'expiring' ? 'Soon' : 'Valid'}
                           </Badge>
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
-                          <span>{format(new Date(userEndorsement.issued_date), 'MMM dd, yyyy')}</span>
+                        <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-[11px] text-gray-500 font-medium">
+                          <div className="flex items-center gap-1">
+                            <CalendarIcon className="w-3 h-3 text-gray-400" />
+                            <span>Issued: {format(new Date(userEndorsement.issued_date), 'MMM dd, yyyy')}</span>
+                          </div>
                           {userEndorsement.expiry_date && (
-                            <span>→ {format(new Date(userEndorsement.expiry_date), 'MMM dd, yyyy')}</span>
-                          )}
-                          {userEndorsement.notes && (
-                            <span className="truncate">{userEndorsement.notes}</span>
+                            <div className="flex items-center gap-1 text-gray-600">
+                              <span className="text-gray-300">|</span>
+                              <span>Expires: {format(new Date(userEndorsement.expiry_date), 'MMM dd, yyyy')}</span>
+                            </div>
                           )}
                         </div>
+                        
+                        {userEndorsement.notes && (
+                          <div className="mt-2 p-2 bg-gray-50 rounded text-[11px] text-gray-600 italic border-l-2 border-gray-200">
+                            {userEndorsement.notes}
+                          </div>
+                        )}
                       </div>
 
                       <Button
@@ -637,18 +654,21 @@ export function MemberPilotDetails({ memberId }: MemberPilotDetailsProps) {
                         variant="ghost"
                         size="sm"
                         onClick={() => showDeleteConfirmationDialog(userEndorsement.id, endorsementName)}
-                        className="h-7 w-7 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 ml-2"
+                        className="h-8 w-8 p-0 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors shrink-0 ml-3"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="w-4 h-4" />
                       </Button>
                     </div>
                   )
                 })}
             </div>
           ) : !showAddEndorsement ? (
-            <div className="text-center py-4 text-gray-500">
-              <Award className="w-6 h-6 mx-auto mb-2 text-gray-300" />
-              <p className="text-sm">No endorsements yet</p>
+            <div className="text-center py-12 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white shadow-sm border border-gray-100 mb-3 text-gray-300">
+                <Award className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-medium text-gray-500">No endorsements or ratings found</p>
+              <p className="text-xs text-gray-400 mt-1">Add them to track pilot qualifications</p>
             </div>
           ) : null}
         </div>

@@ -23,11 +23,6 @@ interface MembershipWithType {
   } | null
 }
 
-interface UserRoleWithRole {
-  role_id: string
-  roles: { name: string } | { name: string }[]
-}
-
 /**
  * GET /api/members/[id]
  * 
@@ -109,32 +104,15 @@ export async function GET(
     .eq('user_id', userId)
     .single()
 
-  // Fetch user role
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select(`
-      role_id,
-      roles!inner (
-        name
-      )
-    `)
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .single()
-  
+  // Fetch user role (authoritative, tolerant of legacy multiple-active roles)
+  const { data: roleNameFromRpc } = await supabase.rpc('get_user_role', {
+    user_id: userId,
+  })
+
   // Normalize the response
   const activeMembership = memberships?.find((m) => (m as MembershipWithType).is_active) || memberships?.[0] || null
   
-  // Extract role name with proper type handling
-  let roleName: string | null = null
-  if (userRole) {
-    const typedUserRole = userRole as UserRoleWithRole
-    if (Array.isArray(typedUserRole.roles)) {
-      roleName = typedUserRole.roles[0]?.name || null
-    } else if (typedUserRole.roles && typeof typedUserRole.roles === 'object' && 'name' in typedUserRole.roles) {
-      roleName = typedUserRole.roles.name
-    }
-  }
+  const roleName = typeof roleNameFromRpc === 'string' ? roleNameFromRpc : null
 
   const member: MemberWithRelations = {
     ...userData,
@@ -312,30 +290,13 @@ export async function PATCH(
     .eq('user_id', memberId)
     .single()
 
-  const { data: userRole } = await supabase
-    .from('user_roles')
-    .select(`
-      role_id,
-      roles!inner (
-        name
-      )
-    `)
-    .eq('user_id', memberId)
-    .eq('is_active', true)
-    .single()
-
   const activeMembership = memberships?.find((m) => (m as MembershipWithType).is_active) || memberships?.[0] || null
   
-  // Extract role name with proper type handling
-  let roleName: string | null = null
-  if (userRole) {
-    const typedUserRole = userRole as UserRoleWithRole
-    if (Array.isArray(typedUserRole.roles)) {
-      roleName = typedUserRole.roles[0]?.name || null
-    } else if (typedUserRole.roles && typeof typedUserRole.roles === 'object' && 'name' in typedUserRole.roles) {
-      roleName = typedUserRole.roles.name
-    }
-  }
+  const { data: roleNameFromRpc } = await supabase.rpc('get_user_role', {
+    user_id: memberId,
+  })
+
+  const roleName = typeof roleNameFromRpc === 'string' ? roleNameFromRpc : null
 
   const member: MemberWithRelations = {
     ...updatedMember,

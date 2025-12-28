@@ -11,6 +11,7 @@ import { userHasAnyRole } from '@/lib/auth/roles'
  * Query parameters:
  * - search: string - Search in first_name, last_name, email
  * - id: string - Get specific user by ID
+ * - ids: string - Get multiple users by comma-separated IDs
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const search = searchParams.get('search')
   const userId = searchParams.get('id')
+  const userIds = searchParams.get('ids')
 
   // Build query
   let query = supabase
@@ -49,6 +51,12 @@ export async function GET(request: NextRequest) {
   // Filter by specific user ID if provided
   if (userId) {
     query = query.eq('id', userId)
+  }
+
+  // Filter by multiple user IDs if provided
+  if (userIds) {
+    const idsArray = userIds.split(',').filter(id => id.trim())
+    query = query.in('id', idsArray)
   }
 
   // Execute query

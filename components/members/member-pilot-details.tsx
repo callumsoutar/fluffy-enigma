@@ -23,6 +23,7 @@ import { Plane, Heart, AlertTriangle, CalendarIcon, CheckCircle, XCircle, Award,
 import { toast } from "sonner"
 import type { License } from "@/lib/types/licenses"
 import type { Endorsement, UserEndorsement } from "@/lib/types/database"
+import { DatePicker } from "@/components/ui/date-picker"
 
 interface MemberPilotDetailsProps {
   memberId: string
@@ -268,9 +269,10 @@ export function MemberPilotDetails({
     setIsSaving(true)
     setError(null)
 
-    // Convert undefined to null for API compatibility
+    // Convert empty strings or undefined to null for API compatibility
     const payload = {
       ...data,
+      pilot_license_id: data.pilot_license_id || null,
       pilot_license_expiry: data.pilot_license_expiry || null,
       medical_certificate_expiry: data.medical_certificate_expiry || null,
     }
@@ -405,15 +407,12 @@ export function MemberPilotDetails({
               <div>
                 <label className="block text-sm font-medium mb-2 text-gray-600">License Expiry Date</label>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                  <div className="relative flex-1">
-                    <Input
-                      type="date"
-                      value={watch("pilot_license_expiry") || ""}
-                      onChange={(e) => setValue("pilot_license_expiry", e.target.value, { shouldDirty: true })}
-                      className="bg-white pl-10 h-11 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg"
-                      placeholder="yyyy-mm-dd"
+                  <div className="flex-1">
+                    <DatePicker
+                      date={watch("pilot_license_expiry")}
+                      onChange={(date) => setValue("pilot_license_expiry", date || "", { shouldDirty: true })}
+                      placeholder="Select expiry date"
                     />
-                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                   </div>
                   {watch("pilot_license_expiry") && (
                     <Button
@@ -460,15 +459,12 @@ export function MemberPilotDetails({
           <div className="max-w-md">
             <label className="block text-sm font-medium mb-2 text-gray-600">Medical Certificate Expiry Date</label>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <div className="relative flex-1">
-                <Input
-                  type="date"
-                  value={watch("medical_certificate_expiry") || ""}
-                  onChange={(e) => setValue("medical_certificate_expiry", e.target.value, { shouldDirty: true })}
-                  className="bg-white pl-10 h-11 border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 transition-all rounded-lg"
-                  placeholder="yyyy-mm-dd"
+              <div className="flex-1">
+                <DatePicker
+                  date={watch("medical_certificate_expiry")}
+                  onChange={(date) => setValue("medical_certificate_expiry", date || "", { shouldDirty: true })}
+                  placeholder="Select expiry date"
                 />
-                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               </div>
               {watch("medical_certificate_expiry") && (
                 <Button
@@ -565,16 +561,12 @@ export function MemberPilotDetails({
                   <label className="block text-xs font-bold text-indigo-700 mb-1.5 uppercase tracking-wide">
                     Expiry Date (Optional)
                   </label>
-                  <div className="relative">
-                    <Input
-                      type="date"
-                      value={endorsementExpiryDate ? format(endorsementExpiryDate, 'yyyy-MM-dd') : ''}
-                      onChange={(e) => setEndorsementExpiryDate(e.target.value ? new Date(e.target.value) : undefined)}
-                      className="h-10 text-sm bg-white border-indigo-100 focus:ring-indigo-500 rounded-lg shadow-sm pl-10"
-                      placeholder="yyyy-mm-dd"
-                    />
-                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-300 pointer-events-none" />
-                  </div>
+                  <DatePicker
+                    date={endorsementExpiryDate ? format(endorsementExpiryDate, 'yyyy-MM-dd') : null}
+                    onChange={(date) => setEndorsementExpiryDate(date ? new Date(date) : undefined)}
+                    placeholder="Select expiry date"
+                    className="h-10 text-sm border-indigo-100 focus:ring-indigo-500 shadow-sm"
+                  />
                 </div>
 
                 <div className="lg:col-span-3">

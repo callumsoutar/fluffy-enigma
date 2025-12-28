@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { IconDotsVertical, IconClipboard, IconEdit, IconInfoCircle, IconTrash, IconPlus, IconClock, IconCalendar } from "@tabler/icons-react"
+import { IconDotsVertical, IconClipboard, IconEdit, IconInfoCircle, IconTrash, IconPlus, IconClock, IconCalendar, IconChevronRight } from "@tabler/icons-react"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -353,26 +353,26 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
 
   return (
     <div className="flex flex-col gap-6 mt-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Aircraft Components</h2>
-          <p className="text-sm text-slate-500 mt-1">Manage maintenance schedules and track component health.</p>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Aircraft Components</h2>
+          <p className="text-slate-600 mt-1">Manage maintenance schedules and track component health.</p>
         </div>
-        <Button className="bg-slate-900 text-white font-bold rounded-xl h-10 shadow-lg shadow-slate-900/10 hover:bg-slate-800" onClick={() => setNewModalOpen(true)}>
-          <IconPlus className="w-4 h-4 mr-2" />
+        <Button className="bg-slate-900 text-white font-semibold h-10 px-5 hover:bg-slate-800" onClick={() => setNewModalOpen(true)}>
+          <IconPlus className="h-4 w-4 mr-2" />
           Add Component
         </Button>
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
+      <div className="hidden md:block overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full text-sm border-collapse">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/50">
-              <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-wider text-slate-500">Component</th>
-              <th className="px-4 py-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-500">Status</th>
-              <th className="px-4 py-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-500">Due At (hrs)</th>
-              <th className="px-4 py-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-500">
+            <tr className="border-b border-slate-200 bg-slate-50/50">
+              <th className="px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide text-slate-600">Component</th>
+              <th className="px-4 py-3 text-center font-semibold text-xs uppercase tracking-wide text-slate-600">Status</th>
+              <th className="px-4 py-3 text-center font-semibold text-xs uppercase tracking-wide text-slate-600">Due At (hrs)</th>
+              <th className="px-4 py-3 text-center font-semibold text-xs uppercase tracking-wide text-slate-600">
                 <div className="flex items-center justify-center gap-1">
                   Extension
                   <Popover>
@@ -387,18 +387,18 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
                   </Popover>
                 </div>
               </th>
-              <th className="px-4 py-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-500">Due Date</th>
-              <th className="px-4 py-3 text-center font-bold text-[10px] uppercase tracking-wider text-slate-500">Remaining</th>
-              <th className="px-4 py-3 text-right font-bold text-[10px] uppercase tracking-wider text-slate-500">Actions</th>
+              <th className="px-4 py-3 text-center font-semibold text-xs uppercase tracking-wide text-slate-600">Due Date</th>
+              <th className="px-4 py-3 text-center font-semibold text-xs uppercase tracking-wide text-slate-600">Remaining</th>
+              <th className="px-4 py-3 text-right font-semibold text-xs uppercase tracking-wide text-slate-600">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr><td colSpan={7} className="text-center py-12 text-slate-400 font-medium">Loading components...</td></tr>
+              <tr><td colSpan={7} className="h-24 text-center text-slate-500 font-medium">Loading components...</td></tr>
             ) : error ? (
-              <tr><td colSpan={7} className="text-center text-red-500 py-12 font-medium">{error}</td></tr>
+              <tr><td colSpan={7} className="h-24 text-center text-red-500 font-medium">{error}</td></tr>
             ) : sortedComponents.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-12 text-slate-400 font-medium">No components tracked for this aircraft.</td></tr>
+              <tr><td colSpan={7} className="h-24 text-center text-slate-500 font-medium">No components tracked for this aircraft.</td></tr>
             ) : (
               sortedComponents.map((comp) => {
                 const { extendedHours, dueIn } = comp._computed
@@ -431,44 +431,44 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
 
                 return (
                   <tr key={comp.id} className={rowClass}>
-                    <td className="relative px-4 py-4 align-middle">
+                    <td className="relative px-4 py-3.5 align-middle">
                       <div className={borderClass} />
                       <div className="pl-2">
-                        <div className="font-bold text-slate-900">{comp.name}</div>
+                        <div className="font-semibold text-slate-900">{comp.name}</div>
                         {comp.description && (
-                          <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{comp.description}</div>
+                          <div className="text-xs text-slate-600 mt-0.5 line-clamp-1">{comp.description}</div>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-center align-middle">
+                    <td className="px-4 py-3.5 text-center align-middle">
                       {status === "Due Soon" && (
-                        <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-none">DUE SOON</Badge>
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200 text-xs font-medium px-2 py-0.5">DUE SOON</Badge>
                       )}
                       {status === "Overdue" && (
-                        <Badge variant="destructive" className="bg-red-500 text-white border-none text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-none">OVERDUE</Badge>
+                        <Badge variant="destructive" className="bg-red-500 text-white border-none text-xs font-medium px-2 py-0.5">OVERDUE</Badge>
                       )}
                       {status === "Within Extension" && (
-                        <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-none">EXTENSION</Badge>
+                        <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs font-medium px-2 py-0.5">EXTENSION</Badge>
                       )}
                       {status === "Upcoming" && (
-                        <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-none">HEALTHY</Badge>
+                        <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-xs font-medium px-2 py-0.5">HEALTHY</Badge>
                       )}
                     </td>
-                    <td className="px-4 py-4 text-center align-middle font-semibold text-slate-700">
+                    <td className="px-4 py-3.5 text-center align-middle font-semibold text-slate-700">
                       {comp.current_due_hours !== null ? `${comp.current_due_hours}h` : "—"}
                     </td>
-                    <td className="px-4 py-4 text-center align-middle font-medium text-slate-500">
+                    <td className="px-4 py-3.5 text-center align-middle font-medium text-slate-500">
                       {extendedHours !== null ? `${Number(extendedHours.toFixed(1))}h` : "—"}
                     </td>
-                    <td className="px-4 py-4 text-center align-middle font-medium text-slate-600">
+                    <td className="px-4 py-3.5 text-center align-middle font-medium text-slate-600">
                       {comp.current_due_date ? (
                         <div className="flex flex-col items-center">
-                          <span className="text-xs font-bold text-slate-700">
+                          <span className="text-xs font-semibold text-slate-700">
                             {format(new Date(comp.current_due_date), 'dd MMM yyyy')}
                           </span>
                           {daysDiff !== null && (status === "Overdue" || status === "Due Soon" || status === "Within Extension") && (
                             <span className={cn(
-                              "text-[9px] font-bold uppercase tracking-tight mt-0.5",
+                              "text-[10px] font-medium uppercase tracking-tight mt-0.5",
                               daysDiff < 0 ? "text-red-500" : "text-amber-500"
                             )}>
                               {daysDiff < 0 ? `${Math.abs(daysDiff)} days overdue` : `${daysDiff} days left`}
@@ -477,38 +477,40 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
                         </div>
                       ) : "—"}
                     </td>
-                    <td className="px-4 py-4 text-center align-middle">
+                    <td className="px-4 py-3.5 text-center align-middle">
                       <div className="flex flex-col items-center">
-                        <span className="font-bold text-slate-900">{dueIn}</span>
+                        <span className="font-semibold text-slate-900">{dueIn}</span>
                         {extendedHours !== null && (
-                          <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tight mt-0.5">Extended</span>
+                          <span className="text-[10px] font-medium text-indigo-500 uppercase tracking-tight mt-0.5">Extended</span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-right align-middle">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
-                            <IconDotsVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="rounded-xl border-slate-200 shadow-xl p-1">
-                          <DropdownMenuItem onClick={() => handleLogMaintenance(comp.id)} className="rounded-lg py-2 text-xs font-medium cursor-pointer">
-                            <IconClipboard className="w-4 h-4 mr-2 text-slate-400" /> Log Maintenance
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-slate-50" />
-                          <DropdownMenuItem onClick={() => handleViewDetails(comp)} className="rounded-lg py-2 text-xs font-medium cursor-pointer">
-                            <IconEdit className="w-4 h-4 mr-2 text-slate-400" /> Edit Details
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-slate-50" />
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteComponent(comp)}
-                            className="rounded-lg py-2 text-xs font-bold text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
-                          >
-                            <IconTrash className="w-4 h-4 mr-2" /> Delete Item
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    <td className="px-4 py-3.5 text-right align-middle">
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600 hover:bg-slate-50">
+                              <IconDotsVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="rounded-xl border-slate-200 shadow-xl p-1">
+                            <DropdownMenuItem onClick={() => handleLogMaintenance(comp.id)} className="rounded-lg py-2 text-xs font-medium cursor-pointer">
+                              <IconClipboard className="w-4 h-4 mr-2 text-slate-400" /> Log Maintenance
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-slate-50" />
+                            <DropdownMenuItem onClick={() => handleViewDetails(comp)} className="rounded-lg py-2 text-xs font-medium cursor-pointer">
+                              <IconEdit className="w-4 h-4 mr-2 text-slate-400" /> Edit Details
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-slate-50" />
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteComponent(comp)}
+                              className="rounded-lg py-2 text-xs font-semibold text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
+                            >
+                              <IconTrash className="w-4 h-4 mr-2" /> Delete Item
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -519,13 +521,13 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
       </div>
 
       {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
+      <div className="md:hidden space-y-3">
         {loading ? (
-          <div className="text-center py-12 text-slate-400 font-medium">Loading components...</div>
+          <div className="text-center py-12 bg-white rounded-lg border border-dashed border-slate-200 text-slate-500 font-medium">Loading components...</div>
         ) : error ? (
-          <div className="text-center text-red-500 py-12 font-medium">{error}</div>
+          <div className="text-center py-12 bg-white rounded-lg border border-dashed border-slate-200 text-red-500 font-medium">{error}</div>
         ) : sortedComponents.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 font-medium">No components tracked.</div>
+          <div className="text-center py-12 bg-white rounded-lg border border-dashed border-slate-200 text-slate-500 font-medium">No components tracked.</div>
         ) : (
           sortedComponents.map((comp) => {
             const { dueIn } = comp._computed
@@ -540,11 +542,11 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
               : null
 
             const cardClass = cn(
-              "relative overflow-hidden rounded-[20px] border bg-white p-4 shadow-sm",
+              "relative overflow-hidden rounded-lg border bg-white p-4 shadow-sm active:bg-slate-50 transition-colors",
               status === "Due Soon" ? "border-amber-100 bg-amber-50/10" :
               status === "Within Extension" ? "border-orange-100 bg-orange-50/10" :
               status === "Overdue" ? "border-red-100 bg-red-50/10" :
-              "border-slate-100"
+              "border-slate-200"
             )
 
             const borderClass = cn(
@@ -559,65 +561,44 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
               <div key={comp.id} className={cardClass}>
                 <div className={borderClass} />
                 <div className="flex justify-between items-start mb-3 pl-2">
-                  <div className="pr-2">
-                    <h3 className="font-bold text-slate-900">{comp.name}</h3>
+                  <div className="pr-2 flex-1">
+                    <h3 className="font-semibold text-slate-900">{comp.name}</h3>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {status === "Due Soon" && (
-                        <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200 text-[9px] font-bold px-2 py-0.5 rounded-lg shadow-none">DUE SOON</Badge>
+                        <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", "bg-amber-100 text-amber-700 border-amber-200")}>DUE SOON</Badge>
                       )}
                       {status === "Overdue" && (
-                        <Badge variant="destructive" className="bg-red-500 text-white border-none text-[9px] font-bold px-2 py-0.5 rounded-lg shadow-none">OVERDUE</Badge>
+                        <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", "bg-red-500 text-white border-red-500")}>OVERDUE</Badge>
                       )}
                       {status === "Within Extension" && (
-                        <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[9px] font-bold px-2 py-0.5 rounded-lg shadow-none">EXTENSION</Badge>
+                        <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", "bg-orange-100 text-orange-700 border-orange-200")}>EXTENSION</Badge>
                       )}
                       {status === "Upcoming" && (
-                        <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[9px] font-bold px-2 py-0.5 rounded-lg shadow-none">HEALTHY</Badge>
+                        <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", "bg-emerald-50 text-emerald-600 border-emerald-200")}>HEALTHY</Badge>
                       )}
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400">
-                        <IconDotsVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="rounded-xl border-slate-200 shadow-xl p-1 w-48">
-                      <DropdownMenuItem onClick={() => handleLogMaintenance(comp.id)} className="rounded-lg py-2.5 text-xs font-semibold">
-                        <IconClipboard className="w-4 h-4 mr-2" /> Log Maintenance
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleViewDetails(comp)} className="rounded-lg py-2.5 text-xs font-semibold">
-                        <IconEdit className="w-4 h-4 mr-2" /> Edit Details
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator className="my-1" />
-                      <DropdownMenuItem
-                        onClick={() => handleDeleteComponent(comp)}
-                        className="rounded-lg py-2.5 text-xs font-bold text-red-600 focus:text-red-600 focus:bg-red-50"
-                      >
-                        <IconTrash className="w-4 h-4 mr-2" /> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <IconChevronRight className="w-4 h-4 text-slate-400" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pl-2">
+                <div className="grid grid-cols-2 gap-4 pl-2">
                   <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                       <IconClock className="w-3 h-3" /> Due In
                     </div>
-                    <div className="font-bold text-sm text-slate-900">{dueIn}</div>
+                    <div className="font-semibold text-sm text-slate-700">{dueIn}</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                       <IconCalendar className="w-3 h-3" /> Due At
                     </div>
                     <div className="flex flex-col">
-                      <div className="font-bold text-sm text-slate-900">
+                      <div className="font-semibold text-sm text-slate-700">
                         {comp.current_due_hours ? `${comp.current_due_hours}h` : (comp.current_due_date ? format(new Date(comp.current_due_date), 'dd MMM') : "—")}
                       </div>
                       {daysDiff !== null && !comp.current_due_hours && (status === "Overdue" || status === "Due Soon" || status === "Within Extension") && (
                         <div className={cn(
-                          "text-[9px] font-bold uppercase tracking-tight mt-0.5",
+                          "text-[10px] font-medium uppercase tracking-tight mt-0.5",
                           daysDiff < 0 ? "text-red-500" : "text-amber-500"
                         )}>
                           {daysDiff < 0 ? `${Math.abs(daysDiff)}d overdue` : `${daysDiff}d left`}
@@ -628,9 +609,9 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
                 </div>
 
                 {comp.description && (
-                  <div className="mt-3 pt-3 border-t border-slate-50 pl-2">
-                    <p className="text-[11px] text-slate-500 leading-relaxed italic line-clamp-2">
-                      &quot;{comp.description}&quot;
+                  <div className="mt-3 pt-3 border-t border-slate-100 pl-2">
+                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
+                      {comp.description}
                     </p>
                   </div>
                 )}

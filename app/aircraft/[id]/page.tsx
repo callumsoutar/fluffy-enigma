@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import {
   IconArrowLeft,
@@ -10,9 +10,6 @@ import {
   IconTool,
   IconSettings,
   IconChartBar,
-  IconChevronDown,
-  IconEdit,
-  IconCalendar,
 } from "@tabler/icons-react"
 import Link from "next/link"
 
@@ -22,15 +19,8 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import * as Tabs from "@radix-ui/react-tabs"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -122,7 +112,6 @@ function formatTotalHours(hours: number | null | undefined): string {
 
 export default function AircraftDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const aircraftId = params.id as string
   const [activeTab, setActiveTab] = React.useState("overview")
   const [underlineStyle, setUnderlineStyle] = React.useState({ left: 0, width: 0 })
@@ -330,36 +319,6 @@ export default function AircraftDetailPage() {
                         <span>Total Hours: {formatTotalHours(totalHours)}</span>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          className="gap-2 bg-white hover:bg-gray-50 border-gray-300 text-gray-700 font-medium w-full sm:w-auto"
-                        >
-                          Quick Actions
-                          <IconChevronDown className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push(`/bookings/new?aircraft_id=${aircraftId}`)}>
-                          <IconCalendar className="h-4 w-4 mr-2" />
-                          Create Booking
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <IconEdit className="h-4 w-4 mr-2" />
-                          Edit Aircraft
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button
-                      className="bg-[#6564db] hover:bg-[#232ed1] text-white gap-2 font-semibold shadow-sm w-full sm:w-auto"
-                      onClick={() => router.push(`/bookings/new?aircraft_id=${aircraftId}`)}
-                    >
-                      <IconCalendar className="h-4 w-4" />
-                      New Booking
-                    </Button>
                   </div>
                 </div>
               </CardContent>

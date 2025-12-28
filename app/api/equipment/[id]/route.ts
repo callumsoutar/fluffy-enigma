@@ -145,3 +145,55 @@ export async function GET(
   return NextResponse.json({ equipment }, { status: 200 });
 }
 
+/**
+ * DELETE /api/equipment/[id]
+ *
+ * Delete an equipment record (soft delete by setting voided_at).
+ * Requires authentication and admin/owner role.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin']);
+  if (!hasAccess) {
+    return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+  }
+
+  const { id } = await params;
+
+  // Check if equipment has any open issuances
+  const { data: openIssuances } = await supabase
+    .from('equipment_issuance')
+    .select('id')
+    .eq('equipment_id', id)
+    .is('returned_at', null);
+
+  if (openIssuances && openIssuances.length > 0) {
+    return NextResponse.json(
+      { error: 'Cannot delete equipment with open issuances. Please return all issued items first.' },
+      { status: 409 }
+    );
+  }
+
+  // Soft delete by setting voided_at
+  const { error } = await supabase
+    .from('equipment')
+    .update({ voided_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting equipment:', error);
+    return NextResponse.json({ error: 'Failed to delete equipment' }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true }, { status: 200 });
+}
+

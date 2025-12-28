@@ -84,6 +84,62 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * GET /api/equipment-issuance
+ *
+ * Fetch equipment issuance history.
+ * Requires authentication and instructor/admin/owner role.
+ */
+export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor']);
+  if (!hasAccess) {
+    return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+  }
+
+  // Get equipment_id from query params
+  const searchParams = request.nextUrl.searchParams;
+  const equipmentId = searchParams.get('equipment_id');
+
+  if (!equipmentId) {
+    return NextResponse.json({ error: 'equipment_id is required' }, { status: 400 });
+  }
+
+  // Fetch issuance history for the equipment
+  const { data: issuances, error } = await supabase
+    .from('equipment_issuance')
+    .select(`
+      *,
+      user:users!equipment_issuance_user_id_fkey(
+        id,
+        first_name,
+        last_name,
+        email
+      ),
+      issued_by_user:users!equipment_issuance_issued_by_fkey(
+        id,
+        first_name,
+        last_name,
+        email
+      )
+    `)
+    .eq('equipment_id', equipmentId)
+    .order('issued_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching equipment issuance history:', error);
+    return NextResponse.json({ error: 'Failed to fetch equipment issuance history' }, { status: 500 });
+  }
+
+  return NextResponse.json({ issuances: issuances || [] }, { status: 200 });
+}
+
+/**
  * PATCH /api/equipment-issuance
  *
  * Return equipment (mark issuance as returned).

@@ -8,10 +8,7 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BookingsTable } from "@/components/bookings/bookings-table"
-import { NewBookingModal } from "@/components/bookings/new-booking-modal"
 import type { BookingWithRelations } from "@/lib/types/bookings"
 import type { BookingsFilter, BookingStatus, BookingType } from "@/lib/types/bookings"
 
@@ -68,7 +65,6 @@ export default function BookingsPage() {
   const [activeTab, setActiveTab] = React.useState("all")
   const [mounted, setMounted] = React.useState(false)
   const [filters, setFilters] = React.useState<BookingsFilter>({})
-  const [newBookingOpen, setNewBookingOpen] = React.useState(false)
 
   // Prevent hydration mismatch by only calculating dates after mount
   React.useEffect(() => {
@@ -222,116 +218,31 @@ export default function BookingsPage() {
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <div className="px-4 lg:px-6">
                 <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <h1 className="text-2xl font-bold tracking-tight">Bookings</h1>
-                      <p className="text-muted-foreground">
-                        View and manage all flight bookings
-                      </p>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-muted-foreground">Loading bookings...</div>
                     </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      <Button
-                        type="button"
-                        onClick={() => setNewBookingOpen(true)}
-                        className="w-full sm:w-auto"
-                      >
-                        New booking
-                      </Button>
+                  ) : isError ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-muted-foreground">
+                        Failed to load bookings. You may not have permission to view this page.
+                      </div>
                     </div>
-                  </div>
-
-                  <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList>
-                      <TabsTrigger value="all">
-                        All ({tabCounts.all})
-                      </TabsTrigger>
-                      <TabsTrigger value="today">
-                        Today ({tabCounts.today})
-                      </TabsTrigger>
-                      <TabsTrigger value="flying">
-                        Flying ({tabCounts.flying})
-                      </TabsTrigger>
-                      <TabsTrigger value="unconfirmed">
-                        Unconfirmed ({tabCounts.unconfirmed})
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="all" className="mt-4">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Loading bookings...</div>
-                        </div>
-                      ) : isError ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Failed to load bookings.</div>
-                        </div>
-                      ) : (
-                        <BookingsTable
-                          bookings={filteredBookings}
-                          onFiltersChange={handleFiltersChange}
-                        />
-                      )}
-                    </TabsContent>
-                    <TabsContent value="today" className="mt-4">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Loading bookings...</div>
-                        </div>
-                      ) : isError ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Failed to load bookings.</div>
-                        </div>
-                      ) : (
-                        <BookingsTable
-                          bookings={filteredBookings}
-                          onFiltersChange={handleFiltersChange}
-                        />
-                      )}
-                    </TabsContent>
-                    <TabsContent value="flying" className="mt-4">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Loading bookings...</div>
-                        </div>
-                      ) : isError ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Failed to load bookings.</div>
-                        </div>
-                      ) : (
-                        <BookingsTable
-                          bookings={filteredBookings}
-                          onFiltersChange={handleFiltersChange}
-                        />
-                      )}
-                    </TabsContent>
-                    <TabsContent value="unconfirmed" className="mt-4">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Loading bookings...</div>
-                        </div>
-                      ) : isError ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Failed to load bookings.</div>
-                        </div>
-                      ) : (
-                        <BookingsTable
-                          bookings={filteredBookings}
-                          onFiltersChange={handleFiltersChange}
-                        />
-                      )}
-                    </TabsContent>
-                  </Tabs>
+                  ) : (
+                    <BookingsTable
+                      bookings={filteredBookings}
+                      onFiltersChange={handleFiltersChange}
+                      activeTab={activeTab}
+                      onTabChange={setActiveTab}
+                      tabCounts={tabCounts}
+                    />
+                  )}
                 </div>
               </div>
             </div>
           </div>
         </div>
       </SidebarInset>
-
-      <NewBookingModal
-        open={newBookingOpen}
-        onOpenChange={setNewBookingOpen}
-        prefill={{ date: new Date(), startTime: "09:00" }}
-      />
     </SidebarProvider>
   )
 }

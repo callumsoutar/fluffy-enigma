@@ -9,12 +9,12 @@ import { Plus, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import type { InstructorCategory } from "@/lib/types/instructor-categories"
+import { DatePicker } from "@/components/ui/date-picker"
 
 const EMPLOYMENT_TYPES = [
   { value: "full_time", label: "Full time" },
@@ -192,12 +192,11 @@ export function CreateInstructorProfileDialog({
                     <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
                       HIRE DATE
                     </label>
-                    <Input
-                      id="hire_date"
-                      type="date"
-                      className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none focus-visible:ring-0"
-                      value={form.watch("hire_date") ?? ""}
-                      onChange={(e) => form.setValue("hire_date", e.target.value || null, { shouldDirty: true })}
+                    <DatePicker
+                      date={form.watch("hire_date")}
+                      onChange={(date) => form.setValue("hire_date", date, { shouldDirty: true })}
+                      placeholder="Select hire date"
+                      className="h-10 w-full"
                     />
                   </div>
                 </div>

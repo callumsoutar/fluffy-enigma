@@ -7,6 +7,7 @@ import {
   IconSettings,
   IconDeviceFloppy,
   IconLoader2,
+  IconPlane,
 } from "@tabler/icons-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { Input } from "@/components/ui/input";
@@ -22,11 +23,13 @@ import {
 } from "@/components/ui/select";
 import { useSettingsManager } from "@/hooks/use-settings";
 import { toast } from "sonner";
+import { AircraftTypesConfig } from "./AircraftTypesConfig";
 
 const generalTabs = [
   { id: "school-info", label: "School Information", icon: IconBuilding },
   { id: "contact-info", label: "Contact Information", icon: IconMail },
   { id: "system-settings", label: "System Settings", icon: IconSettings },
+  { id: "aircraft", label: "Aircraft", icon: IconPlane },
 ];
 
 export function GeneralTab() {
@@ -486,6 +489,10 @@ export function GeneralTab() {
                 </div>
               </div>
             </div>
+          </Tabs.Content>
+
+          <Tabs.Content value="aircraft" className="outline-none">
+            <AircraftTypesConfig />
           </Tabs.Content>
         </div>
       </Tabs.Root>

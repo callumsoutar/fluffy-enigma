@@ -28,18 +28,18 @@ interface AircraftTableProps {
 
 function getStatusBadge(status: string | null): { label: string; className: string } {
   if (!status) {
-    return { label: "Unknown", className: "bg-slate-100 text-slate-600 border-slate-200" }
+    return { label: "Unknown", className: "bg-slate-50 text-slate-700 border-slate-200" }
   }
   
   const statusLower = status.toLowerCase()
   if (statusLower === "active") {
-    return { label: "Active", className: "bg-emerald-50 text-emerald-600 border-emerald-100" }
+    return { label: "Active", className: "bg-emerald-50 text-emerald-700 border-emerald-200" }
   }
   if (statusLower === "maintenance" || statusLower === "down") {
-    return { label: status.toUpperCase(), className: "bg-amber-100 text-amber-700 border-amber-200" }
+    return { label: status.toUpperCase(), className: "bg-amber-50 text-amber-700 border-amber-200" }
   }
   
-  return { label: status.charAt(0).toUpperCase() + status.slice(1), className: "bg-slate-100 text-slate-600 border-slate-200" }
+  return { label: status.charAt(0).toUpperCase() + status.slice(1), className: "bg-slate-50 text-slate-700 border-slate-200" }
 }
 
 function formatTotalHours(hours: number | null): string {
@@ -88,18 +88,18 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
         
         return (
           <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9 rounded-full border border-slate-100">
+            <Avatar className="h-9 w-9 rounded-md">
               {imageUrl ? (
                 <AvatarImage src={imageUrl} alt={registration} />
               ) : null}
-              <AvatarFallback className="bg-slate-100 text-slate-500 text-xs font-bold">
+              <AvatarFallback className="bg-slate-100 text-slate-600 text-xs font-semibold">
                 {registration.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col">
-              <span className="font-bold text-slate-900">{registration}</span>
+              <span className="font-semibold text-slate-900">{registration}</span>
               {model && (
-                <span className="text-[11px] text-slate-500 font-medium">{model}</span>
+                <span className="text-xs text-slate-600">{model}</span>
               )}
             </div>
           </div>
@@ -111,7 +111,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
       header: "Type",
       cell: ({ row }) => {
         const type = row.original.type || row.original.aircraft_type?.name || ""
-        return <span className="font-medium text-slate-600">{type}</span>
+        return <span className="text-slate-700">{type}</span>
       },
     },
     {
@@ -123,7 +123,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
         
         return (
           <div className="flex justify-center">
-            <Badge variant="outline" className={cn("text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-none border uppercase tracking-wider", className)}>
+            <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", className)}>
               {label}
             </Badge>
           </div>
@@ -136,7 +136,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
       cell: ({ row }) => {
         const hours = row.original.total_hours
         return (
-          <div className="text-right font-bold text-slate-900">
+          <div className="text-right font-semibold text-slate-900">
             {formatTotalHours(hours)}
           </div>
         )
@@ -175,7 +175,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-slate-900">Aircraft</h2>
-          <p className="text-slate-500 mt-1">Manage your fleet and maintenance schedules.</p>
+          <p className="text-slate-600 mt-1">Manage your fleet and maintenance schedules.</p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 items-center">
@@ -185,12 +185,12 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
               placeholder="Search aircraft..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 w-full sm:w-64 h-11 rounded-xl border-slate-200 bg-white shadow-sm focus:ring-slate-100"
+              className="pl-9 w-full sm:w-64 h-10 border-slate-200 bg-white focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:border-slate-300"
             />
           </div>
           {canAddAircraft && (
             <Button
-              className="bg-slate-900 text-white font-bold rounded-xl h-11 px-6 shadow-lg shadow-slate-900/10 hover:bg-slate-800 w-full sm:w-auto"
+              className="bg-slate-900 text-white font-semibold h-10 px-5 hover:bg-slate-800 w-full sm:w-auto"
               onClick={() => setAddOpen(true)}
             >
               <IconPlus className="h-4 w-4 mr-2" />
@@ -201,17 +201,17 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
+      <div className="hidden md:block overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full text-sm border-collapse">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/50">
+            <tr className="border-b border-slate-200 bg-slate-50/50">
               {table.getHeaderGroups().map(headerGroup => (
                 <React.Fragment key={headerGroup.id}>
                   {headerGroup.headers.map(header => (
                     <th 
                       key={header.id}
                       className={cn(
-                        "px-4 py-3 font-bold text-[10px] uppercase tracking-wider text-slate-500",
+                        "px-4 py-3 font-semibold text-xs uppercase tracking-wide text-slate-600",
                         header.id === "total_hours" ? "text-right" : 
                         header.id === "status" ? "text-center" : "text-left"
                       )}
@@ -225,7 +225,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-slate-100">
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <tr
@@ -237,7 +237,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
                     <td 
                       key={cell.id} 
                       className={cn(
-                        "px-4 py-4 align-middle",
+                        "px-4 py-3.5 align-middle",
                         cell.column.id === "actions" ? "pr-6" : ""
                       )}
                     >
@@ -248,7 +248,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="h-24 text-center text-slate-400 font-medium">
+                <td colSpan={columns.length} className="h-24 text-center text-slate-500 font-medium">
                   No aircraft found.
                 </td>
               </tr>
@@ -258,7 +258,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
       </div>
 
       {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
+      <div className="md:hidden space-y-3">
         {table.getRowModel().rows?.length ? (
           table.getRowModel().rows.map((row) => {
             const aircraft = row.original
@@ -267,58 +267,58 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
             return (
               <div
                 key={row.id}
-                className="relative overflow-hidden rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm active:bg-slate-50 transition-colors"
+                className="relative overflow-hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50 transition-colors"
                 onClick={() => router.push(`/aircraft/${aircraft.id}`)}
               >
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-100" />
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-900 rounded-l-lg" />
                 
-                <div className="flex justify-between items-start mb-4 pl-2">
+                <div className="flex justify-between items-start mb-3 pl-2">
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 rounded-full border border-slate-50">
+                    <Avatar className="h-10 w-10 rounded-md">
                       {aircraft.aircraft_image_url ? (
                         <AvatarImage src={aircraft.aircraft_image_url} alt={aircraft.registration} />
                       ) : null}
-                      <AvatarFallback className="bg-slate-50 text-slate-400 text-xs font-bold">
+                      <AvatarFallback className="bg-slate-100 text-slate-600 text-xs font-semibold">
                         {aircraft.registration?.substring(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col">
-                      <h3 className="font-bold text-slate-900">{aircraft.registration}</h3>
-                      <span className="text-[11px] text-slate-500 font-medium">{aircraft.model || "Unknown Model"}</span>
+                      <h3 className="font-semibold text-slate-900">{aircraft.registration}</h3>
+                      <span className="text-xs text-slate-600">{aircraft.model || "Unknown Model"}</span>
                     </div>
                   </div>
-                  <Badge variant="outline" className={cn("text-[9px] font-bold px-2 py-0.5 rounded-lg shadow-none border uppercase tracking-wider", className)}>
+                  <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", className)}>
                     {label}
                   </Badge>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 pl-2">
                   <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                       <IconTag className="w-3 h-3" /> Type
                     </div>
-                    <div className="font-bold text-sm text-slate-700">
+                    <div className="font-semibold text-sm text-slate-700">
                       {aircraft.type || aircraft.aircraft_type?.name || "—"}
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                       <IconClock className="w-3 h-3" /> Total Hours
                     </div>
-                    <div className="font-bold text-sm text-slate-900">
+                    <div className="font-semibold text-sm text-slate-900">
                       {formatTotalHours(aircraft.total_hours)}
                     </div>
                   </div>
                 </div>
 
                 <div className="absolute right-4 bottom-4">
-                  <IconChevronRight className="w-4 h-4 text-slate-300" />
+                  <IconChevronRight className="w-4 h-4 text-slate-400" />
                 </div>
               </div>
             )
           })
         ) : (
-          <div className="text-center py-12 bg-white rounded-[20px] border border-dashed border-slate-200 text-slate-400 font-medium">
+          <div className="text-center py-12 bg-white rounded-lg border border-dashed border-slate-200 text-slate-500 font-medium">
             No aircraft found.
           </div>
         )}
@@ -326,8 +326,8 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
 
       {/* Pagination */}
       <div className="flex items-center justify-between px-2">
-        <div className="text-xs text-slate-500 font-medium">
-          Showing <span className="text-slate-900">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to <span className="text-slate-900">{Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, filteredAircraft.length)}</span> of <span className="text-slate-900">{filteredAircraft.length}</span> aircraft
+        <div className="text-sm text-slate-600">
+          Showing <span className="font-semibold text-slate-900">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to <span className="font-semibold text-slate-900">{Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, filteredAircraft.length)}</span> of <span className="font-semibold text-slate-900">{filteredAircraft.length}</span> aircraft
         </div>
         <div className="flex items-center space-x-2">
           <Button
@@ -335,7 +335,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
             size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="rounded-lg h-8 border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="h-9 border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Previous
           </Button>
@@ -344,7 +344,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
             size="sm"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="rounded-lg h-8 border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="h-9 border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Next
           </Button>

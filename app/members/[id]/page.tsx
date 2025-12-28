@@ -14,6 +14,9 @@ import {
   IconClock,
   IconMail,
   IconChevronDown,
+  IconReceipt,
+  IconUserPlus,
+  IconKey,
 } from "@tabler/icons-react"
 import Link from "next/link"
 
@@ -31,6 +34,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu"
 import {
   Select,
@@ -367,19 +375,34 @@ export default function MemberDetailPage() {
                           <IconChevronDown className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end" className="w-56">
                         <DropdownMenuItem onClick={() => router.push(`/bookings/new?member_id=${memberId}`)}>
                           <IconCalendar className="h-4 w-4 mr-2" />
-                          Create Booking
+                          New Booking
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <IconUser className="h-4 w-4 mr-2" />
-                          View Profile
+                        <DropdownMenuItem onClick={() => router.push(`/invoices/new?member_id=${memberId}`)}>
+                          <IconReceipt className="h-4 w-4 mr-2" />
+                          New Invoice
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <IconMail className="h-4 w-4 mr-2" />
-                          Send Email
-                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <IconUser className="h-4 w-4 mr-2" />
+                            Account
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuPortal>
+                            <DropdownMenuSubContent>
+                              <DropdownMenuItem>
+                                <IconUserPlus className="h-4 w-4 mr-2" />
+                                Invite User
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <IconKey className="h-4 w-4 mr-2" />
+                                Reset Password
+                              </DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                          </DropdownMenuPortal>
+                        </DropdownMenuSub>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <Button

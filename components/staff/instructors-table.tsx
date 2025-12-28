@@ -53,18 +53,18 @@ const STATUS_LABELS: Record<string, string> = {
 
 function getStatusBadge(status: string | null): { label: string; className: string } {
   if (!status) {
-    return { label: "Unknown", className: "bg-slate-100 text-slate-600 border-slate-200" }
+    return { label: "Unknown", className: "bg-slate-50 text-slate-700 border-slate-200" }
   }
   
   const statusLower = status.toLowerCase()
   if (statusLower === "active") {
-    return { label: "Active", className: "bg-emerald-50 text-emerald-600 border-emerald-100" }
+    return { label: "Active", className: "bg-emerald-50 text-emerald-700 border-emerald-200" }
   }
   if (statusLower === "inactive" || statusLower === "deactivated" || statusLower === "suspended") {
-    return { label: STATUS_LABELS[statusLower] || status.toUpperCase(), className: "bg-red-50 text-red-600 border-red-100" }
+    return { label: STATUS_LABELS[statusLower] || status.toUpperCase(), className: "bg-red-50 text-red-700 border-red-200" }
   }
   
-  return { label: status.charAt(0).toUpperCase() + status.slice(1), className: "bg-slate-100 text-slate-600 border-slate-200" }
+  return { label: status.charAt(0).toUpperCase() + status.slice(1), className: "bg-slate-50 text-slate-700 border-slate-200" }
 }
 
 export function InstructorsTable({ instructors }: InstructorsTableProps) {
@@ -114,14 +114,14 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
 
         return (
           <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9 rounded-full border border-slate-100">
-              <AvatarFallback className="bg-slate-100 text-slate-500 text-xs font-bold">
+            <Avatar className="h-9 w-9 rounded-md">
+              <AvatarFallback className="bg-slate-100 text-slate-700 text-xs font-semibold">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col">
-              <span className="font-bold text-slate-900">{name}</span>
-              <span className="text-[11px] text-slate-500 font-medium">{user.email}</span>
+              <span className="font-semibold text-slate-900">{name}</span>
+              <span className="text-xs text-slate-600">{user.email}</span>
             </div>
           </div>
         )
@@ -133,7 +133,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
       cell: ({ row }) => {
         const { employment_type } = row.original
         const label = employment_type ? EMPLOYMENT_TYPE_LABELS[employment_type] || employment_type : "Not assigned"
-        return <span className="font-medium text-slate-600">{label}</span>
+        return <span className="text-slate-700">{label}</span>
       },
     },
     {
@@ -141,7 +141,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
       header: "Category",
       cell: ({ row }) => {
         const category = row.original.rating_category?.name || "Not set"
-        return <span className="font-medium text-slate-600">{category}</span>
+        return <span className="text-slate-700">{category}</span>
       },
     },
     {
@@ -153,7 +153,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
         
         return (
           <div className="flex justify-center">
-            <Badge variant="outline" className={cn("text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-none border uppercase tracking-wider", className)}>
+            <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", className)}>
               {label}
             </Badge>
           </div>
@@ -189,7 +189,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-slate-900">Staff</h2>
-          <p className="text-slate-500 mt-1">Manage your organization&apos;s instructors and staff members.</p>
+          <p className="text-slate-600 mt-1">Manage your organization&apos;s instructors and staff members.</p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 items-center">
@@ -199,24 +199,24 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
               placeholder="Search staff..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 w-full sm:w-64 h-11 rounded-xl border-slate-200 bg-white shadow-sm focus:ring-slate-100"
+              className="pl-9 w-full sm:w-64 h-10 border-slate-200 bg-white focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:border-slate-300"
             />
           </div>
         </div>
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
+      <div className="hidden md:block overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full text-sm border-collapse">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/50">
+            <tr className="border-b border-slate-200 bg-slate-50/50">
               {table.getHeaderGroups().map(headerGroup => (
                 <React.Fragment key={headerGroup.id}>
                   {headerGroup.headers.map(header => (
                     <th 
                       key={header.id}
                       className={cn(
-                        "px-4 py-3 font-bold text-[10px] uppercase tracking-wider text-slate-500",
+                        "px-4 py-3 font-semibold text-xs uppercase tracking-wide text-slate-600",
                         header.id === "status" ? "text-center" : "text-left"
                       )}
                     >
@@ -229,7 +229,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-slate-100">
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <tr
@@ -241,7 +241,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
                     <td 
                       key={cell.id} 
                       className={cn(
-                        "px-4 py-4 align-middle",
+                        "px-4 py-3.5 align-middle",
                         cell.column.id === "actions" ? "pr-6" : ""
                       )}
                     >
@@ -252,7 +252,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="h-24 text-center text-slate-400 font-medium">
+                <td colSpan={columns.length} className="h-24 text-center text-slate-500 font-medium">
                   No staff members found.
                 </td>
               </tr>
@@ -262,7 +262,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
       </div>
 
       {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
+      <div className="md:hidden space-y-3">
         {table.getRowModel().rows?.length ? (
           table.getRowModel().rows.map((row) => {
             const instructor = row.original
@@ -277,55 +277,55 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
             return (
               <div
                 key={row.id}
-                className="relative overflow-hidden rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm active:bg-slate-50 transition-colors"
+                className="relative overflow-hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50 transition-colors"
                 onClick={() => router.push(`/staff/instructors/${encodeURIComponent(instructor.id)}`)}
               >
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-100" />
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-900 rounded-l-lg" />
                 
-                <div className="flex justify-between items-start mb-4 pl-2">
+                <div className="flex justify-between items-start mb-3 pl-2">
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 rounded-full border border-slate-50">
-                      <AvatarFallback className="bg-slate-50 text-slate-400 text-xs font-bold">
+                    <Avatar className="h-10 w-10 rounded-md">
+                      <AvatarFallback className="bg-slate-100 text-slate-700 text-xs font-semibold">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col">
-                      <h3 className="font-bold text-slate-900">{name}</h3>
-                      <span className="text-[11px] text-slate-500 font-medium">{user.email}</span>
+                      <h3 className="font-semibold text-slate-900">{name}</h3>
+                      <span className="text-xs text-slate-600">{user.email}</span>
                     </div>
                   </div>
-                  <Badge variant="outline" className={cn("text-[9px] font-bold px-2 py-0.5 rounded-lg shadow-none border uppercase tracking-wider", statusClass)}>
+                  <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", statusClass)}>
                     {statusLabel}
                   </Badge>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 pl-2">
                   <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                       <IconBriefcase className="w-3 h-3" /> Employment
                     </div>
-                    <div className="font-bold text-sm text-slate-700 uppercase tracking-tight">
+                    <div className="font-semibold text-sm text-slate-700">
                       {employmentLabel}
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                       <IconUserShare className="w-3 h-3" /> Category
                     </div>
-                    <div className="font-bold text-sm text-slate-700">
+                    <div className="font-semibold text-sm text-slate-700">
                       {instructor.rating_category?.name || "Not set"}
                     </div>
                   </div>
                 </div>
 
                 <div className="absolute right-4 bottom-4">
-                  <IconChevronRight className="w-4 h-4 text-slate-300" />
+                  <IconChevronRight className="w-4 h-4 text-slate-400" />
                 </div>
               </div>
             )
           })
         ) : (
-          <div className="text-center py-12 bg-white rounded-[20px] border border-dashed border-slate-200 text-slate-400 font-medium">
+          <div className="text-center py-12 bg-white rounded-lg border border-dashed border-slate-200 text-slate-500 font-medium">
             No staff members found.
           </div>
         )}
@@ -333,8 +333,8 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
 
       {/* Pagination */}
       <div className="flex items-center justify-between px-2">
-        <div className="text-xs text-slate-500 font-medium">
-          Showing <span className="text-slate-900">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to <span className="text-slate-900">{Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, filteredInstructors.length)}</span> of <span className="text-slate-900">{filteredInstructors.length}</span> staff members
+        <div className="text-sm text-slate-600">
+          Showing <span className="font-semibold text-slate-900">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to <span className="font-semibold text-slate-900">{Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, filteredInstructors.length)}</span> of <span className="font-semibold text-slate-900">{filteredInstructors.length}</span> staff members
         </div>
         <div className="flex items-center space-x-2">
           <Button
@@ -342,7 +342,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
             size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="rounded-lg h-8 border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="h-9 border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Previous
           </Button>
@@ -351,7 +351,7 @@ export function InstructorsTable({ instructors }: InstructorsTableProps) {
             size="sm"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="rounded-lg h-8 border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="h-9 border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Next
           </Button>

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import type { MemberWithRelations } from "@/lib/types/members"
+import { DatePicker } from "@/components/ui/date-picker"
 
 const contactSchema = z.object({
   first_name: z.string().min(1, "First name is required").max(100),
@@ -135,8 +136,9 @@ export function MemberContactDetails({
       
       if (!res.ok) {
         const err = await res.json()
-        setError(err.error || `Failed to update member (${res.status})`)
-        toast.error(err.error || "Failed to update member")
+        const detailMsg = err.details ? `: ${JSON.stringify(err.details)}` : ""
+        setError(err.error || `Failed to update member (${res.status})${detailMsg}`)
+        toast.error(err.error || `Failed to update member${detailMsg}`)
       } else {
         const result = await res.json()
         // Invalidate and refetch member data
@@ -239,12 +241,10 @@ export function MemberContactDetails({
             </div>
             <div className="w-1/2 min-w-0">
               <label className="block text-sm font-medium mb-1 text-gray-700">Date of Birth</label>
-              <Input
-                type="date"
-                className="w-full bg-white"
-                {...register("date_of_birth")}
-                value={watch("date_of_birth") || ""}
-                onChange={(e) => setValue("date_of_birth", e.target.value || null, { shouldDirty: true })}
+              <DatePicker
+                date={watch("date_of_birth")}
+                onChange={(date) => setValue("date_of_birth", date, { shouldDirty: true })}
+                placeholder="Select date of birth"
               />
             </div>
           </div>

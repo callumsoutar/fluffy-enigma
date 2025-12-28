@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import * as Tabs from "@radix-ui/react-tabs"
 import { cn } from "@/lib/utils"
+import { DatePicker } from "@/components/ui/date-picker"
 
 import type { Exam, ExamResult, StudentSyllabusEnrollment, Syllabus } from "@/lib/types/database"
 import type { AircraftType } from "@/lib/types/aircraft"
@@ -271,11 +272,11 @@ function EnrollmentCard({ enrollment, instructors, aircraftTypes, onUpdate }: En
             <label className="block text-sm font-medium text-gray-700">
               Enrollment Date
             </label>
-            <Input
-              type="date"
-              value={enrolledAt}
-              onChange={(e) => setEnrolledAt(e.target.value)}
-              className="w-full h-10 bg-white text-sm border-gray-200 focus-visible:ring-0"
+            <DatePicker
+              date={enrolledAt}
+              onChange={(date) => setEnrolledAt(date || "")}
+              placeholder="Select enrollment date"
+              className="w-full h-10 bg-white"
             />
           </div>
         </div>
@@ -1025,12 +1026,12 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                           <CheckCircle2 className="w-2.5 h-2.5" />
                           ENROLLMENT DATE
                         </label>
-                        <Input
-                          type="date"
-                          value={form.watch("enrolled_at") || ""}
-                          onChange={(e) => form.setValue("enrolled_at", e.target.value)}
+                        <DatePicker
+                          date={form.watch("enrolled_at")}
+                          onChange={(date) => form.setValue("enrolled_at", date || "", { shouldValidate: true })}
                           disabled={submitting}
-                          className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-1 focus-visible:ring-indigo-100 transition-all"
+                          placeholder="Select enrollment date"
+                          className="h-10 w-full"
                         />
                       </div>
                     </div>
@@ -1220,12 +1221,12 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                           <CheckCircle2 className="w-2.5 h-2.5" />
                           EXAM DATE <span className="text-destructive font-bold ml-0.5">*</span>
                         </label>
-                        <Input
-                          type="date"
-                          value={logExamForm.watch("exam_date") || ""}
-                          onChange={(e) => logExamForm.setValue("exam_date", e.target.value)}
+                        <DatePicker
+                          date={logExamForm.watch("exam_date")}
+                          onChange={(date) => logExamForm.setValue("exam_date", date || "", { shouldValidate: true })}
                           disabled={logSubmitting}
-                          className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-1 focus-visible:ring-indigo-100 transition-all"
+                          placeholder="Select exam date"
+                          className="h-10 w-full"
                         />
                       </div>
                     </div>

@@ -14,7 +14,6 @@ import { AddEquipmentModal } from "@/components/equipment/AddEquipmentModal"
 import { IssueEquipmentModal } from "@/components/equipment/IssueEquipmentModal"
 import { UpdateEquipmentModal } from "@/components/equipment/UpdateEquipmentModal"
 import { ReturnEquipmentModal } from "@/components/equipment/ReturnEquipmentModal"
-import { EditEquipmentModal } from "@/components/equipment/EditEquipmentModal"
 
 // Fetch equipment from API
 async function fetchEquipment(filters?: EquipmentFilter): Promise<EquipmentWithIssuance[]> {
@@ -52,7 +51,6 @@ export default function EquipmentPage() {
   const [issueModalOpen, setIssueModalOpen] = React.useState(false)
   const [returnModalOpen, setReturnModalOpen] = React.useState(false)
   const [updateModalOpen, setUpdateModalOpen] = React.useState(false)
-  const [editModalOpen, setEditModalOpen] = React.useState(false)
   const [selectedEquipment, setSelectedEquipment] = React.useState<EquipmentWithIssuance | null>(null)
 
   const {
@@ -79,11 +77,6 @@ export default function EquipmentPage() {
   const handleLogUpdate = (equipment: EquipmentWithIssuance) => {
     setSelectedEquipment(equipment)
     setUpdateModalOpen(true)
-  }
-
-  const handleEdit = (equipment: EquipmentWithIssuance) => {
-    setSelectedEquipment(equipment)
-    setEditModalOpen(true)
   }
 
   const handleRefresh = () => {
@@ -123,7 +116,6 @@ export default function EquipmentPage() {
                       onIssue={handleIssue}
                       onReturn={handleReturn}
                       onLogUpdate={handleLogUpdate}
-                      onEdit={handleEdit}
                       onAdd={() => setAddModalOpen(true)}
                     />
                   )}
@@ -160,13 +152,6 @@ export default function EquipmentPage() {
           <UpdateEquipmentModal
             open={updateModalOpen}
             onOpenChange={setUpdateModalOpen}
-            equipment={selectedEquipment}
-            onSuccess={handleRefresh}
-          />
-          
-          <EditEquipmentModal
-            open={editModalOpen}
-            onOpenChange={setEditModalOpen}
             equipment={selectedEquipment}
             onSuccess={handleRefresh}
           />

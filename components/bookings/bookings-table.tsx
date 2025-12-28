@@ -14,14 +14,14 @@ import {
 } from "@tanstack/react-table"
 import { 
   IconSearch, 
-  IconX, 
   IconPlane,
   IconCalendar,
   IconClock,
   IconUser,
   IconSchool,
   IconCircleCheck,
-  IconAlertCircle
+  IconAlertCircle,
+  IconCalendarPlus
 } from "@tabler/icons-react"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter } from "next/navigation"
@@ -45,6 +45,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { NewBookingModal } from "@/components/bookings/new-booking-modal"
 import type { BookingWithRelations, BookingStatus, BookingType } from "@/lib/types/bookings"
 
 interface BookingsTableProps {
@@ -54,6 +55,14 @@ interface BookingsTableProps {
     status?: BookingStatus[]
     booking_type?: BookingType[]
   }) => void
+  activeTab: string
+  onTabChange: (tab: string) => void
+  tabCounts: {
+    all: number
+    today: number
+    flying: number
+    unconfirmed: number
+  }
 }
 
 function getStatusBadgeVariant(status: BookingStatus) {
@@ -376,7 +385,7 @@ function BookingCard({ booking }: { booking: BookingWithRelations }) {
 function DateHeader({ date }: { date: string }) {
   const dateObj = new Date(date)
   return (
-    <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm px-4 py-2.5 text-sm font-medium text-muted-foreground border-b">
+    <div className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur-sm px-4 py-2.5 text-sm font-semibold text-slate-600 border-b border-slate-200">
       {dateObj.toLocaleDateString("en-US", {
         weekday: "short",
         month: "short",
@@ -413,7 +422,13 @@ function groupBookingsByDate(bookings: BookingWithRelations[]) {
     }))
 }
 
-export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps) {
+export function BookingsTable({ 
+  bookings, 
+  onFiltersChange,
+  activeTab,
+  onTabChange,
+  tabCounts
+}: BookingsTableProps) {
   const isMobile = useIsMobile()
   const [mounted, setMounted] = React.useState(false)
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -422,6 +437,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
   const [debouncedSearch, setDebouncedSearch] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
   const [typeFilter, setTypeFilter] = React.useState<string>("all")
+  const [newBookingOpen, setNewBookingOpen] = React.useState(false)
 
   // Prevent hydration mismatch by only rendering mobile/desktop view after mount
   React.useEffect(() => {
@@ -486,64 +502,113 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
     }
   }, [debouncedSearch, statusFilter, typeFilter, onFiltersChange])
 
+  const tabs = [
+    { id: "all", label: "All" },
+    { id: "today", label: "Today" },
+    { id: "flying", label: "Flying" },
+    { id: "unconfirmed", label: "Unconfirmed" },
+  ]
+
   return (
-    <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 items-center gap-2">
-          <div className="relative flex-1 max-w-sm">
-            <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+    <div className="flex flex-col gap-6">
+      <NewBookingModal
+        open={newBookingOpen}
+        onOpenChange={setNewBookingOpen}
+        prefill={{ date: new Date(), startTime: "09:00" }}
+      />
+
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Bookings</h2>
+          <p className="text-slate-600 mt-1">View and manage all flight bookings.</p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-3 items-center">
+          <div className="relative w-full sm:w-auto">
+            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Search aircraft, student, instructor..."
+              placeholder="Search bookings..."
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
-              className="pl-9 h-10 bg-background"
+              className="pl-9 w-full sm:w-64 h-10 border-slate-200 bg-white focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:border-slate-300"
             />
-            {globalFilter && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0 hover:bg-muted"
-                onClick={() => setGlobalFilter("")}
-              >
-                <IconX className="h-3.5 w-3.5" />
-              </Button>
-            )}
           </div>
+          <Button
+            className="bg-slate-900 text-white font-semibold h-10 px-5 hover:bg-slate-800 w-full sm:w-auto"
+            onClick={() => setNewBookingOpen(true)}
+          >
+            <IconCalendarPlus className="h-4 w-4 mr-2" />
+            New Booking
+          </Button>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px] h-10 bg-background">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="unconfirmed">Unconfirmed</SelectItem>
-              <SelectItem value="confirmed">Confirmed</SelectItem>
-              <SelectItem value="briefing">Briefing</SelectItem>
-              <SelectItem value="flying">Flying</SelectItem>
-              <SelectItem value="complete">Complete</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[140px] h-10 bg-background">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="flight">Flight</SelectItem>
-              <SelectItem value="groundwork">Ground Work</SelectItem>
-              <SelectItem value="maintenance">Maintenance</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
+      </div>
+
+      {/* Custom Tabs - Horizontally scrollable on mobile */}
+      <div className="relative -mx-4 px-4 md:mx-0 md:px-0">
+        <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto scrollbar-hide">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id
+            const count = tabCounts[tab.id as keyof typeof tabCounts]
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-all border-b-2 whitespace-nowrap flex-shrink-0",
+                  isActive 
+                    ? "border-slate-900 text-slate-900" 
+                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                )}
+              >
+                <span>{tab.label}</span>
+                <span className={cn(
+                  "inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1.5 rounded-full text-xs font-semibold",
+                  isActive 
+                    ? "bg-slate-900 text-white" 
+                    : "bg-slate-100 text-slate-600"
+                )}>
+                  {count}
+                </span>
+              </button>
+            )
+          })}
         </div>
+      </div>
+
+      {/* Filters Row */}
+      <div className="flex items-center gap-2">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[140px] h-10 border-slate-200">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="unconfirmed">Unconfirmed</SelectItem>
+            <SelectItem value="confirmed">Confirmed</SelectItem>
+            <SelectItem value="briefing">Briefing</SelectItem>
+            <SelectItem value="flying">Flying</SelectItem>
+            <SelectItem value="complete">Complete</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-full sm:w-[140px] h-10 border-slate-200">
+            <SelectValue placeholder="Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="flight">Flight</SelectItem>
+            <SelectItem value="groundwork">Ground Work</SelectItem>
+            <SelectItem value="maintenance">Maintenance</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Mobile Card View - Only render after mount to prevent hydration mismatch */}
       {mounted && isMobile ? (
-        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
           {filteredBookings.length > 0 ? (
             (() => {
               // Get paginated bookings
@@ -572,7 +637,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
             })()
           ) : (
             <div className="p-12">
-              <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <div className="flex flex-col items-center justify-center gap-3 text-slate-500">
                 <IconPlane className="h-10 w-10 opacity-50" />
                 <p className="text-sm font-medium">No bookings found</p>
                 <p className="text-xs text-center">Try adjusting your filters</p>
@@ -582,7 +647,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
         </div>
       ) : mounted ? (
         /* Desktop Table View - Only render after mount */
-        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto -mx-1 sm:mx-0">
             <div className="inline-block min-w-full align-middle px-1 sm:px-0">
               <Table>
@@ -590,12 +655,12 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow 
                       key={headerGroup.id}
-                      className="bg-muted/50 hover:bg-muted/50 border-b"
+                      className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200"
                     >
                       {headerGroup.headers.map((header) => (
                         <TableHead 
                           key={header.id}
-                          className="font-semibold text-foreground h-12 px-4 whitespace-nowrap"
+                          className="font-semibold text-xs uppercase tracking-wide text-slate-600 h-12 px-4 whitespace-nowrap"
                         >
                           {header.isPlaceholder
                             ? null
@@ -614,7 +679,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
                     <TableRow
                       key={row.id}
                       data-state={row.getIsSelected() && "selected"}
-                      className="hover:bg-muted/50 transition-colors border-b last:border-0 cursor-pointer group"
+                      className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0 cursor-pointer group"
                       onClick={(e) => {
                         // Don't navigate if clicking on interactive elements
                         const target = e.target as HTMLElement
@@ -626,7 +691,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
                       {row.getVisibleCells().map((cell) => (
                         <TableCell 
                           key={cell.id}
-                          className="py-4 px-4"
+                          className="py-3.5 px-4"
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
@@ -642,7 +707,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
                         colSpan={columns.length}
                         className="h-32 text-center"
                       >
-                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                        <div className="flex flex-col items-center justify-center gap-2 text-slate-500">
                           <IconPlane className="h-8 w-8 opacity-50" />
                           <p className="text-sm font-medium">No bookings found</p>
                           <p className="text-xs">Try adjusting your filters</p>
@@ -657,27 +722,27 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
         </div>
       ) : (
         /* Loading state during SSR/hydration */
-        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-          <div className="p-8 text-center text-muted-foreground">
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="p-8 text-center text-slate-500">
             Loading...
           </div>
         </div>
       )}
 
       {/* Pagination */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-2">
-        <div className="text-sm text-muted-foreground">
-          Showing <span className="font-medium text-foreground">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-2 pt-2">
+        <div className="text-sm text-slate-600">
+          Showing <span className="font-semibold text-slate-900">
             {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
           </span> to{" "}
-          <span className="font-medium text-foreground">
+          <span className="font-semibold text-slate-900">
             {Math.min(
               (table.getState().pagination.pageIndex + 1) *
                 table.getState().pagination.pageSize,
               filteredBookings.length
             )}
           </span>{" "}
-          of <span className="font-medium text-foreground">{filteredBookings.length}</span> bookings
+          of <span className="font-semibold text-slate-900">{filteredBookings.length}</span> bookings
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -685,7 +750,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
             size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="h-9"
+            className="h-9 border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Previous
           </Button>
@@ -694,7 +759,7 @@ export function BookingsTable({ bookings, onFiltersChange }: BookingsTableProps)
             size="sm"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="h-9"
+            className="h-9 border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Next
           </Button>

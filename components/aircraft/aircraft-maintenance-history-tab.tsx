@@ -20,9 +20,7 @@ import {
   IconEdit, 
   IconTool, 
   IconAlertTriangle, 
-  IconCalendar, 
   IconClock, 
-  IconUser, 
   IconChevronRight,
   IconCoin,
   IconSearch
@@ -172,9 +170,9 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
         const visit = row.original
         return (
           <div className="flex flex-col">
-            <span className="font-bold text-slate-900">{formatDate(visit.visit_date)}</span>
+            <span className="font-semibold text-slate-900">{formatDate(visit.visit_date)}</span>
             {visit.date_out_of_maintenance && (
-              <span className="text-[10px] text-slate-500 font-medium">
+              <span className="text-xs text-slate-600">
                 Out: {formatDate(visit.date_out_of_maintenance)}
               </span>
             )}
@@ -188,7 +186,7 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
       cell: ({ row }) => {
         const { label, className } = getVisitTypeBadge(row.original.visit_type)
         return (
-          <Badge variant="outline" className={cn("text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-none border uppercase tracking-wider", className)}>
+          <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", className)}>
             {label}
           </Badge>
         )
@@ -203,7 +201,7 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
             {row.original.description || "—"}
           </p>
           {row.original.component && (
-            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-tight mt-1 inline-block">
+            <span className="text-xs font-medium text-indigo-600 mt-1 inline-block">
               {row.original.component.name}
             </span>
           )}
@@ -221,14 +219,14 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
       accessorKey: "hours_at_visit",
       header: "Tach Hours",
       cell: ({ row }) => (
-        <span className="font-bold text-slate-900">{formatHours(row.original.hours_at_visit)}</span>
+        <span className="font-semibold text-slate-900">{formatHours(row.original.hours_at_visit)}</span>
       ),
     },
     {
       accessorKey: "total_cost",
       header: () => <div className="text-right">Cost</div>,
       cell: ({ row }) => (
-        <div className="text-right font-bold text-slate-900">
+        <div className="text-right font-semibold text-slate-900">
           {formatCurrency(row.original.total_cost)}
         </div>
       ),
@@ -307,24 +305,24 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
               placeholder="Search history..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 w-full sm:w-64 h-11 rounded-xl border-slate-200 bg-white shadow-sm focus:ring-slate-100"
+              className="pl-9 w-full sm:w-64 h-10 border-slate-200 bg-white focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:border-slate-300"
             />
           </div>
         </div>
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
+      <div className="hidden md:block overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full text-sm border-collapse">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/50">
+            <tr className="border-b border-slate-200 bg-slate-50/50">
               {table.getHeaderGroups().map(headerGroup => (
                 <React.Fragment key={headerGroup.id}>
                   {headerGroup.headers.map(header => (
                     <th 
                       key={header.id}
                       className={cn(
-                        "px-4 py-3 font-bold text-[10px] uppercase tracking-wider text-slate-500",
+                        "px-4 py-3 font-semibold text-xs uppercase tracking-wide text-slate-600",
                         header.id === "total_cost" ? "text-right" : "text-left"
                       )}
                     >
@@ -337,7 +335,7 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-slate-100">
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <tr
@@ -349,7 +347,7 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
                     <td 
                       key={cell.id} 
                       className={cn(
-                        "px-4 py-4 align-middle",
+                        "px-4 py-3.5 align-middle",
                         cell.column.id === "actions" ? "pr-6" : ""
                       )}
                     >
@@ -360,11 +358,8 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="h-24 text-center text-slate-400 font-medium py-12">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <IconTool className="h-8 w-8 opacity-20" />
-                    <p>No maintenance visits recorded.</p>
-                  </div>
+                <td colSpan={columns.length} className="h-24 text-center text-slate-500 font-medium">
+                  No maintenance visits recorded.
                 </td>
               </tr>
             )}
@@ -373,7 +368,7 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
       </div>
 
       {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
+      <div className="md:hidden space-y-3">
         {table.getRowModel().rows?.length ? (
           table.getRowModel().rows.map((row) => {
             const visit = row.original
@@ -382,87 +377,77 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
             return (
               <div
                 key={row.id}
-                className="relative overflow-hidden rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm active:bg-slate-50 transition-colors"
+                className="relative overflow-hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50 transition-colors"
                 onClick={() => handleEdit(visit.id)}
               >
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-100" />
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-900 rounded-l-lg" />
                 
-                <div className="flex justify-between items-start mb-4 pl-2">
-                  <div className="flex flex-col pr-8">
-                    <h3 className="font-bold text-slate-900 leading-tight">
+                <div className="flex justify-between items-start mb-3 pl-2">
+                  <div className="flex flex-col">
+                    <h3 className="font-semibold text-slate-900">
                       {visit.visit_type || "Maintenance Visit"}
                     </h3>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Badge variant="outline" className={cn("text-[9px] font-bold px-2 py-0.5 rounded-lg shadow-none border uppercase tracking-wider", typeClass)}>
-                        {typeLabel}
-                      </Badge>
-                      {visit.component && (
-                        <Badge variant="outline" className="text-[9px] font-bold px-2 py-0.5 rounded-lg shadow-none border border-slate-200 text-slate-500 uppercase tracking-wider">
-                          {visit.component.name}
-                        </Badge>
-                      )}
-                    </div>
+                    <span className="text-xs text-slate-600">{formatDate(visit.visit_date)}</span>
                   </div>
-                  <IconChevronRight className="absolute right-4 top-4 w-4 h-4 text-slate-300" />
+                  <Badge variant="outline" className={cn("text-xs font-medium px-2 py-0.5", typeClass)}>
+                    {typeLabel}
+                  </Badge>
                 </div>
 
-                <div className="pl-2 mb-4">
-                  <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed italic">
-                    &quot;{visit.description || "No description provided."}&quot;
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pl-2 border-t border-slate-50 pt-4">
-                  <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                      <IconCalendar className="w-3 h-3" /> Date
-                    </div>
-                    <div className="font-bold text-[13px] text-slate-700 tracking-tight">
-                      {formatDate(visit.visit_date)}
-                    </div>
+                {visit.description && (
+                  <div className="pl-2 mb-3">
+                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
+                      {visit.description}
+                    </p>
                   </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4 pl-2">
                   <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                       <IconClock className="w-3 h-3" /> Hours
                     </div>
-                    <div className="font-bold text-[13px] text-slate-900">
+                    <div className="font-semibold text-sm text-slate-700">
                       {formatHours(visit.hours_at_visit)}
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                      <IconUser className="w-3 h-3" /> Tech
-                    </div>
-                    <div className="font-bold text-[13px] text-slate-900 truncate">
-                      {getUserName(visit)}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
                       <IconCoin className="w-3 h-3" /> Cost
                     </div>
-                    <div className="font-bold text-[13px] text-emerald-600">
+                    <div className="font-semibold text-sm text-slate-700">
                       {formatCurrency(visit.total_cost)}
                     </div>
                   </div>
+                  {visit.component && (
+                    <div className="space-y-1 col-span-2">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
+                        <IconTool className="w-3 h-3" /> Component
+                      </div>
+                      <div className="font-semibold text-sm text-slate-700">
+                        {visit.component.name}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="absolute right-4 bottom-4">
+                  <IconChevronRight className="w-4 h-4 text-slate-400" />
                 </div>
               </div>
             )
           })
         ) : (
-          <div className="text-center py-12 bg-white rounded-[20px] border border-dashed border-slate-200 text-slate-400 font-medium">
-            <div className="flex flex-col items-center justify-center gap-2">
-              <IconTool className="h-8 w-8 opacity-20" />
-              <p>No maintenance visits found.</p>
-            </div>
+          <div className="text-center py-12 bg-white rounded-lg border border-dashed border-slate-200 text-slate-500 font-medium">
+            No maintenance visits found.
           </div>
         )}
       </div>
 
       {/* Pagination */}
       <div className="flex items-center justify-between px-2">
-        <div className="text-xs text-slate-500 font-medium">
-          Showing <span className="text-slate-900">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to <span className="text-slate-900">{Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, filteredVisits.length)}</span> of <span className="text-slate-900">{filteredVisits.length}</span> visits
+        <div className="text-sm text-slate-600">
+          Showing <span className="font-semibold text-slate-900">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to <span className="font-semibold text-slate-900">{Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, filteredVisits.length)}</span> of <span className="font-semibold text-slate-900">{filteredVisits.length}</span> visits
         </div>
         <div className="flex items-center space-x-2">
           <Button
@@ -470,7 +455,7 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
             size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="rounded-lg h-8 border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="h-9 border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Previous
           </Button>
@@ -479,7 +464,7 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
             size="sm"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="rounded-lg h-8 border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="h-9 border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Next
           </Button>
@@ -521,3 +506,4 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
     </div>
   )
 }
+

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { userHasAnyRole } from '@/lib/auth/roles'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabase = await createClient()
   
   // Auth check
@@ -19,16 +19,25 @@ export async function GET() {
     }, { status: 403 })
   }
 
-  const { data, error } = await supabase
-    .from('flight_types')
+  const { searchParams } = new URL(request.url)
+  const syllabusId = searchParams.get('syllabus_id')
+
+  let query = supabase
+    .from('lessons')
     .select('*')
-    .order('name', { ascending: true })
+    .order('order', { ascending: true })
+
+  if (syllabusId) {
+    query = query.eq('syllabus_id', syllabusId)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ flight_types: data || [] })
+  return NextResponse.json({ lessons: data || [] })
 }
 
 export async function POST(request: NextRequest) {
@@ -40,7 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // Role authorization check - only admin and owner can create
+  // Role authorization check
   const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
   if (!hasAccess) {
     return NextResponse.json({ 
@@ -50,19 +59,34 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { name, description, instruction_type, is_active } = body
+    const { syllabus_id, name, description, is_required, syllabus_stage } = body
 
-    if (!name || name.trim() === '') {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    if (!syllabus_id || !name) {
+      return NextResponse.json({ error: 'Syllabus ID and name are required' }, { status: 400 })
     }
 
+    // Get the current max order for this syllabus
+    const { data: currentLessons, error: fetchError } = await supabase
+      .from('lessons')
+      .select('order')
+      .eq('syllabus_id', syllabus_id)
+      .order('order', { ascending: false })
+      .limit(1)
+
+    if (fetchError) throw fetchError
+
+    const nextOrder = currentLessons && currentLessons.length > 0 ? (currentLessons[0].order || 0) + 1 : 1
+
     const { data, error } = await supabase
-      .from('flight_types')
+      .from('lessons')
       .insert({
+        syllabus_id,
         name: name.trim(),
         description: description?.trim() || null,
-        instruction_type: instruction_type || null,
-        is_active: is_active !== undefined ? is_active : true,
+        is_required: is_required !== undefined ? is_required : true,
+        syllabus_stage: syllabus_stage || null,
+        order: nextOrder,
+        is_active: true,
       })
       .select()
       .single()
@@ -71,7 +95,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ flight_type: data }, { status: 201 })
+    return NextResponse.json({ lesson: data }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ 
       error: error instanceof Error ? error.message : 'Invalid request body' 
@@ -79,7 +103,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PATCH(request: NextRequest) {
   const supabase = await createClient()
   
   // Auth check
@@ -88,7 +112,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // Role authorization check - only admin and owner can update
+  // Role authorization check
   const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
   if (!hasAccess) {
     return NextResponse.json({ 
@@ -98,23 +122,20 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { id, name, description, instruction_type, is_active } = body
+    const { id, name, description, is_required, syllabus_stage, is_active } = body
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
     }
 
-    if (!name || name.trim() === '') {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
-    }
-
     const { data, error } = await supabase
-      .from('flight_types')
+      .from('lessons')
       .update({
-        name: name.trim(),
+        name: name?.trim(),
         description: description?.trim() || null,
-        instruction_type: instruction_type || null,
-        is_active: is_active !== undefined ? is_active : true,
+        is_required: is_required !== undefined ? is_required : undefined,
+        syllabus_stage: syllabus_stage || null,
+        is_active: is_active !== undefined ? is_active : undefined,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -125,7 +146,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ flight_type: data })
+    return NextResponse.json({ lesson: data })
   } catch (error) {
     return NextResponse.json({ 
       error: error instanceof Error ? error.message : 'Invalid request body' 
@@ -142,7 +163,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // Role authorization check - only admin and owner can delete
+  // Role authorization check
   const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
   if (!hasAccess) {
     return NextResponse.json({ 
@@ -157,20 +178,15 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'ID is required' }, { status: 400 })
   }
 
-  // Soft delete - mark as inactive instead of actually deleting
-  const { data, error } = await supabase
-    .from('flight_types')
-    .update({
-      is_active: false,
-      updated_at: new Date().toISOString(),
-    })
+  const { error } = await supabase
+    .from('lessons')
+    .delete()
     .eq('id', id)
-    .select()
-    .single()
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ flight_type: data })
+  return NextResponse.json({ success: true })
 }
+

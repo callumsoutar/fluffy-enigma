@@ -20,15 +20,16 @@ export async function GET() {
   }
 
   const { data, error } = await supabase
-    .from('flight_types')
+    .from('experience_types')
     .select('*')
+    .is('voided_at', null)
     .order('name', { ascending: true })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ flight_types: data || [] })
+  return NextResponse.json({ experience_types: data || [] })
 }
 
 export async function POST(request: NextRequest) {
@@ -50,18 +51,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { name, description, instruction_type, is_active } = body
+    const { name, description, is_active } = body
 
     if (!name || name.trim() === '') {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
 
     const { data, error } = await supabase
-      .from('flight_types')
+      .from('experience_types')
       .insert({
         name: name.trim(),
         description: description?.trim() || null,
-        instruction_type: instruction_type || null,
         is_active: is_active !== undefined ? is_active : true,
       })
       .select()
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ flight_type: data }, { status: 201 })
+    return NextResponse.json({ experience_type: data }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ 
       error: error instanceof Error ? error.message : 'Invalid request body' 
@@ -98,7 +98,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { id, name, description, instruction_type, is_active } = body
+    const { id, name, description, is_active } = body
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 })
@@ -109,11 +109,10 @@ export async function PUT(request: NextRequest) {
     }
 
     const { data, error } = await supabase
-      .from('flight_types')
+      .from('experience_types')
       .update({
         name: name.trim(),
         description: description?.trim() || null,
-        instruction_type: instruction_type || null,
         is_active: is_active !== undefined ? is_active : true,
         updated_at: new Date().toISOString(),
       })
@@ -125,7 +124,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ flight_type: data })
+    return NextResponse.json({ experience_type: data })
   } catch (error) {
     return NextResponse.json({ 
       error: error instanceof Error ? error.message : 'Invalid request body' 
@@ -157,10 +156,11 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'ID is required' }, { status: 400 })
   }
 
-  // Soft delete - mark as inactive instead of actually deleting
+  // Soft delete - mark with voided_at instead of actually deleting
   const { data, error } = await supabase
-    .from('flight_types')
+    .from('experience_types')
     .update({
+      voided_at: new Date().toISOString(),
       is_active: false,
       updated_at: new Date().toISOString(),
     })
@@ -172,5 +172,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ flight_type: data })
+  return NextResponse.json({ experience_type: data })
 }
+

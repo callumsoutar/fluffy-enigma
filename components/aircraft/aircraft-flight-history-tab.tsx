@@ -16,35 +16,46 @@ import {
 } from "@tabler/icons-react"
 import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns"
 
-interface FlightLog {
+interface FlightEntry {
   id: string
-  booking_id: string | null
-  tach_start: number | null
-  tach_end: number | null
+  user_id: string | null
+  instructor_id: string | null
+  checked_out_aircraft_id: string | null
+  checked_out_instructor_id: string | null
+  start_time: string
+  end_time: string
+  status: string
+  purpose: string
   hobbs_start: number | null
   hobbs_end: number | null
+  tach_start: number | null
+  tach_end: number | null
   flight_time: number | null
   created_at: string
-  booking?: {
-    start_time: string
-    end_time: string
-    student?: {
-      id: string
-      first_name: string | null
-      last_name: string | null
-      email: string
-    }
-    instructor?: {
-      id: string
-      first_name: string | null
-      last_name: string | null
-      email: string
-    }
+  student?: {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    email: string
+  }
+  instructor?: {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    user_id: string | null
+  }
+  flight_type?: {
+    id: string
+    name: string
+  }
+  lesson?: {
+    id: string
+    name: string
   }
 }
 
 interface AircraftFlightHistoryTabProps {
-  flightLogs: FlightLog[]
+  flights: FlightEntry[]
 }
 
 function formatTime(dateString: string | null | undefined): string {
@@ -57,11 +68,10 @@ function formatTime(dateString: string | null | undefined): string {
   }
 }
 
-
 interface UserData {
   first_name: string | null
   last_name: string | null
-  email: string
+  email?: string
 }
 
 function getUserName(user: UserData | null | undefined): string {
@@ -70,21 +80,21 @@ function getUserName(user: UserData | null | undefined): string {
   return name || user.email || "—"
 }
 
-function getFlightHours(flight: FlightLog): number {
+function getFlightHours(flight: FlightEntry): number {
   const flightTime = flight.flight_time
   if (flightTime == null) return 0
   const hours = typeof flightTime === 'string' ? Number(flightTime) : flightTime
   return isFinite(hours) ? hours : 0
 }
 
-function getFlightHoursDisplay(flight: FlightLog): string {
+function getFlightHoursDisplay(flight: FlightEntry): string {
   const flightTime = flight.flight_time
   if (flightTime == null) return "-"
   const hoursStr = String(flightTime)
   return hoursStr.includes('.') ? hoursStr : `${hoursStr}.0`
 }
 
-export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTabProps) {
+export function AircraftFlightHistoryTab({ flights: allFlights }: AircraftFlightHistoryTabProps) {
   // Date range state - default to last 30 days
   const [dateFrom, setDateFrom] = React.useState<Date>(startOfDay(subDays(new Date(), 30)))
   const [dateTo, setDateTo] = React.useState<Date>(endOfDay(new Date()))
@@ -104,13 +114,10 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
     setIsDatePickerOpen(false)
   }
 
-  // Filter flights by date range and ensure they have meter readings
-  const flights = flightLogs.filter((flight) => {
-    // Only show flights with at least one meter reading (tach_end or hobbs_end)
-    if (flight.tach_end == null && flight.hobbs_end == null) return false
-
-    // Use booking end time as the primary date for filtering
-    const dateToCheck = flight.booking?.end_time || flight.created_at
+  // Filter flights by date range
+  const flights = allFlights.filter((flight) => {
+    // Use end time as the primary date for filtering
+    const dateToCheck = flight.end_time || flight.created_at
     if (!dateToCheck) return false
 
     const flightDate = new Date(dateToCheck)
@@ -250,6 +257,7 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
                     <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Date</th>
                     <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Member</th>
                     <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Instructor</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-xs">Description</th>
                     <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Hobbs Start</th>
                     <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Hobbs End</th>
                     <th className="text-center py-2 px-2 font-medium text-gray-900 text-xs">Tach Start</th>
@@ -260,9 +268,10 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
                 </thead>
                 <tbody>
                   {flights.map((flight) => {
-                    const flightDate = flight.booking?.end_time || flight.created_at
-                    const bookingStart = flight.booking?.start_time
-                    const bookingEnd = flight.booking?.end_time
+                    const flightDate = flight.end_time || flight.created_at
+                    const bookingStart = flight.start_time
+                    const bookingEnd = flight.end_time
+                    const description = flight.lesson?.name || flight.flight_type?.name || flight.purpose || "Flight"
                     
                     return (
                       <tr key={flight.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -282,18 +291,18 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
                           <div className="flex items-center gap-1">
                             <IconUser className="w-3 h-3 text-gray-500" />
                             <span className="font-medium">
-                              {flight.booking?.student
-                                ? getUserName(flight.booking.student)
+                              {flight.student
+                                ? getUserName(flight.student)
                                 : 'Member'}
                             </span>
                           </div>
                         </td>
                         <td className="py-2 px-3 text-xs">
-                          {flight.booking?.instructor ? (
+                          {flight.instructor ? (
                             <div className="flex items-center gap-1">
                               <IconSchool className="w-3 h-3 text-gray-500" />
                               <span>
-                                {getUserName(flight.booking.instructor)}
+                                {getUserName(flight.instructor)}
                               </span>
                             </div>
                           ) : (
@@ -303,32 +312,35 @@ export function AircraftFlightHistoryTab({ flightLogs }: AircraftFlightHistoryTa
                             </span>
                           )}
                         </td>
-                        <td className="py-2 px-2 text-center text-xs font-mono">
-                          {flight.hobbs_start != null ? flight.hobbs_start.toFixed(1) : '-'}
+                        <td className="py-2 px-3 text-xs text-gray-600 max-w-[150px]">
+                          <span className="truncate block" title={description}>
+                            {description}
+                          </span>
                         </td>
                         <td className="py-2 px-2 text-center text-xs font-mono">
-                          {flight.hobbs_end != null ? flight.hobbs_end.toFixed(1) : '-'}
+                          {flight.hobbs_start != null ? Number(flight.hobbs_start).toFixed(1) : '-'}
                         </td>
                         <td className="py-2 px-2 text-center text-xs font-mono">
-                          {flight.tach_start != null ? flight.tach_start.toFixed(1) : '-'}
+                          {flight.hobbs_end != null ? Number(flight.hobbs_end).toFixed(1) : '-'}
                         </td>
                         <td className="py-2 px-2 text-center text-xs font-mono">
-                          {flight.tach_end != null ? flight.tach_end.toFixed(1) : '-'}
+                          {flight.tach_start != null ? Number(flight.tach_start).toFixed(1) : '-'}
+                        </td>
+                        <td className="py-2 px-2 text-center text-xs font-mono">
+                          {flight.tach_end != null ? Number(flight.tach_end).toFixed(1) : '-'}
                         </td>
                         <td className="py-2 px-2 text-center text-xs font-mono font-semibold">
                           {getFlightHoursDisplay(flight)}
                         </td>
                         <td className="py-2 px-2 text-center">
-                          {flight.booking_id && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => window.location.href = `/bookings/${flight.booking_id}`}
-                              className="h-6 px-2 text-xs"
-                            >
-                              View
-                            </Button>
-                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.href = `/bookings/${flight.id}`}
+                            className="h-6 px-2 text-xs"
+                          >
+                            View
+                          </Button>
                         </td>
                       </tr>
                     )

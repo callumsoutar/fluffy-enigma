@@ -89,56 +89,57 @@ export async function GET(
 
   // Fetch related data in parallel
   const [
-    flightLogsResult,
+    bookingsResult,
     maintenanceVisitsResult,
     observationsResult,
     componentsResult,
   ] = await Promise.all([
-    // Flight logs
+    // Flight history from bookings
     supabase
-      .from('flight_logs')
+      .from('bookings')
       .select(`
-        *,
-        checked_out_aircraft:aircraft!flight_logs_checked_out_aircraft_id_fkey(id, registration, type, model),
-        checked_out_instructor:instructors!flight_logs_checked_out_instructor_id_fkey(
+        id,
+        user_id,
+        instructor_id,
+        checked_out_aircraft_id,
+        checked_out_instructor_id,
+        start_time,
+        end_time,
+        status,
+        purpose,
+        hobbs_start,
+        hobbs_end,
+        tach_start,
+        tach_end,
+        flight_time,
+        created_at,
+        student:users!user_id(id, first_name, last_name, email),
+        instructor:instructors!checked_out_instructor_id (
           id,
           first_name,
           last_name,
-          user_id,
-          users:users!instructors_user_id_fkey(id, first_name, last_name, email)
+          user_id
         ),
-        booking:bookings!flight_logs_booking_id_fkey(
+        flight_type:flight_types (
           id,
-          aircraft_id,
-          user_id,
-          instructor_id,
-          start_time,
-          end_time,
-          purpose,
-          student:users!bookings_user_id_fkey(id, first_name, last_name, email),
-          instructor:instructors!bookings_instructor_id_fkey(
-            id,
-            first_name,
-            last_name,
-            user_id,
-            users:users!instructors_user_id_fkey(id, first_name, last_name, email)
-          )
+          name
+        ),
+        lesson:lessons (
+          id,
+          name
         )
       `)
       .eq('checked_out_aircraft_id', aircraftId)
-      .order('created_at', { ascending: false })
+      .eq('status', 'complete')
+      .not('flight_time', 'is', null)
+      .order('end_time', { ascending: false })
       .limit(50),
     
     // Maintenance visits
     supabase
       .from('maintenance_visits')
       .select(`
-        *,
-        component:aircraft_components (
-          id,
-          name,
-          component_type
-        )
+        *
       `)
       .eq('aircraft_id', aircraftId)
       .order('visit_date', { ascending: false })
@@ -149,19 +150,13 @@ export async function GET(
       .from('observations')
       .select(`
         *,
-        reported_by_user:users!observations_reported_by_fkey (
+        reported_by_user:users!reported_by (
           id,
           first_name,
           last_name,
           email
         ),
-        assigned_to_user:users!observations_assigned_to_fkey (
-          id,
-          first_name,
-          last_name,
-          email
-        ),
-        closed_by_user:users!observations_closed_by_fkey (
+        assigned_to_user:users!assigned_to (
           id,
           first_name,
           last_name,
@@ -194,7 +189,7 @@ export async function GET(
 
   return NextResponse.json({
     aircraft: aircraftWithType,
-    flightLogs: flightLogsResult.data || [],
+    flights: bookingsResult.data || [],
     maintenanceVisits: maintenanceVisitsResult.data || [],
     observations: observationsResult.data || [],
     components: componentsResult.data || [],

@@ -51,36 +51,47 @@ import { AircraftMaintenanceItemsTab } from "@/components/aircraft/aircraft-main
 import { AircraftMaintenanceHistoryTab } from "@/components/aircraft/aircraft-maintenance-history-tab"
 import { AircraftSettingsTab } from "@/components/aircraft/aircraft-settings-tab"
 
-interface FlightLog {
+interface FlightEntry {
   id: string
-  booking_id: string | null
-  tach_start: number | null
-  tach_end: number | null
+  user_id: string | null
+  instructor_id: string | null
+  checked_out_aircraft_id: string | null
+  checked_out_instructor_id: string | null
+  start_time: string
+  end_time: string
+  status: string
+  purpose: string
   hobbs_start: number | null
   hobbs_end: number | null
+  tach_start: number | null
+  tach_end: number | null
   flight_time: number | null
   created_at: string
-  booking?: {
-    start_time: string
-    end_time: string
-    student?: {
-      id: string
-      first_name: string | null
-      last_name: string | null
-      email: string
-    }
-    instructor?: {
-      id: string
-      first_name: string | null
-      last_name: string | null
-      email: string
-    }
+  student?: {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    email: string
+  }
+  instructor?: {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    user_id: string | null
+  }
+  flight_type?: {
+    id: string
+    name: string
+  }
+  lesson?: {
+    id: string
+    name: string
   }
 }
 
 interface AircraftDetailData {
   aircraft: AircraftWithType
-  flightLogs: FlightLog[]
+  flights: FlightEntry[]
   maintenanceVisits: MaintenanceVisit[]
   observations: ObservationWithUser[]
   components: AircraftComponent[]
@@ -239,7 +250,7 @@ export default function AircraftDetailPage() {
     )
   }
 
-  const { aircraft, flightLogs, observations, components } = aircraftData
+  const { aircraft, flights, observations, components } = aircraftData
   const registration = aircraft.registration || ""
   const model = aircraft.model || ""
   const type = aircraft.type || ""
@@ -453,7 +464,7 @@ export default function AircraftDetailPage() {
                     <Tabs.Content value="overview">
                       <AircraftOverviewTab 
                         aircraft={aircraft} 
-                        flightLogs={flightLogs}
+                        flights={flights}
                         observations={observations}
                         components={components}
                         activeObservations={activeObservations}
@@ -462,7 +473,7 @@ export default function AircraftDetailPage() {
                     </Tabs.Content>
 
                     <Tabs.Content value="flight-history">
-                      <AircraftFlightHistoryTab flightLogs={flightLogs} />
+                      <AircraftFlightHistoryTab flights={flights} />
                     </Tabs.Content>
 
                     <Tabs.Content value="observations">

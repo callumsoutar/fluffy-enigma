@@ -11,7 +11,6 @@ import {
   IconFileInvoice,
   IconSchool,
   IconTool,
-  IconCheckbox,
   IconReport,
   IconSettings,
   IconPlaneDeparture,
@@ -140,12 +139,6 @@ const navigationConfig: NavSection[] = [
       label: "Management",
       items: [
         {
-          title: "Tasks",
-        url: "/tasks",
-          icon: IconCheckbox,
-        roles: ['owner', 'admin', 'instructor'],
-        },
-        {
           title: "Reports",
         url: "/reports",
           icon: IconReport,
@@ -160,7 +153,7 @@ const secondaryNavItems: NavItem[] = [
       title: "Settings",
     url: "/settings",
       icon: IconSettings,
-    roles: ['owner', 'admin', 'instructor', 'member', 'student'],
+    roles: ['owner', 'admin'],
     },
 ]
 

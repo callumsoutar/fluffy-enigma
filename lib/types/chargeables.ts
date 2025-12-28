@@ -18,7 +18,21 @@ export interface ChargeableType {
   [key: string]: unknown
 }
 
+export interface LandingFeeRate {
+  id: string
+  chargeable_id: string
+  aircraft_type_id: string
+  rate: number
+  created_at?: string
+  updated_at?: string
+}
+
 export type ChargeableWithType = Chargeable & {
   chargeable_type?: ChargeableType | null
+}
+
+export type ChargeableWithAircraftRates = Chargeable & {
+  chargeable_type?: ChargeableType | null
+  landing_fee_rates?: LandingFeeRate[]
 }
 

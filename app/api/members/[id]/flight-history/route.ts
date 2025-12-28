@@ -37,6 +37,7 @@ export async function GET(
   }
 
   // Pull booking rows directly (flight_logs are legacy and no longer used).
+  // Use checked_out_aircraft_id and checked_out_instructor_id for actual flight data.
   const { data, error } = await supabase
     .from('bookings')
     .select(`
@@ -47,20 +48,21 @@ export async function GET(
       status,
       purpose,
       flight_time,
-      aircraft:aircraft_id (
+      aircraft:aircraft!checked_out_aircraft_id (
         id,
         registration
       ),
-      instructor:instructors!instructor_id (
+      instructor:instructors!checked_out_instructor_id (
         id,
+        user_id,
         first_name,
         last_name
       ),
-      flight_type:flight_type_id (
+      flight_type:flight_types (
         id,
         name
       ),
-      lesson:lesson_id (
+      lesson:lessons (
         id,
         name
       )

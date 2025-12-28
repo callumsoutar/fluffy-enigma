@@ -1,0 +1,512 @@
+"use client"
+
+import * as React from "react"
+import {
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table"
+import { IconSearch, IconPlus, IconPackage, IconClock, IconEdit, IconAlertCircle, IconSelector, IconSortAscending, IconSortDescending, IconFilter, IconX } from "@tabler/icons-react"
+import { useAuth } from "@/contexts/auth-context"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { EQUIPMENT_TYPE_OPTIONS, type EquipmentWithIssuance, type EquipmentType } from "@/lib/types/equipment"
+import { cn } from "@/lib/utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
+import { MoreVertical } from "lucide-react"
+
+interface EquipmentTableProps {
+  equipment: EquipmentWithIssuance[]
+  onIssue?: (equipment: EquipmentWithIssuance) => void
+  onReturn?: (equipment: EquipmentWithIssuance) => void
+  onLogUpdate?: (equipment: EquipmentWithIssuance) => void
+  onEdit?: (equipment: EquipmentWithIssuance) => void
+  onAdd?: () => void
+}
+
+function getStatusBadge(status: string | null, isIssued: boolean): { label: string; className: string } {
+  // If issued, show "Issued" status regardless of equipment status
+  if (isIssued) {
+    return { label: "Issued", className: "bg-blue-50 text-blue-600 border-blue-100" }
+  }
+
+  if (!status) {
+    return { label: "Unknown", className: "bg-slate-100 text-slate-600 border-slate-200" }
+  }
+  
+  const statusLower = status.toLowerCase()
+  if (statusLower === "active") {
+    return { label: "Active", className: "bg-emerald-50 text-emerald-600 border-emerald-100" }
+  }
+  if (statusLower === "maintenance") {
+    return { label: "Maintenance", className: "bg-amber-100 text-amber-700 border-amber-200" }
+  }
+  if (statusLower === "lost") {
+    return { label: "Lost", className: "bg-red-100 text-red-700 border-red-200" }
+  }
+  if (statusLower === "retired") {
+    return { label: "Retired", className: "bg-slate-100 text-slate-600 border-slate-200" }
+  }
+  
+  return { label: status.charAt(0).toUpperCase() + status.slice(1), className: "bg-slate-100 text-slate-600 border-slate-200" }
+}
+
+function formatIssuedTo(equipment: EquipmentWithIssuance): string {
+  if (!equipment.current_issuance || !equipment.issued_to_user) {
+    return "—"
+  }
+
+  const user = equipment.issued_to_user
+  if (user.first_name || user.last_name) {
+    return `${user.first_name || ''} ${user.last_name || ''}`.trim()
+  }
+
+  return user.email
+}
+
+function formatExpectedReturn(equipment: EquipmentWithIssuance): React.ReactNode {
+  if (!equipment.current_issuance?.expected_return) {
+    return <span className="text-slate-400">—</span>
+  }
+
+  const expectedDate = new Date(equipment.current_issuance.expected_return)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const isOverdue = expectedDate < today
+
+  return (
+    <span className={isOverdue ? "text-red-600 font-semibold" : "text-slate-900"}>
+      {expectedDate.toLocaleDateString()}
+    </span>
+  )
+}
+
+export function EquipmentTable({ 
+  equipment, 
+  onIssue, 
+  onReturn, 
+  onLogUpdate, 
+  onEdit,
+  onAdd 
+}: EquipmentTableProps) {
+  const [search, setSearch] = React.useState("")
+  const [selectedType, setSelectedType] = React.useState<EquipmentType | "all">("all")
+  const [sorting, setSorting] = React.useState<SortingState>([])
+  const { role } = useAuth()
+
+  // Filter by search and type
+  const filteredEquipment = React.useMemo(() => {
+    return equipment.filter((item) => {
+      // Filter by search
+      const searchLower = search.toLowerCase()
+      const matchesSearch = !search || (
+        (item.name?.toLowerCase() || "").includes(searchLower) ||
+        (item.serial_number?.toLowerCase() || "").includes(searchLower) ||
+        (item.type?.toLowerCase() || "").includes(searchLower)
+      )
+
+      // Filter by type
+      const matchesType = selectedType === "all" || item.type === selectedType
+
+      return matchesSearch && matchesType
+    })
+  }, [equipment, search, selectedType])
+
+  const columns = React.useMemo<ColumnDef<EquipmentWithIssuance>[]>(() => [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => {
+        const equipment = row.original
+        return (
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 border border-slate-200">
+              <IconPackage className="h-4 w-4 text-slate-500" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-bold text-slate-900">{equipment.name}</span>
+              {equipment.serial_number && (
+                <span className="text-[11px] text-slate-500 font-medium">{equipment.serial_number}</span>
+              )}
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "label",
+      header: "Label",
+      cell: ({ row }) => {
+        const label = row.original.label
+        return <span className="font-medium text-slate-600">{label || "—"}</span>
+      },
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: ({ row }) => {
+        const type = row.original.type
+        return <span className="font-medium text-slate-600 capitalize">{type || "—"}</span>
+      },
+    },
+    {
+      accessorKey: "status",
+      header: () => <div className="text-center">Status</div>,
+      cell: ({ row }) => {
+        const equipment = row.original
+        const isIssued = !!equipment.current_issuance
+        const { label, className } = getStatusBadge(equipment.status, isIssued)
+        
+        return (
+          <div className="flex justify-center">
+            <Badge variant="outline" className={cn("text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-none border uppercase tracking-wider", className)}>
+              {label}
+            </Badge>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "issued_to",
+      header: "Issued To",
+      cell: ({ row }) => {
+        const equipment = row.original
+        return <span className="font-medium text-slate-600">{formatIssuedTo(equipment)}</span>
+      },
+    },
+    {
+      accessorKey: "expected_return",
+      header: "Expected Return",
+      cell: ({ row }) => {
+        const equipment = row.original
+        return <div className="font-medium">{formatExpectedReturn(equipment)}</div>
+      },
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const equipment = row.original
+        const isIssued = !!equipment.current_issuance
+
+        return (
+          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="outline" className="hover:bg-slate-100">
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {isIssued ? (
+                  <DropdownMenuItem onClick={() => onReturn?.(equipment)}>
+                    <IconAlertCircle className="w-4 h-4 mr-2" /> Return
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => onIssue?.(equipment)}>
+                    <IconClock className="w-4 h-4 mr-2" /> Issue
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => onLogUpdate?.(equipment)}>
+                  <IconPackage className="w-4 h-4 mr-2" /> Log Update
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onEdit?.(equipment)}>
+                  <IconEdit className="w-4 h-4 mr-2" /> Edit
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )
+      },
+    },
+  ], [onIssue, onReturn, onLogUpdate, onEdit])
+
+  const table = useReactTable<EquipmentWithIssuance>({
+    data: filteredEquipment,
+    columns,
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    state: { sorting },
+    initialState: {
+      pagination: { pageIndex: 0, pageSize: 10 },
+    },
+  })
+
+  const canAddEquipment = role && !['member', 'student'].includes(role.toLowerCase())
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header Section */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900">Equipment</h2>
+            <p className="text-slate-500 mt-1 text-sm">Manage inventory, maintenance, and issuance tracking.</p>
+          </div>
+          
+          {canAddEquipment && (
+            <Button
+              className="bg-slate-900 text-white font-bold rounded-xl h-11 px-6 shadow-lg shadow-slate-900/10 hover:bg-slate-800 transition-all active:scale-[0.98]"
+              onClick={onAdd}
+            >
+              <IconPlus className="h-4 w-4 mr-2" />
+              Add Equipment
+            </Button>
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-2 rounded-[22px] border border-slate-200 shadow-sm">
+          <div className="relative flex-1 w-full">
+            <IconSearch className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search by name, serial, or type..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-11 pr-4 w-full h-11 rounded-2xl border-none bg-slate-50/50 focus-visible:ring-0 focus-visible:bg-slate-50 transition-colors"
+            />
+          </div>
+          
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="h-8 w-px bg-slate-200 hidden sm:block mx-1" />
+            
+            <Select
+              value={selectedType}
+              onValueChange={(value) => setSelectedType(value as EquipmentType | "all")}
+            >
+              <SelectTrigger className="w-full sm:w-[180px] h-11 rounded-2xl border-none bg-slate-50/50 focus:ring-0 transition-colors">
+                <div className="flex items-center gap-2">
+                  <IconFilter className="h-4 w-4 text-slate-400" />
+                  <SelectValue placeholder="All Types" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl border-slate-200">
+                <SelectItem value="all" className="rounded-xl">All Types</SelectItem>
+                {EQUIPMENT_TYPE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value} className="rounded-xl">
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {(search || selectedType !== "all") && (
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => {
+                  setSearch("")
+                  setSelectedType("all")
+                }}
+                className="h-11 w-11 rounded-2xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <IconX className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50/50">
+              {table.getHeaderGroups().map(headerGroup => (
+                <React.Fragment key={headerGroup.id}>
+                  {headerGroup.headers.map(header => (
+                    <th 
+                      key={header.id}
+                      className={cn(
+                        "px-4 py-3 font-bold text-[10px] uppercase tracking-wider text-slate-500",
+                        header.column.getCanSort() && "cursor-pointer select-none hover:text-slate-700",
+                        header.id === "status" ? "text-center" : "text-left"
+                      )}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <div className={cn(
+                        "flex items-center gap-1",
+                        header.id === "status" && "justify-center"
+                      )}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                        {header.column.getCanSort() && (
+                          <div className="w-3">
+                            {{
+                              asc: <IconSortAscending className="h-3 w-3" />,
+                              desc: <IconSortDescending className="h-3 w-3" />,
+                            }[header.column.getIsSorted() as string] ?? (
+                              <IconSelector className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                  ))}
+                </React.Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <tr
+                  key={row.id}
+                  className="group transition-colors hover:bg-slate-50/50"
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <td 
+                      key={cell.id} 
+                      className={cn(
+                        "px-4 py-4 align-middle",
+                        cell.column.id === "actions" ? "pr-6" : ""
+                      )}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={columns.length} className="h-24 text-center text-slate-400 font-medium">
+                  No equipment found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-4">
+        {table.getRowModel().rows?.length ? (
+          table.getRowModel().rows.map((row) => {
+            const equipment = row.original
+            const isIssued = !!equipment.current_issuance
+            const { label, className } = getStatusBadge(equipment.status, isIssued)
+            
+            return (
+              <div
+                key={row.id}
+                className="relative overflow-hidden rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm"
+              >
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-100" />
+                
+                <div className="flex justify-between items-start mb-4 pl-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 border border-slate-200">
+                      <IconPackage className="h-5 w-5 text-slate-500" />
+                    </div>
+                    <div className="flex flex-col">
+                      <h3 className="font-bold text-slate-900">{equipment.name}</h3>
+                      <span className="text-[11px] text-slate-500 font-medium">{equipment.serial_number || equipment.type}</span>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className={cn("text-[9px] font-bold px-2 py-0.5 rounded-lg shadow-none border uppercase tracking-wider", className)}>
+                    {label}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pl-2">
+                  <div className="space-y-1">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Label</div>
+                    <div className="font-bold text-sm text-slate-700">
+                      {equipment.label || "—"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Issued To</div>
+                    <div className="font-bold text-sm text-slate-900">
+                      {formatIssuedTo(equipment)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="absolute right-4 bottom-4">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="outline" className="hover:bg-slate-100">
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {isIssued ? (
+                        <DropdownMenuItem onClick={() => onReturn?.(equipment)}>
+                          <IconAlertCircle className="w-4 h-4 mr-2" /> Return
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onClick={() => onIssue?.(equipment)}>
+                          <IconClock className="w-4 h-4 mr-2" /> Issue
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => onLogUpdate?.(equipment)}>
+                        <IconPackage className="w-4 h-4 mr-2" /> Log Update
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => onEdit?.(equipment)}>
+                        <IconEdit className="w-4 h-4 mr-2" /> Edit
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            )
+          })
+        ) : (
+          <div className="text-center py-12 bg-white rounded-[20px] border border-dashed border-slate-200 text-slate-400 font-medium">
+            No equipment found.
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between px-2">
+        <div className="text-xs text-slate-500 font-medium">
+          Showing <span className="text-slate-900">{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}</span> to <span className="text-slate-900">{Math.min((table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize, filteredEquipment.length)}</span> of <span className="text-slate-900">{filteredEquipment.length}</span> items
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+            className="rounded-lg h-8 border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+            className="rounded-lg h-8 border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+

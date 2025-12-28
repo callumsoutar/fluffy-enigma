@@ -15,23 +15,20 @@ import type { AircraftWithType } from "@/lib/types/aircraft"
 import type { ObservationWithUser } from "@/lib/types/observations"
 import type { AircraftComponent } from "@/lib/types/aircraft_components"
 
-interface FlightLog {
+interface FlightEntry {
   id: string
-  booking_id: string | null
   flight_time: number | null
   created_at: string
-  booking?: {
-    student?: {
-      first_name: string | null
-      last_name: string | null
-      email: string
-    }
+  student?: {
+    first_name: string | null
+    last_name: string | null
+    email: string
   }
 }
 
 interface OverviewTabProps {
   aircraft: AircraftWithType
-  flightLogs: FlightLog[]
+  flights: FlightEntry[]
   observations: ObservationWithUser[]
   components: AircraftComponent[]
   activeObservations: number
@@ -59,9 +56,21 @@ function formatDate(dateString: string | null | undefined): string {
   }
 }
 
+interface UserData {
+  first_name: string | null
+  last_name: string | null
+  email: string
+}
+
+function getUserName(user: UserData | null | undefined): string {
+  if (!user) return "—"
+  const name = [user.first_name, user.last_name].filter(Boolean).join(" ")
+  return name || user.email || "—"
+}
+
 export function AircraftOverviewTab({
   aircraft,
-  flightLogs,
+  flights,
   observations,
   activeObservations,
   overdueComponents,
@@ -69,11 +78,11 @@ export function AircraftOverviewTab({
   const totalHours = aircraft.total_hours || 0
   const currentHobbs = aircraft.current_hobbs || 0
   const currentTach = aircraft.current_tach || 0
-  const recentFlights = flightLogs.slice(0, 5)
+  const recentFlights = flights.slice(0, 5)
   const recentObservations = observations.filter((o) => !o.resolved_at).slice(0, 3)
 
   // Calculate hours since last flight
-  const lastFlight = flightLogs[0]
+  const lastFlight = flights[0]
   const hoursSinceLastFlight = lastFlight?.created_at
     ? Math.round((new Date().getTime() - new Date(lastFlight.created_at).getTime()) / (1000 * 60 * 60))
     : null
@@ -100,8 +109,8 @@ export function AircraftOverviewTab({
           <CardContent className="p-5">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Flight Logs</p>
-                <p className="text-2xl font-semibold tracking-tight">{flightLogs.length}</p>
+                <p className="text-sm font-medium text-muted-foreground">Flights</p>
+                <p className="text-2xl font-semibold tracking-tight">{flights.length}</p>
               </div>
               <div className="h-10 w-10 rounded-lg bg-muted/50 flex items-center justify-center">
                 <IconClock className="h-5 w-5 text-muted-foreground" />
@@ -243,9 +252,7 @@ export function AircraftOverviewTab({
                         </div>
                         <div>
                           <p className="text-sm font-medium">
-                            {flight.booking?.student
-                              ? `${flight.booking.student.first_name || ""} ${flight.booking.student.last_name || ""}`.trim() || flight.booking.student.email
-                              : "—"}
+                            {getUserName(flight.student)}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {flight.created_at ? formatDate(flight.created_at) : "—"}

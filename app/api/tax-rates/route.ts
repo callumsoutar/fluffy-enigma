@@ -36,3 +36,53 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ tax_rates: data || [] })
 }
+
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient()
+  
+  // Auth check
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  // Role authorization check
+  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  if (!hasAccess) {
+    return NextResponse.json({ 
+      error: 'Forbidden: Insufficient permissions' 
+    }, { status: 403 })
+  }
+
+  try {
+    const body = await req.json()
+    const { id, is_default, ...rest } = body
+
+    if (!id) {
+      return NextResponse.json({ error: "Tax rate ID is required" }, { status: 400 })
+    }
+
+    // If setting a new default, unset all others first
+    if (is_default === true) {
+      await supabase
+        .from('tax_rates')
+        .update({ is_default: false })
+        .neq('id', id)
+    }
+
+    const { data, error } = await supabase
+      .from('tax_rates')
+      .update({ is_default, ...rest })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ tax_rate: data })
+  } catch {
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  }
+}

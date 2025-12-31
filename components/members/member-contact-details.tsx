@@ -166,7 +166,7 @@ export function MemberContactDetails({
   }
 
   return (
-    <form id={formId} onSubmit={handleSubmit(onSubmit)} className="pb-32">
+    <form id={formId} onSubmit={handleSubmit(onSubmit)} className="pb-12">
       <div className="flex flex-row items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-900">Contact Information</h3>
       </div>

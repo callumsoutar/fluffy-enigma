@@ -11,7 +11,6 @@ import {
   IconCreditCard,
   IconPlane,
   IconChartBar,
-  IconClock,
   IconMail,
   IconChevronDown,
   IconReceipt,
@@ -49,6 +48,7 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { toast } from "sonner"
 import type { MemberWithRelations } from "@/lib/types/members"
 import { MemberPilotDetails } from "@/components/members/member-pilot-details"
 import { MemberContactDetails } from "@/components/members/member-contact-details"
@@ -56,10 +56,12 @@ import { MemberMemberships } from "@/components/members/member-memberships"
 import { MemberAccountTab } from "@/components/members/member-account-tab"
 import { MemberFlightHistoryTab } from "@/components/members/member-flight-history-tab"
 import { MemberTrainingTab } from "@/components/members/member-training-tab"
+import { MemberHistoryTab } from "@/components/members/member-history-tab"
 import { useAuth } from "@/contexts/auth-context"
 import { isValidRole, type UserRole } from "@/lib/types/roles"
 import { CreateInstructorProfileDialog } from "@/components/members/CreateInstructorProfileDialog"
 import { StickyFormActions } from "@/components/ui/sticky-form-actions"
+import { NewBookingModal } from "@/components/bookings/new-booking-modal"
 
 async function fetchMember(id: string): Promise<MemberWithRelations> {
   const response = await fetch(`/api/members/${id}`)
@@ -117,8 +119,10 @@ export default function MemberDetailPage() {
   const [showScrollLeft, setShowScrollLeft] = React.useState(false)
   const [showScrollRight, setShowScrollRight] = React.useState(false)
   const [isUpdatingRole, setIsUpdatingRole] = React.useState(false)
+  const [isInviting, setIsInviting] = React.useState(false)
   const [roleUpdateError, setRoleUpdateError] = React.useState<string | null>(null)
   const [showCreateInstructorDialog, setShowCreateInstructorDialog] = React.useState(false)
+  const [isBookingModalOpen, setIsBookingModalOpen] = React.useState(false)
 
   // Form states for sticky banner
   const [isContactDirty, setIsContactDirty] = React.useState(false)
@@ -220,7 +224,6 @@ export default function MemberDetailPage() {
     { id: "account", label: "Account", icon: IconCreditCard },
     { id: "flights", label: "Flight Management", icon: IconPlane },
     { id: "training", label: "Training", icon: IconChartBar },
-    { id: "history", label: "History", icon: IconClock },
     { id: "permissions", label: "Permissions", icon: IconUser },
   ]
 
@@ -300,6 +303,36 @@ export default function MemberDetailPage() {
     }
   }
 
+  async function inviteUser() {
+    if (!isStaffViewer || isInviting) return
+    setIsInviting(true)
+    const toastId = toast.loading("Sending invitation...")
+    try {
+      const res = await fetch(`/api/members/${memberId}/invite`, {
+        method: "POST",
+      })
+
+      const json = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to send invitation")
+      }
+
+      toast.success("Invitation sent successfully", { id: toastId })
+      
+      // If the ID changed (syncing IDs), we need to redirect to the new URL
+      if (json.auth_user_id && json.auth_user_id !== memberId) {
+        router.push(`/members/${json.auth_user_id}`)
+      } else {
+        await queryClient.invalidateQueries({ queryKey: ["member", memberId] })
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send invitation", { id: toastId })
+    } finally {
+      setIsInviting(false)
+    }
+  }
+
   return (
     <SidebarProvider
       style={
@@ -345,6 +378,15 @@ export default function MemberDetailPage() {
                         >
                           {isActive ? "Active" : "Inactive"}
                         </Badge>
+                        <Badge
+                          className={`rounded-md px-2 py-1 text-xs font-medium ${
+                            member.is_auth_user 
+                              ? "bg-blue-100 text-blue-700 border-0" 
+                              : "bg-orange-100 text-orange-700 border-0"
+                          }`}
+                        >
+                          {member.is_auth_user ? "Portal Access" : "No Portal Access"}
+                        </Badge>
                         {memberRole && (
                           <Badge className="rounded-md px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border-0">
                             {memberRole}
@@ -376,11 +418,11 @@ export default function MemberDetailPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56">
-                        <DropdownMenuItem onClick={() => router.push(`/bookings/new?member_id=${memberId}`)}>
+                        <DropdownMenuItem onClick={() => setIsBookingModalOpen(true)}>
                           <IconCalendar className="h-4 w-4 mr-2" />
                           New Booking
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => router.push(`/invoices/new?member_id=${memberId}`)}>
+                        <DropdownMenuItem onClick={() => router.push(`/invoices/new?user_id=${memberId}`)}>
                           <IconReceipt className="h-4 w-4 mr-2" />
                           New Invoice
                         </DropdownMenuItem>
@@ -392,11 +434,14 @@ export default function MemberDetailPage() {
                           </DropdownMenuSubTrigger>
                           <DropdownMenuPortal>
                             <DropdownMenuSubContent>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={inviteUser} 
+                                disabled={isInviting || member.is_auth_user}
+                              >
                                 <IconUserPlus className="h-4 w-4 mr-2" />
-                                Invite User
+                                {member.is_auth_user ? "Already Invited" : "Invite User"}
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem disabled={!member.is_auth_user}>
                                 <IconKey className="h-4 w-4 mr-2" />
                                 Reset Password
                               </DropdownMenuItem>
@@ -407,7 +452,7 @@ export default function MemberDetailPage() {
                     </DropdownMenu>
                     <Button
                       className="bg-[#6564db] hover:bg-[#232ed1] text-white gap-2 font-semibold shadow-sm w-full sm:w-auto"
-                      onClick={() => router.push(`/bookings/new?member_id=${memberId}`)}
+                      onClick={() => setIsBookingModalOpen(true)}
                     >
                       <IconCalendar className="h-4 w-4" />
                       New Booking
@@ -423,6 +468,23 @@ export default function MemberDetailPage() {
               userId={memberId}
               onCreated={async () => {
                 await queryClient.invalidateQueries({ queryKey: ["member", memberId] })
+              }}
+            />
+
+            <NewBookingModal
+              open={isBookingModalOpen}
+              onOpenChange={setIsBookingModalOpen}
+              prefill={{
+                member: member ? {
+                  id: member.id,
+                  first_name: member.first_name,
+                  last_name: member.last_name,
+                  email: member.email,
+                } : null
+              }}
+              onCreated={async () => {
+                await queryClient.invalidateQueries({ queryKey: ["member", memberId] })
+                await queryClient.invalidateQueries({ queryKey: ["member-bookings", memberId] })
               }}
             />
 
@@ -677,17 +739,13 @@ export default function MemberDetailPage() {
                         <Tabs.Content value="training">
                           <MemberTrainingTab memberId={memberId} />
                         </Tabs.Content>
-
-                        <Tabs.Content value="history">
-                          <div>
-                            <h2 className="text-lg font-semibold mb-4">History</h2>
-                            <p className="text-muted-foreground">History coming soon...</p>
-                          </div>
-                        </Tabs.Content>
                       </div>
                     </Tabs.Root>
                   </CardContent>
                 </Card>
+
+                {/* Member History / Audit Log */}
+                <MemberHistoryTab memberId={memberId} />
           </div>
         </div>
         {activeTab === "contact" && (

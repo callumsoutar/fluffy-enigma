@@ -76,6 +76,8 @@ export interface EquipmentUpdate {
  */
 export interface EquipmentWithIssuance extends Equipment {
   current_issuance?: EquipmentIssuance | null;
+  most_recent_issuance?: EquipmentIssuance | null;
+  latest_update?: EquipmentUpdate | null;
   issued_to_user?: {
     id: string;
     first_name: string | null;

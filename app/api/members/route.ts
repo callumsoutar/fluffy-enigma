@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { userHasAnyRole } from '@/lib/auth/roles'
 import { memberCreateSchema, membersQuerySchema } from '@/lib/validation/members'
 import type { PersonType, MembershipStatus, MembersFilter, MemberWithRelations } from '@/lib/types/members'
@@ -330,32 +331,85 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { email, first_name, last_name, phone, street_address } = parsed.data
+  const { email, first_name, last_name, phone, street_address, send_invitation } = parsed.data
+
+  let authUserId: string | null = null
+
+  // Handle invitation if requested
+  if (send_invitation) {
+    let adminSupabase
+    try {
+      adminSupabase = createAdminClient()
+    } catch (e) {
+      console.error('Admin client creation failed:', e)
+      return NextResponse.json(
+        { error: 'Server configuration error: Missing admin privileges for invitations.' },
+        { status: 500 }
+      )
+    }
+    
+    const { data: inviteData, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
+      data: {
+        first_name: first_name ?? '',
+        last_name: last_name ?? '',
+      }
+    })
+
+    if (inviteError) {
+      // If user already exists, we might get an error or the user.
+      // Supabase's inviteUserByEmail behavior can vary by configuration.
+      // Let's explicitly check for "user already exists" if needed, 
+      // but usually it just returns the user or a specific error code.
+      console.error('Error inviting user:', inviteError)
+      return NextResponse.json({ error: inviteError.message || 'Failed to send invitation' }, { status: 500 })
+    }
+    
+    authUserId = inviteData.user.id
+  }
+
+  const insertPayload: Record<string, any> = {
+    email,
+    first_name: first_name ?? null,
+    last_name: last_name ?? null,
+    phone: phone ?? null,
+    street_address: street_address ?? null,
+    is_active: true,
+  }
+
+  // If we have an auth user ID (either from a new invite or existing auth user),
+  // use it as the primary key for the public.users record to maintain 1:1 relationship.
+  if (authUserId) {
+    insertPayload.id = authUserId
+  }
 
   const { data: created, error } = await supabase
     .from('users')
-    .insert({
-      email,
-      first_name: first_name ?? null,
-      last_name: last_name ?? null,
-      phone: phone ?? null,
-      street_address: street_address ?? null,
-      is_active: true,
-    })
+    .insert(insertPayload)
     .select('*')
     .single()
 
   if (error) {
-    // Unique violation, commonly on email
+    // Unique violation, commonly on email or id
     if ((error as { code?: string })?.code === '23505') {
+      const isIdConflict = error.message?.includes('id')
       return NextResponse.json(
-        { error: 'A member with that email already exists.' },
+        { error: isIdConflict ? 'A member with this account already exists.' : 'A member with that email already exists.' },
         { status: 409 }
       )
     }
 
     console.error('Error creating member:', error)
     return NextResponse.json({ error: 'Failed to create member' }, { status: 500 })
+  }
+
+  // If we invited them, also create their initial role
+  if (send_invitation && authUserId) {
+    await supabase
+      .from('user_roles')
+      .insert({
+        user_id: authUserId,
+        role: 'member'
+      })
   }
 
   return NextResponse.json({ member: created }, { status: 201 })

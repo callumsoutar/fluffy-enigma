@@ -201,7 +201,7 @@ export async function PATCH(
   // First, check if booking exists and user has access
   const { data: existingBooking, error: fetchError } = await supabase
     .from('bookings')
-    .select('user_id, instructor_id, status, cancelled_at')
+    .select('user_id, instructor_id, status, cancelled_at, checked_out_at')
     .eq('id', bookingId)
     .single()
 
@@ -267,6 +267,11 @@ export async function PATCH(
   // Prepare update data (only allow specific fields to be updated)
   const updateData: Record<string, unknown> = {}
   
+  // Track check-out time
+  if (body.status === 'flying' && existingBooking.status !== 'flying' && !existingBooking.checked_out_at) {
+    updateData.checked_out_at = new Date().toISOString()
+  }
+
   if (body.start_time !== undefined) updateData.start_time = body.start_time
   if (body.end_time !== undefined) updateData.end_time = body.end_time
   if (body.aircraft_id !== undefined) updateData.aircraft_id = body.aircraft_id

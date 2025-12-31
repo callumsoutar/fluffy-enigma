@@ -48,6 +48,7 @@ export const memberCreateSchema = z.object({
   last_name: z.string().trim().max(100, 'Last name too long').optional().nullable(),
   phone: z.string().trim().max(20, 'Phone number too long').optional().nullable(),
   street_address: z.string().trim().max(200, 'Street address too long').optional().nullable(),
+  send_invitation: z.boolean().optional().default(false),
 }).strict()
 
 // Member ID parameter schema

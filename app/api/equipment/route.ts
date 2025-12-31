@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     issued,
   };
 
-  // Build base query - select equipment with open issuances
+  // Build base query - select equipment with open issuances and updates
   let query = supabase
     .from('equipment')
     .select(`
@@ -63,6 +63,15 @@ export async function GET(request: NextRequest) {
         issued_by,
         notes,
         expected_return,
+        created_at,
+        updated_at
+      ),
+      equipment_updates(
+        id,
+        equipment_id,
+        next_due_at,
+        updated_by,
+        notes,
         created_at,
         updated_at
       )
@@ -99,13 +108,28 @@ export async function GET(request: NextRequest) {
 
   // Transform results and filter for open issuances only
   const equipmentWithIssuance: EquipmentWithIssuance[] = equipment.map((e) => {
-    // Get open issuances (returned_at is null)
+    // Get all issuances
     const issuances = Array.isArray(e.current_issuance) ? e.current_issuance : (e.current_issuance ? [e.current_issuance] : []);
+    
+    // Find open issuance (returned_at is null)
     const openIssuance = issuances.find((i: { returned_at: string | null }) => i.returned_at === null);
+
+    // Find most recent issuance (by issued_at descending)
+    const mostRecentIssuance = [...issuances].sort((a, b) => 
+      new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime()
+    )[0] || null;
+
+    // Find latest update (by created_at descending)
+    const updates = Array.isArray(e.equipment_updates) ? e.equipment_updates : [];
+    const latestUpdate = [...updates].sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0] || null;
 
     return {
       ...e,
       current_issuance: openIssuance || null,
+      most_recent_issuance: mostRecentIssuance,
+      latest_update: latestUpdate,
     };
   });
 

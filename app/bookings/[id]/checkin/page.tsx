@@ -123,7 +123,7 @@ function getErrorMessage(err: unknown) {
 
 // Calculate flight hours from meter readings
 function calculateFlightHours(start: number | null | undefined, end: number | null | undefined): number {
-  if (start == null || end == null || end < start) return 0
+  if (start == null || end == null || isNaN(start) || isNaN(end) || end < start) return 0
   return parseFloat((end - start).toFixed(1))
 }
 
@@ -803,18 +803,18 @@ export default function BookingCheckinPage() {
     const lp = Array.isArray(booking.lesson_progress) ? booking.lesson_progress[0] : booking.lesson_progress
 
     const initialValues: FlightLogCheckinFormData = {
-      hobbs_start: booking.hobbs_start || null,
-      hobbs_end: booking.hobbs_end || null,
-      tach_start: booking.tach_start || null,
-      tach_end: booking.tach_end || null,
-      airswitch_start: booking.airswitch_start || null,
-      airswitch_end: booking.airswitch_end || null,
-      flight_time_hobbs: booking.flight_time_hobbs || null,
-      flight_time_tach: booking.flight_time_tach || null,
-      flight_time_airswitch: booking.flight_time_airswitch || null,
-      flight_time: booking.flight_time || null,
+      hobbs_start: (typeof booking.hobbs_start === 'number' && !isNaN(booking.hobbs_start)) ? booking.hobbs_start : null,
+      hobbs_end: (typeof booking.hobbs_end === 'number' && !isNaN(booking.hobbs_end)) ? booking.hobbs_end : null,
+      tach_start: (typeof booking.tach_start === 'number' && !isNaN(booking.tach_start)) ? booking.tach_start : null,
+      tach_end: (typeof booking.tach_end === 'number' && !isNaN(booking.tach_end)) ? booking.tach_end : null,
+      airswitch_start: (typeof booking.airswitch_start === 'number' && !isNaN(booking.airswitch_start)) ? booking.airswitch_start : null,
+      airswitch_end: (typeof booking.airswitch_end === 'number' && !isNaN(booking.airswitch_end)) ? booking.airswitch_end : null,
+      flight_time_hobbs: (typeof booking.flight_time_hobbs === 'number' && !isNaN(booking.flight_time_hobbs)) ? booking.flight_time_hobbs : null,
+      flight_time_tach: (typeof booking.flight_time_tach === 'number' && !isNaN(booking.flight_time_tach)) ? booking.flight_time_tach : null,
+      flight_time_airswitch: (typeof booking.flight_time_airswitch === 'number' && !isNaN(booking.flight_time_airswitch)) ? booking.flight_time_airswitch : null,
+      flight_time: (typeof booking.flight_time === 'number' && !isNaN(booking.flight_time)) ? booking.flight_time : null,
       billing_basis: booking.billing_basis || null,
-      billing_hours: booking.billing_hours || null,
+      billing_hours: (typeof booking.billing_hours === 'number' && !isNaN(booking.billing_hours)) ? booking.billing_hours : null,
       checked_out_aircraft_id: booking.checked_out_aircraft_id || booking.aircraft_id || null,
       checked_out_instructor_id: booking.checked_out_instructor_id || booking.instructor_id || null,
       flight_type_id: booking.flight_type_id || null,
@@ -824,12 +824,12 @@ export default function BookingCheckinPage() {
       passengers: null,
       route: null,
       flight_remarks: null,
-      solo_end_hobbs: booking.solo_end_hobbs || null,
-      solo_end_tach: booking.solo_end_tach || null,
-      dual_time: booking.dual_time || null,
-      solo_time: booking.solo_time || null,
-      total_hours_start: booking.total_hours_start || null,
-      total_hours_end: booking.total_hours_end || null,
+      solo_end_hobbs: (typeof booking.solo_end_hobbs === 'number' && !isNaN(booking.solo_end_hobbs)) ? booking.solo_end_hobbs : null,
+      solo_end_tach: (typeof booking.solo_end_tach === 'number' && !isNaN(booking.solo_end_tach)) ? booking.solo_end_tach : null,
+      dual_time: (typeof booking.dual_time === 'number' && !isNaN(booking.dual_time)) ? booking.dual_time : null,
+      solo_time: (typeof booking.solo_time === 'number' && !isNaN(booking.solo_time)) ? booking.solo_time : null,
+      total_hours_start: (typeof booking.total_hours_start === 'number' && !isNaN(booking.total_hours_start)) ? booking.total_hours_start : null,
+      total_hours_end: (typeof booking.total_hours_end === 'number' && !isNaN(booking.total_hours_end)) ? booking.total_hours_end : null,
       instructor_comments: lp?.instructor_comments || null,
       lesson_highlights: lp?.lesson_highlights || null,
       areas_for_improvement: lp?.areas_for_improvement || null,
@@ -1189,12 +1189,11 @@ export default function BookingCheckinPage() {
                                               <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
                                               <Input
                                                 id="hobbs_start"
-                                                type="number"
-                                                step="0.1"
+                                                inputMode="decimal"
+                                                placeholder="0.0"
                                                 disabled={isApproved}
-                                                {...register("hobbs_start", { valueAsNumber: true })}
+                                                {...register("hobbs_start", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                 className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="8752.2"
                                                 aria-invalid={!!errors.hobbs_start}
                                               />
                                               <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
@@ -1203,12 +1202,11 @@ export default function BookingCheckinPage() {
                                               <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
                                               <Input
                                                 id="hobbs_end"
-                                                type="number"
-                                                step="0.1"
+                                                inputMode="decimal"
+                                                placeholder="0.0"
                                                 disabled={isApproved}
-                                                {...register("hobbs_end", { valueAsNumber: true })}
+                                                {...register("hobbs_end", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                 className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="8754.5"
                                                 aria-invalid={!!errors.hobbs_end}
                                               />
                                               <FieldError errors={errors.hobbs_end ? [{ message: errors.hobbs_end.message }] : undefined} />
@@ -1238,12 +1236,11 @@ export default function BookingCheckinPage() {
                                                   <FieldLabel htmlFor="solo_end_hobbs" className="text-sm sm:text-xs font-medium">Solo End Hobbs</FieldLabel>
                                                   <Input
                                                     id="solo_end_hobbs"
-                                                    type="number"
-                                                    step="0.1"
+                                                    inputMode="decimal"
+                                                    placeholder="0.0"
                                                     disabled={isApproved}
-                                                    {...register("solo_end_hobbs", { valueAsNumber: true })}
+                                                    {...register("solo_end_hobbs", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                     className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                    placeholder="e.g. 8755.0"
                                                   />
                                                 </Field>
                                               )}
@@ -1277,12 +1274,11 @@ export default function BookingCheckinPage() {
                                               <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
                                               <Input
                                                 id="tach_start"
-                                                type="number"
-                                                step="0.1"
+                                                inputMode="decimal"
+                                                placeholder="0.0"
                                                 disabled={isApproved}
-                                                {...register("tach_start", { valueAsNumber: true })}
+                                                {...register("tach_start", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                 className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="8752.2"
                                                 aria-invalid={!!errors.tach_start}
                                               />
                                               <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
@@ -1291,12 +1287,11 @@ export default function BookingCheckinPage() {
                                               <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
                                               <Input
                                                 id="tach_end"
-                                                type="number"
-                                                step="0.1"
+                                                inputMode="decimal"
+                                                placeholder="0.0"
                                                 disabled={isApproved}
-                                                {...register("tach_end", { valueAsNumber: true })}
+                                                {...register("tach_end", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                 className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="8754.5"
                                                 aria-invalid={!!errors.tach_end}
                                               />
                                               <FieldError errors={errors.tach_end ? [{ message: errors.tach_end.message }] : undefined} />
@@ -1322,12 +1317,11 @@ export default function BookingCheckinPage() {
                                               <FieldLabel htmlFor="tach_start" className="text-sm sm:text-xs font-medium">Start Tacho</FieldLabel>
                                               <Input
                                                 id="tach_start"
-                                                type="number"
-                                                step="0.1"
+                                                inputMode="decimal"
+                                                placeholder="0.0"
                                                 disabled={isApproved}
-                                                {...register("tach_start", { valueAsNumber: true })}
+                                                {...register("tach_start", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                 className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="8752.2"
                                                 aria-invalid={!!errors.tach_start}
                                               />
                                               <FieldError errors={errors.tach_start ? [{ message: errors.tach_start.message }] : undefined} />
@@ -1336,12 +1330,11 @@ export default function BookingCheckinPage() {
                                               <FieldLabel htmlFor="tach_end" className="text-sm sm:text-xs font-medium">End Tacho</FieldLabel>
                                               <Input
                                                 id="tach_end"
-                                                type="number"
-                                                step="0.1"
+                                                inputMode="decimal"
+                                                placeholder="0.0"
                                                 disabled={isApproved}
-                                                {...register("tach_end", { valueAsNumber: true })}
+                                                {...register("tach_end", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                 className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="8754.5"
                                                 aria-invalid={!!errors.tach_end}
                                               />
                                               <FieldError errors={errors.tach_end ? [{ message: errors.tach_end.message }] : undefined} />
@@ -1371,12 +1364,11 @@ export default function BookingCheckinPage() {
                                                   <FieldLabel htmlFor="solo_end_tach" className="text-sm sm:text-xs font-medium">Solo End Tacho</FieldLabel>
                                                   <Input
                                                     id="solo_end_tach"
-                                                    type="number"
-                                                    step="0.1"
+                                                    inputMode="decimal"
+                                                    placeholder="0.0"
                                                     disabled={isApproved}
-                                                    {...register("solo_end_tach", { valueAsNumber: true })}
+                                                    {...register("solo_end_tach", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                     className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                    placeholder="e.g. 8755.0"
                                                   />
                                                 </Field>
                                               )}
@@ -1410,12 +1402,11 @@ export default function BookingCheckinPage() {
                                               <FieldLabel htmlFor="hobbs_start" className="text-sm sm:text-xs font-medium">Start Hobbs</FieldLabel>
                                               <Input
                                                 id="hobbs_start"
-                                                type="number"
-                                                step="0.1"
+                                                inputMode="decimal"
+                                                placeholder="0.0"
                                                 disabled={isApproved}
-                                                {...register("hobbs_start", { valueAsNumber: true })}
+                                                {...register("hobbs_start", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                 className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="8752.2"
                                                 aria-invalid={!!errors.hobbs_start}
                                               />
                                               <FieldError errors={errors.hobbs_start ? [{ message: errors.hobbs_start.message }] : undefined} />
@@ -1424,12 +1415,11 @@ export default function BookingCheckinPage() {
                                               <FieldLabel htmlFor="hobbs_end" className="text-sm sm:text-xs font-medium">End Hobbs</FieldLabel>
                                               <Input
                                                 id="hobbs_end"
-                                                type="number"
-                                                step="0.1"
+                                                inputMode="decimal"
+                                                placeholder="0.0"
                                                 disabled={isApproved}
-                                                {...register("hobbs_end", { valueAsNumber: true })}
+                                                {...register("hobbs_end", { setValueAs: (v) => (v === "" || isNaN(parseFloat(v))) ? null : parseFloat(v) })}
                                                 className="h-12 sm:h-10 px-4 sm:px-3 text-base sm:text-sm border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:ring-2 focus:ring-primary/20"
-                                                placeholder="8754.5"
                                                 aria-invalid={!!errors.hobbs_end}
                                               />
                                               <FieldError errors={errors.hobbs_end ? [{ message: errors.hobbs_end.message }] : undefined} />
@@ -1936,13 +1926,12 @@ export default function BookingCheckinPage() {
                                             <TableCell className="text-right py-2">
                                               {isEditing ? (
                                                 <Input
-                                                  type="number"
-                                                  step="0.1"
                                                   inputMode="decimal"
                                                   value={Number.isFinite(line.quantity) ? String(line.quantity) : ""}
                                                   onChange={(e) => {
-                                                    const v = e.target.value === "" ? NaN : Number(e.target.value)
-                                                    updateDraftLine(idx, { quantity: v })
+                                                    const v = e.target.value === "" ? null : Number(e.target.value)
+                                                    if (v !== null && isNaN(v)) return;
+                                                    updateDraftLine(idx, { quantity: v ?? 0 })
                                                   }}
                                                   className="h-8 text-right tabular-nums w-full"
                                                 />
@@ -1955,8 +1944,6 @@ export default function BookingCheckinPage() {
                                                 <div className="relative">
                                                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
                                                   <Input
-                                                    type="number"
-                                                    step="0.01"
                                                     inputMode="decimal"
                                                     value={(() => {
                                                       const effectiveTaxRate = (line.tax_rate ?? taxRate) || 0

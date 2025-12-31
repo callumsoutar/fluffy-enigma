@@ -114,8 +114,15 @@ export async function GET(
   
   const roleName = typeof roleNameFromRpc === 'string' ? roleNameFromRpc : null
 
+  // Check if they are an auth user via RPC (avoids needing Service Role key for every GET)
+  const { data: isAuthUser } = await supabase.rpc('is_auth_user', { user_uuid: userId })
+  const { data: authDetails } = await supabase.rpc('get_auth_user_details', { user_uuid: userId })
+  const confirmedAt = authDetails && authDetails.length > 0 ? authDetails[0].confirmed_at : null
+
   const member: MemberWithRelations = {
     ...userData,
+    is_auth_user: !!isAuthUser,
+    auth_user_confirmed_at: confirmedAt,
     membership: activeMembership ? {
       id: activeMembership.id,
       membership_type: activeMembership.membership_type ? {

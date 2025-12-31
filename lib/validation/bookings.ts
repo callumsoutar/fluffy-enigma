@@ -84,6 +84,30 @@ export const bookingsQuerySchema = z.object({
   end_date: dateSchema.optional(),
 })
 
+/**
+ * Query parameters schema for GET /api/bookings/overlaps
+ *
+ * Used to compute unavailable resources for a proposed booking time range.
+ */
+export const bookingOverlapsQuerySchema = z.object({
+  start_time: dateSchema,
+  end_time: dateSchema,
+  exclude_booking_id: uuidSchema.optional(),
+}).superRefine((data, ctx) => {
+  const start = new Date(data.start_time)
+  const end = new Date(data.end_time)
+
+  if (Number.isNaN(start.getTime())) {
+    ctx.addIssue({ code: "custom", message: "Invalid start_time", path: ["start_time"] })
+  }
+  if (Number.isNaN(end.getTime())) {
+    ctx.addIssue({ code: "custom", message: "Invalid end_time", path: ["end_time"] })
+  }
+  if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && start >= end) {
+    ctx.addIssue({ code: "custom", message: "end_time must be after start_time", path: ["end_time"] })
+  }
+})
+
 // Booking ID parameter schema
 export const bookingIdSchema = uuidSchema
 

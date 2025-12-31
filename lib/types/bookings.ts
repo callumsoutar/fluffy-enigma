@@ -78,6 +78,8 @@ export interface Booking {
   checkin_invoice_id: string | null
   checkin_approved_at: string | null // ISO timestamp
   checkin_approved_by: string | null
+  checked_out_at: string | null // ISO timestamp
+  checked_in_at: string | null // ISO timestamp
 }
 
 // Extended booking with joined data

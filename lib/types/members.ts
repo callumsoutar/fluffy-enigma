@@ -111,6 +111,10 @@ export interface Instructor {
  * User with relations (membership, instructor, role info)
  */
 export interface MemberWithRelations extends User {
+  // Auth status info
+  is_auth_user?: boolean
+  auth_user_confirmed_at?: string | null
+
   // Membership info (if member)
   membership?: {
     id: string

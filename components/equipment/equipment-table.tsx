@@ -82,21 +82,61 @@ function formatIssuedTo(equipment: EquipmentWithIssuance): string {
   return user.email
 }
 
-function formatExpectedReturn(equipment: EquipmentWithIssuance): React.ReactNode {
-  if (!equipment.current_issuance?.expected_return) {
-    return <span className="text-slate-500">—</span>
-  }
-
-  const expectedDate = new Date(equipment.current_issuance.expected_return)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const isOverdue = expectedDate < today
+function formatOverdueableDate(date: Date | string | null): React.ReactNode {
+  if (!date) return <span className="text-slate-500">—</span>;
+  const d = new Date(date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isOverdue = d < today;
+  
+  const diffTime = Math.abs(today.getTime() - d.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   return (
-    <span className={isOverdue ? "text-red-700 font-semibold" : "text-slate-700"}>
-      {expectedDate.toLocaleDateString()}
-    </span>
-  )
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1.5">
+        {isOverdue && <IconAlertCircle className="h-3.5 w-3.5 text-red-600" />}
+        <span className={cn(
+          "text-sm font-medium",
+          isOverdue ? "text-red-600" : "text-slate-700"
+        )}>
+          {d.toLocaleDateString('en-GB', { 
+            day: '2-digit', 
+            month: 'short', 
+            year: 'numeric' 
+          })}
+        </span>
+      </div>
+      {isOverdue && (
+        <span className="text-[10px] text-red-500 uppercase tracking-tight font-medium">
+          Due {diffDays} {diffDays === 1 ? 'day' : 'days'} ago
+        </span>
+      )}
+    </div>
+  );
+}
+
+function formatExpectedReturn(equipment: EquipmentWithIssuance): React.ReactNode {
+  return formatOverdueableDate(equipment.current_issuance?.expected_return || null);
+}
+
+function formatNextDue(equipment: EquipmentWithIssuance): React.ReactNode {
+  const issuanceDueDate = equipment.most_recent_issuance?.expected_return 
+    ? new Date(equipment.most_recent_issuance.expected_return) 
+    : null;
+  const updateDueDate = equipment.latest_update?.next_due_at 
+    ? new Date(equipment.latest_update.next_due_at) 
+    : null;
+
+  // Use the earliest date as the "Next Due" date, or whichever exists
+  let nextDueDate: Date | null = null;
+  if (issuanceDueDate && updateDueDate) {
+    nextDueDate = issuanceDueDate < updateDueDate ? issuanceDueDate : updateDueDate;
+  } else {
+    nextDueDate = issuanceDueDate || updateDueDate;
+  }
+
+  return formatOverdueableDate(nextDueDate);
 }
 
 export function EquipmentTable({ 
@@ -202,6 +242,25 @@ export function EquipmentTable({
       cell: ({ row }) => {
         const equipment = row.original
         return <div>{formatExpectedReturn(equipment)}</div>
+      },
+    },
+    {
+      id: "next_due",
+      header: "Next Update Due",
+      cell: ({ row }) => {
+        const equipment = row.original
+        return <div>{formatNextDue(equipment)}</div>
+      },
+      sortingFn: (rowA, rowB) => {
+        const getNextDue = (item: EquipmentWithIssuance) => {
+          const d1 = item.most_recent_issuance?.expected_return ? new Date(item.most_recent_issuance.expected_return).getTime() : Infinity;
+          const d2 = item.latest_update?.next_due_at ? new Date(item.latest_update.next_due_at).getTime() : Infinity;
+          return Math.min(d1, d2);
+        };
+        const dateA = getNextDue(rowA.original);
+        const dateB = getNextDue(rowB.original);
+        if (dateA === Infinity && dateB === Infinity) return 0;
+        return dateA - dateB;
       },
     },
     {
@@ -402,12 +461,13 @@ export function EquipmentTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100">
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="group transition-colors hover:bg-slate-50/50"
+                  className="group transition-colors hover:bg-slate-50/50 cursor-pointer"
+                  onClick={() => router.push(`/equipment/${row.original.id}`)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td 
@@ -444,7 +504,8 @@ export function EquipmentTable({
             return (
               <div
                 key={row.id}
-                className="relative overflow-hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+                className="relative overflow-hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm cursor-pointer hover:border-slate-300 hover:shadow-md transition-all"
+                onClick={() => router.push(`/equipment/${equipment.id}`)}
               >
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-900 rounded-l-lg" />
                 
@@ -478,7 +539,22 @@ export function EquipmentTable({
                   </div>
                 </div>
 
-                <div className="absolute right-4 bottom-4">
+                <div className="mt-4 grid grid-cols-2 gap-4 pl-2 border-t border-slate-50 pt-3">
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Expected Return</div>
+                    <div className="text-sm font-medium">
+                      {formatExpectedReturn(equipment)}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Next Update Due</div>
+                    <div className="text-sm font-medium">
+                      {formatNextDue(equipment)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="absolute right-4 bottom-4" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button size="icon" variant="outline" className="h-8 w-8 hover:bg-slate-100">

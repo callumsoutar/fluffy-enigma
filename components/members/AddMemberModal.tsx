@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 
 const formSchema = z.object({
   first_name: z.string().trim().max(100, "First name too long").optional(),
@@ -20,6 +22,7 @@ const formSchema = z.object({
   email: z.string().trim().toLowerCase().email("A valid email is required"),
   phone: z.string().trim().max(20, "Phone number too long").optional(),
   street_address: z.string().trim().max(200, "Street address too long").optional(),
+  send_invitation: z.boolean().default(false),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -42,6 +45,7 @@ export function AddMemberModal(props: {
       email: "",
       phone: "",
       street_address: "",
+      send_invitation: false,
     },
     mode: "onSubmit",
   })
@@ -54,6 +58,7 @@ export function AddMemberModal(props: {
       email: "",
       phone: "",
       street_address: "",
+      send_invitation: false,
     })
     setSubmitting(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,6 +78,7 @@ export function AddMemberModal(props: {
           last_name: values.last_name || null,
           phone: values.phone || null,
           street_address: values.street_address || null,
+          send_invitation: values.send_invitation,
         }),
       })
 
@@ -214,6 +220,29 @@ export function AddMemberModal(props: {
                     {errors.street_address ? (
                       <p className="mt-1 text-[10px] text-destructive">{errors.street_address.message}</p>
                     ) : null}
+                  </div>
+                </div>
+              </section>
+
+              {/* Authentication */}
+              <section>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                  <span className="text-xs font-semibold tracking-tight text-slate-900">Authentication</span>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-semibold text-slate-900">Send Invitation</Label>
+                      <p className="text-xs text-slate-500">
+                        Invite this member to create an account and access the portal.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={form.watch("send_invitation")}
+                      onCheckedChange={(checked) => form.setValue("send_invitation", checked)}
+                    />
                   </div>
                 </div>
               </section>

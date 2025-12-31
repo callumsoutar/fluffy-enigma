@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { GraduationCap, Target, Plus, BookOpen, Plane, FileText, CheckCircle2, User, ChevronDown, ChevronUp, MessageSquare } from "lucide-react"
+import { GraduationCap, Target, Plus, BookOpen, Plane, FileText, CheckCircle2, User, ChevronDown, ChevronUp, MessageSquare, Book, Info } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,6 +24,7 @@ import type { Exam, ExamResult, StudentSyllabusEnrollment, Syllabus } from "@/li
 import type { AircraftType } from "@/lib/types/aircraft"
 import type { InstructorWithUser } from "@/lib/types/instructors"
 import { createSyllabusEnrollmentSchema, logExamResultSchema } from "@/lib/validation/training"
+import { MemberFlightTrainingTable } from "./member-flight-training-table"
 
 type EnrollmentWithSyllabus = StudentSyllabusEnrollment & {
   syllabus?: Pick<Syllabus, "id" | "name" | "description" | "is_active" | "voided_at"> | null
@@ -109,8 +110,22 @@ function enrollmentStatusClasses(label: string) {
 
 function resultBadgeClasses(result: "PASS" | "FAIL") {
   return result === "PASS"
-    ? "bg-emerald-100 text-emerald-700 border-0"
-    : "bg-rose-100 text-rose-700 border-0"
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : "bg-rose-50 text-rose-700 border-rose-200"
+}
+
+function progressBar(percent: number | null) {
+  const pct = percent ?? 0
+  return (
+    <div className="w-full">
+      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden border border-slate-200/50">
+        <div
+          className="h-1.5 rounded-full bg-indigo-500 transition-all duration-500"
+          style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+        />
+      </div>
+    </div>
+  )
 }
 
 interface EnrollmentCardProps {
@@ -402,6 +417,68 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
   const enrollments = training?.enrollments ?? []
   const examResults = React.useMemo(() => training?.examResults ?? [], [training])
   const syllabi = training?.syllabi ?? []
+
+  // Calculate progress for each syllabus
+  const syllabusProgress = React.useMemo(() => {
+    return syllabi.map(s => {
+      const totalExams = s.number_of_exams || 0
+      const passedInSyllabus = examResults.filter(r => 
+        r.result === "PASS" && 
+        r.exam?.syllabus_id === s.id
+      ).length
+      
+      // Count unique passed exams (in case of multiple attempts for the same exam)
+      const uniquePassedIds = new Set(
+        examResults
+          .filter(r => r.result === "PASS" && r.exam?.syllabus_id === s.id)
+          .map(r => r.exam_id)
+      )
+      
+      const percent = totalExams > 0 ? Math.round((uniquePassedIds.size / totalExams) * 100) : 0
+      
+      return {
+        ...s,
+        completed: uniquePassedIds.size,
+        total: totalExams,
+        percent
+      }
+    })
+  }, [syllabi, examResults])
+
+  // Group exam results by syllabus
+  const groupedExamResults = React.useMemo(() => {
+    const groups: Record<string, { 
+      name: string; 
+      results: ExamResultWithExam[];
+      progress?: { completed: number; total: number; percent: number }
+    }> = {}
+    
+    examResults.forEach(r => {
+      const syllabusId = r.exam?.syllabus_id || "no-syllabus"
+      const syllabusName = r.exam?.syllabus?.name || "No Syllabus"
+      
+      if (!groups[syllabusId]) {
+        groups[syllabusId] = {
+          name: syllabusName,
+          results: []
+        }
+
+        if (syllabusId !== "no-syllabus") {
+          const prog = syllabusProgress.find(p => p.id === syllabusId)
+          if (prog) {
+            groups[syllabusId].progress = {
+              completed: prog.completed,
+              total: prog.total,
+              percent: prog.percent
+            }
+          }
+        }
+      }
+      groups[syllabusId].results.push(r)
+    })
+    
+    return groups
+  }, [examResults, syllabusProgress])
 
   // Get IDs of exams the member has already passed
   const passedExamIds = React.useMemo(() => {
@@ -748,159 +825,140 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
           </Tabs.Content>
 
           <Tabs.Content value="exams" className="space-y-6 outline-none">
-            {/* Exam Results */}
-            <Card className="shadow-sm border border-border/50 bg-card overflow-hidden rounded-lg">
-              <CardHeader className="pb-4 border-b border-slate-100">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <div className="p-2 rounded-full bg-indigo-50">
-                      <GraduationCap className="w-5 h-5 text-indigo-600" />
-                    </div>
-                    Exam Results
-                  </CardTitle>
-                  <Button
-                    size="sm"
-                    onClick={() => setLogExamOpen(true)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-md h-9"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Log Result
-                  </Button>
+            {/* Exam Results Table */}
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">Exam History</h3>
+                <Button
+                  size="sm"
+                  onClick={() => setLogExamOpen(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg h-9 font-bold text-xs shadow-sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Log Result
+                </Button>
+              </div>
+
+              {examResults.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 p-12 text-center bg-slate-50/30">
+                  <GraduationCap className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                  <p className="text-sm font-semibold text-slate-700">No exam results yet</p>
+                  <p className="text-xs text-slate-500 mt-2 max-w-[280px] mx-auto">Exam attempts and outcomes will appear here once recorded.</p>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {examResults.length === 0 ? (
-                  <div className="p-12 text-center">
-                    <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                      <GraduationCap className="w-8 h-8 text-slate-300" />
-                    </div>
-                    <p className="text-slate-700 font-semibold">No exam results yet</p>
-                    <p className="text-slate-500 text-sm mt-1 max-w-[280px] mx-auto">Exam attempts and outcomes will appear here once recorded.</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Desktop Table View */}
-                    <div className="hidden md:block overflow-x-auto">
-                      <table className="w-full" aria-label="Exam results table">
-                        <thead>
-                          <tr className="border-b border-slate-200 bg-slate-50/50">
-                            <th className="text-left py-3 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Exam</th>
-                            <th className="text-left py-3 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-[160px]">Attempted</th>
-                            <th className="text-left py-3 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-[120px]">Result</th>
-                            <th className="text-left py-3 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-[160px]">Score</th>
-                            <th className="text-left py-3 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400 min-w-[260px]">Notes</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {examResults.map((r) => {
-                            const examName = r.exam?.name || "Exam"
-                            const syllabusName = r.exam?.syllabus?.name
-                            const passing = r.exam?.passing_score
-                            const resultLabel = r.result
-                            return (
-                              <tr key={r.id} className="hover:bg-slate-50 transition-colors group">
-                                <td className="py-4 px-6">
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-semibold text-slate-900">{examName}</span>
-                                    {syllabusName ? (
-                                      <span className="text-[11px] text-slate-500 mt-0.5">{syllabusName}</span>
-                                    ) : null}
-                                  </div>
+              ) : (
+                <div className="space-y-10">
+                  {Object.entries(groupedExamResults).sort((a, b) => {
+                    if (a[0] === 'no-syllabus') return 1;
+                    if (b[0] === 'no-syllabus') return -1;
+                    return a[1].name.localeCompare(b[1].name);
+                  }).map(([syllabusId, group]) => (
+                    <div key={syllabusId} className="space-y-4">
+                      {/* Syllabus Header with Progress */}
+                      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 px-1">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              "w-1.5 h-1.5 rounded-full",
+                              syllabusId === 'no-syllabus' ? "bg-slate-400" : "bg-indigo-500"
+                            )} />
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                              {group.name}
+                            </h4>
+                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 rounded-md bg-slate-50 text-slate-400 border-slate-200">
+                              {group.results.length} {group.results.length === 1 ? 'result' : 'results'}
+                            </Badge>
+                          </div>
+                          {group.progress && (
+                            <p className="text-[11px] font-medium text-slate-400 pl-3.5">
+                              {group.progress.completed} of {group.progress.total} exams passed
+                            </p>
+                          )}
+                        </div>
+
+                        {group.progress && (
+                          <div className="flex items-center gap-4 w-full sm:w-[240px]">
+                            <div className="flex-1">
+                              {progressBar(group.progress.percent)}
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full min-w-[38px] text-center">
+                              {group.progress.percent}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="hidden md:block overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/50">
+                              <th className="px-6 py-3 text-left font-bold text-[11px] uppercase tracking-wider text-slate-500">Exam</th>
+                              <th className="px-6 py-3 text-left font-bold text-[11px] uppercase tracking-wider text-slate-500 w-[180px]">Date</th>
+                              <th className="px-6 py-3 text-left font-bold text-[11px] uppercase tracking-wider text-slate-500 w-[140px]">Result</th>
+                              <th className="px-6 py-3 text-left font-bold text-[11px] uppercase tracking-wider text-slate-500 w-[140px]">Score</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {group.results.map((r) => (
+                              <tr key={r.id} className="group transition-colors hover:bg-slate-50/50">
+                                <td className="px-6 py-4 align-middle">
+                                  <span className="font-bold text-slate-900">{r.exam?.name || "Exam"}</span>
                                 </td>
-                                <td className="py-4 px-6">
-                                  <span className="text-sm text-slate-700">{formatDateTime(r.exam_date)}</span>
+                                <td className="px-6 py-4 align-middle">
+                                  <span className="text-slate-700 font-medium">{formatDateTime(r.exam_date)}</span>
                                 </td>
-                                <td className="py-4 px-6">
-                                  <Badge className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold uppercase", resultBadgeClasses(resultLabel))}>
-                                    {resultLabel}
+                                <td className="px-6 py-4 align-middle">
+                                  <Badge className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold uppercase border shadow-none", resultBadgeClasses(r.result))}>
+                                    {r.result}
                                   </Badge>
                                 </td>
-                                <td className="py-4 px-6">
-                                  <div className="text-sm flex items-center gap-1.5">
-                                    <span className="font-semibold text-slate-900">{r.score}%</span>
-                                    {typeof passing === "number" ? (
-                                      <span className="text-[10px] text-slate-400 font-medium">/ pass {passing}%</span>
-                                    ) : null}
+                                <td className="px-6 py-4 align-middle">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-bold text-slate-900">{r.score}%</span>
+                                    <span className="text-[10px] text-slate-400 font-medium">/ 100%</span>
                                   </div>
                                 </td>
-                                <td className="py-4 px-6">
-                                  {r.notes ? (
-                                    <span className="text-xs text-slate-600 leading-relaxed italic block max-w-[300px] truncate" title={r.notes}>&ldquo;{r.notes}&rdquo;</span>
-                                  ) : (
-                                    <span className="text-xs text-slate-300">—</span>
-                                  )}
-                                </td>
                               </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
 
-                    {/* Mobile Card View */}
-                    <div className="md:hidden divide-y divide-slate-100">
-                      {examResults.map((r) => {
-                        const examName = r.exam?.name || "Exam"
-                        const syllabusName = r.exam?.syllabus?.name
-                        const passing = r.exam?.passing_score
-                        const resultLabel = r.result
-                        return (
-                          <div key={r.id} className="p-4 space-y-3 bg-white">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0">
-                                <h4 className="font-semibold text-slate-900 text-sm truncate">{examName}</h4>
-                                {syllabusName && <p className="text-[11px] text-slate-500 truncate">{syllabusName}</p>}
-                              </div>
-                              <Badge className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold uppercase shrink-0", resultBadgeClasses(resultLabel))}>
-                                {resultLabel}
+                      {/* Mobile View for this group */}
+                      <div className="md:hidden space-y-3">
+                        {group.results.map((r) => (
+                          <div key={r.id} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className={cn(
+                              "absolute left-0 top-0 bottom-0 w-1",
+                              r.result === 'PASS' ? "bg-emerald-500" : "bg-rose-500"
+                            )} />
+                            <div className="flex justify-between items-start mb-3">
+                              <h5 className="font-bold text-slate-900 text-sm">{r.exam?.name || "Exam"}</h5>
+                              <Badge className={cn("rounded-md px-2 py-0.5 text-[10px] font-bold uppercase border shadow-none", resultBadgeClasses(r.result))}>
+                                {r.result}
                               </Badge>
                             </div>
-                            
-                            <div className="grid grid-cols-2 gap-4 text-[11px]">
-                              <div>
-                                <span className="text-slate-400 block uppercase font-bold tracking-tighter">Date</span>
-                                <span className="text-slate-700 font-medium">{formatDateTime(r.exam_date)}</span>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Date</div>
+                                <div className="font-bold text-xs text-slate-900">{formatDateTime(r.exam_date)}</div>
                               </div>
-                              <div>
-                                <span className="text-slate-400 block uppercase font-bold tracking-tighter">Score</span>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-slate-900 font-bold">{r.score}%</span>
-                                  {typeof passing === "number" && <span className="text-slate-400">/ {passing}%</span>}
-                                </div>
+                              <div className="space-y-1">
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Score</div>
+                                <div className="font-bold text-xs text-slate-900">{r.score}% <span className="text-slate-400 font-medium ml-1">/ 100%</span></div>
                               </div>
                             </div>
-
-                            {r.notes && (
-                              <div className="bg-slate-50 rounded-md p-2.5">
-                                <span className="text-slate-400 block uppercase text-[9px] font-bold tracking-tighter mb-1">Notes</span>
-                                <p className="text-xs text-slate-600 italic">&ldquo;{r.notes}&rdquo;</p>
-                              </div>
-                            )}
                           </div>
-                        )
-                      })}
+                        ))}
+                      </div>
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </Tabs.Content>
 
           <Tabs.Content value="flight" className="space-y-6 outline-none">
-            <Card className="shadow-sm border border-border/50 bg-card overflow-hidden rounded-lg">
-              <CardContent className="p-12 text-center">
-                <div className="h-20 w-20 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-6">
-                  <Plane className="w-10 h-10 text-indigo-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2 tracking-tight">Flight Training Progress</h3>
-                <p className="text-slate-500 text-sm max-w-[420px] mx-auto leading-relaxed">
-                  Detailed flight training logs, lesson progress, and skill assessments will be integrated here in a future update.
-                </p>
-                <div className="mt-8 flex justify-center gap-3">
-                  <div className="px-4 py-2 rounded-full bg-slate-100 text-[10px] font-bold uppercase tracking-widest text-slate-500">Coming Soon</div>
-                </div>
-              </CardContent>
-            </Card>
+            <MemberFlightTrainingTable memberId={memberId} />
           </Tabs.Content>
         </div>
       </Tabs.Root>
@@ -909,14 +967,14 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
       <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
         <DialogContent
           className={cn(
-            "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden",
+            "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden flex flex-col",
             "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[520px]",
             "top-[calc(env(safe-area-inset-top)+1rem)] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]",
-            "h-auto max-h-[calc(100dvh-4rem)]"
+            "h-[calc(100dvh-4rem)] sm:h-auto sm:max-h-[calc(100dvh-4rem)]"
           )}
         >
-          <div className="flex h-full min-h-0 flex-col bg-white">
-            <DialogHeader className="px-6 pt-6 pb-4 text-left">
+          <div className="flex flex-1 min-h-0 flex-col bg-white">
+            <DialogHeader className="px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 text-left sm:pt-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
                   <Plus className="h-5 w-5" />
@@ -1057,7 +1115,7 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
               </div>
             </form>
 
-            <div className="border-t bg-white px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+            <div className="border-t bg-white px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] sm:pb-4">
               <div className="flex items-center justify-between gap-3">
                 <Button
                   type="button"
@@ -1086,13 +1144,13 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
       <Dialog open={logExamOpen} onOpenChange={setLogExamOpen}>
         <DialogContent
           className={cn(
-            "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden",
+            "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden flex flex-col",
             "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[520px]",
             "top-[calc(env(safe-area-inset-top)+1rem)] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]",
-            "h-auto max-h-[calc(100dvh-4rem)]"
+            "h-[calc(100dvh-4rem)] sm:h-auto sm:max-h-[calc(100dvh-4rem)]"
           )}
         >
-          <div className="flex h-full min-h-0 flex-col bg-white">
+          <div className="flex flex-1 min-h-0 flex-col bg-white">
             <DialogHeader className="px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 text-left sm:pt-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">

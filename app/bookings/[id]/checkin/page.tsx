@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -15,15 +15,16 @@ import {
   IconTarget,
   IconCloudStorm,
   IconCheck,
-  IconCircleCheckFilled,
   IconX,
   IconNotebook,
   IconAlertCircle,
   IconMessage,
+  IconTrophy,
   IconPlus,
   IconTrash,
   IconPencil,
   IconLoader2,
+  IconChevronDown,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -36,7 +37,7 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -63,25 +64,25 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { 
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogDescription,
-} from "@/components/ui/dialog"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Separator } from "@/components/ui/separator"
 
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useOrganizationTaxRate } from "@/hooks/use-tax-rate"
 import type { BookingWithRelations } from "@/lib/types/bookings"
+import type { Invoice } from "@/lib/types/invoices"
+import type { InvoiceItem } from "@/lib/types/invoice_items"
+import type { ExperienceType } from "@/lib/types/experience-types"
+import type { ExperienceUnit } from "@/lib/types/flight-experience"
 import { bookingUpdateSchema } from "@/lib/validation/bookings"
 import { z } from "zod"
+import { BookingStatusTracker } from "@/components/bookings/booking-status-tracker"
 import { InvoiceCalculations, roundToTwoDecimals } from "@/lib/invoice-calculations"
 import ChargeableSearchDropdown from "@/components/invoices/ChargeableSearchDropdown"
+import InvoiceDocumentView, { type InvoicingSettings } from "@/components/invoices/InvoiceDocumentView"
+import { IconChevronRight } from "@tabler/icons-react"
 
 type FlightLogCheckinFormData = z.infer<typeof bookingUpdateSchema>
 
@@ -169,13 +170,19 @@ function deriveChargeBasisFromFlags(rate: ChargeRate | null | undefined): Charge
 
 export default function BookingCheckinPage() {
   const params = useParams()
-  const router = useRouter()
   const { role } = useAuth()
   const bookingId = params.id as string
   const isMobile = useIsMobile()
-  const [activeTab, setActiveTab] = React.useState<'billing' | 'debrief'>('billing')
-  const [isPerformanceNotesOpen, setIsPerformanceNotesOpen] = React.useState(false)
+  const isAdminOrInstructor = role === 'owner' || role === 'admin' || role === 'instructor'
+  const [isPerformanceNotesExpanded, setIsPerformanceNotesExpanded] = React.useState(false)
+  const [isExperienceExpanded, setIsExperienceExpanded] = React.useState(true)
   const [isCalculating, setIsCalculating] = React.useState(false)
+  const [isDebriefOpen, setIsDebriefOpen] = React.useState(false)
+
+  const billingRef = React.useRef<HTMLDivElement>(null)
+  const invoiceRef = React.useRef<HTMLDivElement>(null)
+  const debriefRef = React.useRef<HTMLDivElement>(null)
+  const isFirstMount = React.useRef(true)
 
   const queryClient = useQueryClient()
 
@@ -246,6 +253,138 @@ export default function BookingCheckinPage() {
   const isApproved = !!booking?.checkin_approved_at
   const checkinInvoiceId = booking?.checkin_invoice_id ?? null
 
+  // State for collapsible sections
+  const [isBillingCollapsed, setIsBillingCollapsed] = React.useState(isApproved)
+  const [isInvoiceCollapsed, setIsInvoiceCollapsed] = React.useState(isApproved)
+
+  // Fetch invoice details if approved
+  const invoiceQuery = useQuery({
+    queryKey: ["invoice", checkinInvoiceId],
+    queryFn: () => fetchJson<{ invoice: Invoice }>(`/api/invoices/${checkinInvoiceId}`),
+    enabled: !!checkinInvoiceId,
+  })
+
+  const invoiceItemsQuery = useQuery({
+    queryKey: ["invoice_items", checkinInvoiceId],
+    queryFn: () => fetchJson<{ invoice_items: InvoiceItem[] }>(`/api/invoice_items?invoice_id=${checkinInvoiceId}`),
+    enabled: !!checkinInvoiceId,
+  })
+
+  const invoiceSettingsQuery = useQuery({
+    queryKey: ["settings", "invoicing-full"],
+    queryFn: () => fetchJson<{ settings: InvoicingSettings }>("/api/settings/invoicing"),
+  })
+  const lessonProgressExists = React.useMemo(() => {
+    const lp = booking?.lesson_progress
+    if (!lp) return false
+    return Array.isArray(lp) ? lp.length > 0 : true
+  }, [booking?.lesson_progress])
+
+  React.useEffect(() => {
+    if (lessonProgressExists) setIsDebriefOpen(true)
+  }, [lessonProgressExists])
+
+  React.useEffect(() => {
+    if (isApproved) setIsDebriefOpen(true)
+  }, [isApproved])
+
+  // Scroll to section when it opens
+  React.useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false
+      return
+    }
+
+    if (!isBillingCollapsed) {
+      setTimeout(() => {
+        billingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    }
+  }, [isBillingCollapsed])
+
+  React.useEffect(() => {
+    if (isFirstMount.current) return
+
+    if (!isInvoiceCollapsed) {
+      setTimeout(() => {
+        invoiceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    }
+  }, [isInvoiceCollapsed])
+
+  React.useEffect(() => {
+    if (isFirstMount.current) return
+
+    if (isDebriefOpen) {
+      setTimeout(() => {
+        debriefRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    }
+  }, [isDebriefOpen])
+
+  type ExperienceEntryDraft = {
+    experience_type_id: string
+    value: string
+    unit: ExperienceUnit
+    notes?: string | null
+    conditions?: string | null
+  }
+
+  const [experienceEntries, setExperienceEntries] = React.useState<ExperienceEntryDraft[]>([])
+  const [experienceDirty, setExperienceDirty] = React.useState(false)
+
+  const addExperienceEntry = () => {
+    setExperienceEntries((prev) => [
+      ...prev,
+      { experience_type_id: "", value: "", unit: "hours" },
+    ])
+    setExperienceDirty(true)
+  }
+
+  const experienceTypesQuery = useQuery({
+    queryKey: ['experienceTypes'],
+    enabled: isAdminOrInstructor,
+    queryFn: async () => {
+      const res = await fetchJson<{ experience_types: ExperienceType[] }>('/api/experience-types')
+      return res.experience_types || []
+    },
+    staleTime: 10 * 60_000,
+  })
+
+  const bookingExperienceQuery = useQuery({
+    queryKey: ['bookingExperience', bookingId],
+    enabled: isAdminOrInstructor && !!bookingId && (isApproved || lessonProgressExists),
+    queryFn: async () => {
+      return fetchJson<{ entries: Array<{ experience_type_id: string; value: number; unit: ExperienceUnit; notes: string | null; conditions: string | null }> }>(
+        `/api/bookings/${bookingId}/experience`
+      )
+    },
+  })
+
+  React.useEffect(() => {
+    // Reset experience state when navigating between bookings
+    setExperienceEntries([])
+    setExperienceDirty(false)
+  }, [bookingId])
+
+  React.useEffect(() => {
+    if (!bookingExperienceQuery.data) return
+    // Only hydrate when we haven't changed anything locally
+    if (experienceDirty) return
+
+    const entries = bookingExperienceQuery.data.entries || []
+    setExperienceEntries(
+      entries.map((e) => ({
+        experience_type_id: e.experience_type_id,
+        value: String(e.value ?? ''),
+        unit: e.unit ?? 'hours',
+        notes: e.notes ?? null,
+        conditions: e.conditions ?? null,
+      }))
+    )
+    setExperienceDirty(false)
+  }, [bookingExperienceQuery.data, experienceDirty])
+
   const [draftCalculation, setDraftCalculation] = React.useState<null | {
     signature: string
     calculated_at: string
@@ -264,18 +403,65 @@ export default function BookingCheckinPage() {
   const [openDropdownIdx, setOpenDropdownIdx] = React.useState<number | null>(null)
 
   const selectedAircraftId =
-    watch("checked_out_aircraft_id") ||
-    booking?.checked_out_aircraft_id ||
-    booking?.aircraft_id ||
+    watch("checked_out_aircraft_id") ??
+    booking?.checked_out_aircraft_id ??
+    booking?.aircraft_id ??
     null
 
   const selectedInstructorId =
-    watch("checked_out_instructor_id") ||
-    booking?.checked_out_instructor_id ||
-    booking?.instructor_id ||
+    watch("checked_out_instructor_id") ??
+    booking?.checked_out_instructor_id ??
+    booking?.instructor_id ??
     null
 
-  const selectedFlightTypeId = watch("flight_type_id") || booking?.flight_type_id || null
+  const selectedFlightTypeId = watch("flight_type_id") ?? booking?.flight_type_id ?? null
+
+  // If the current booking's selection is inactive (not returned by /api/bookings/options),
+  // Radix Select will render an empty placeholder unless we include the selected item.
+  const bookingInstructorId = booking?.checked_out_instructor_id ?? booking?.instructor_id ?? null
+  const bookingInstructor = booking?.checked_out_instructor ?? booking?.instructor ?? null
+  const bookingFlightTypeId = booking?.flight_type_id ?? null
+  const bookingFlightType = booking?.flight_type ?? null
+
+  const bookingInstructorLabel = React.useMemo(() => {
+    if (!bookingInstructor) return null
+    const first = bookingInstructor.first_name
+    const last = bookingInstructor.last_name
+    
+    // Support both direct user object and legacy array format if it persists in some responses,
+    // though BookingWithRelations defines it as an object.
+    const user = (bookingInstructor as { user?: { email: string } | { email: string }[] }).user
+    const email = Array.isArray(user) ? user[0]?.email : user?.email
+    
+    const full = [first, last].filter(Boolean).join(" ")
+    return full || email || "Instructor"
+  }, [bookingInstructor])
+
+  const bookingFlightTypeLabel = React.useMemo(() => {
+    if (!bookingFlightType) return null
+    return bookingFlightType.name
+  }, [bookingFlightType])
+
+  const memberName = React.useMemo(() => {
+    if (!booking?.student) return "Member"
+    return [booking.student.first_name, booking.student.last_name].filter(Boolean).join(" ")
+  }, [booking?.student])
+
+  const aircraftReg = React.useMemo(() => {
+    return booking?.checked_out_aircraft?.registration || booking?.aircraft?.registration || "Aircraft"
+  }, [booking?.checked_out_aircraft, booking?.aircraft])
+
+  const bookingDate = React.useMemo(() => {
+    if (!booking?.start_time) return ""
+    return new Date(booking.start_time).toLocaleDateString('en-GB', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric' 
+    })
+  }, [booking?.start_time])
+
+  const lessonName = booking?.lesson?.name || "Lesson"
+  const syllabusName = booking?.lesson?.syllabus?.name
 
   const selectedFlightType = React.useMemo(() => {
     if (!selectedFlightTypeId) return null
@@ -286,6 +472,7 @@ export default function BookingCheckinPage() {
   const instructionType = (selectedFlightType as { instruction_type?: 'trial' | 'dual' | 'solo' | null } | null)?.instruction_type ?? null
 
   const [hasSoloAtEnd, setHasSoloAtEnd] = React.useState(false)
+  const [hasAttemptedCalculation, setHasAttemptedCalculation] = React.useState(false)
   const lastSoloInitKey = React.useRef<string | null>(null)
 
   React.useEffect(() => {
@@ -752,6 +939,11 @@ export default function BookingCheckinPage() {
   ])
 
   const calculateDraft = handleSubmit(async () => {
+    setHasAttemptedCalculation(true)
+    if (splitTimes.error) {
+      toast.error(splitTimes.error)
+      return
+    }
     setIsCalculating(true)
     // Add a small delay for better UX (shows loading state)
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -852,6 +1044,70 @@ export default function BookingCheckinPage() {
     })
   }, [booking, bookingId, reset])
 
+  function buildExperienceEntriesForSave(): Array<{
+    experience_type_id: string
+    value: number
+    unit: ExperienceUnit
+    notes?: string | null
+    conditions?: string | null
+  }> {
+    const cleaned = experienceEntries
+      .map((e) => ({
+        experience_type_id: e.experience_type_id?.trim(),
+        unit: e.unit,
+        valueRaw: e.value,
+        notes: e.notes ?? null,
+        conditions: e.conditions ?? null,
+      }))
+      .filter((e) => e.experience_type_id || (e.valueRaw != null && String(e.valueRaw).trim().length > 0))
+
+    const seen = new Set<string>()
+    const output: Array<{
+      experience_type_id: string
+      value: number
+      unit: ExperienceUnit
+      notes?: string | null
+      conditions?: string | null
+    }> = []
+
+    for (const e of cleaned) {
+      if (!e.experience_type_id) throw new Error('Select an experience type for each entry')
+      if (seen.has(e.experience_type_id)) throw new Error('Each experience type can only be added once per booking')
+      seen.add(e.experience_type_id)
+
+      const value = Number(e.valueRaw)
+      if (!Number.isFinite(value) || value <= 0) throw new Error('Experience values must be greater than 0')
+      if ((e.unit === 'count' || e.unit === 'landings') && !Number.isInteger(value)) {
+        throw new Error('Counts/landings must be a whole number')
+      }
+
+      output.push({
+        experience_type_id: e.experience_type_id,
+        value,
+        unit: e.unit,
+        notes: e.notes,
+        conditions: e.conditions,
+      })
+    }
+
+    return output
+  }
+
+  const saveExperienceMutation = useMutation({
+    mutationFn: async () => {
+      const entries = buildExperienceEntriesForSave()
+      return fetchJson<{ entries: unknown[] }>(`/api/bookings/${bookingId}/experience`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries }),
+      })
+    },
+    onSuccess: async () => {
+      setExperienceDirty(false)
+      await queryClient.invalidateQueries({ queryKey: ['bookingExperience', bookingId] })
+    },
+  })
+
   const approveMutation = useMutation({
     mutationFn: async () => {
       if (!booking) throw new Error('Booking not loaded')
@@ -890,15 +1146,6 @@ export default function BookingCheckinPage() {
         billing_basis: draftCalculation.billing_basis,
         billing_hours: draftCalculation.billing_hours,
 
-        instructor_comments: watch("instructor_comments") || null,
-        lesson_highlights: watch("lesson_highlights") || null,
-        areas_for_improvement: watch("areas_for_improvement") || null,
-        airmanship: watch("airmanship") || null,
-        focus_next_lesson: watch("focus_next_lesson") || null,
-        safety_concerns: watch("safety_concerns") || null,
-        weather_conditions: watch("weather_conditions") || null,
-        lesson_status: watch("lesson_status") || null,
-
         tax_rate: taxRate,
         due_date: dueDate.toISOString(),
         reference: `Booking ${booking.id} check-in`,
@@ -913,18 +1160,28 @@ export default function BookingCheckinPage() {
         })),
       }
 
+      // Persist experience entries before approval so reporting is consistent immediately after check-in.
+      if (experienceDirty) {
+        await saveExperienceMutation.mutateAsync()
+      }
+
       return fetchJson<{ invoice: { id: string } }>(`/api/bookings/${bookingId}/checkin/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
     },
-    onSuccess: async (data) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
       await queryClient.invalidateQueries({ queryKey: ["bookings"] })
       await queryClient.invalidateQueries({ queryKey: ["invoices"] })
       toast.success("Check-in approved and invoice created")
-      router.replace(`/invoices/${data.invoice.id}`)
+      setIsBillingCollapsed(true)
+      setIsInvoiceCollapsed(true)
+      setIsDebriefOpen(true)
+      setTimeout(() => {
+        document.getElementById("lesson-debrief")?.scrollIntoView({ behavior: "smooth", block: "start" })
+      }, 150)
     },
     onError: (error) => {
       toast.error(getErrorMessage(error))
@@ -941,17 +1198,11 @@ export default function BookingCheckinPage() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
-      toast.success("Progress saved")
-    },
-    onError: (error) => {
-      toast.error(getErrorMessage(error))
     },
   })
 
   // "Save Draft Check-In" is intentionally browser-only. It calculates and stores
   // invoice data locally; nothing is persisted until approval.
-
-  const isAdminOrInstructor = role === 'owner' || role === 'admin' || role === 'instructor'
 
   const isLoading = bookingQuery.isLoading || optionsQuery.isLoading
   const isError = bookingQuery.isError
@@ -1066,11 +1317,11 @@ export default function BookingCheckinPage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
-        <div className="flex flex-1 flex-col bg-muted/30">
+        <div className="flex flex-1 flex-col bg-slate-100/50 dark:bg-slate-950/50">
           <div className="flex flex-1 flex-col">
             {/* Header Section */}
-            <div className="border-b border-border/40 bg-gradient-to-br from-slate-50 via-blue-50/30 to-background dark:from-slate-900 dark:via-slate-800/50 dark:to-background">
-              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            <div className="border-b border-border/80 bg-gradient-to-br from-white via-slate-50 to-white dark:from-slate-900 dark:via-slate-900/50 dark:to-slate-900 shadow-sm">
+              <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
                 {/* Top Row: Back Button */}
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <Link
@@ -1114,48 +1365,104 @@ export default function BookingCheckinPage() {
             </div>
 
             {/* Main Content */}
-            <div className={`flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 ${
+            <div className={`flex-1 mx-auto max-w-5xl w-full px-4 sm:px-6 lg:px-8 ${
               isMobile ? "pt-8 pb-24" : "pt-10 pb-8"
             }`}>
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
-                {/* Left Column: Check-In Form */}
-                <div className="lg:col-span-2 space-y-6 lg:space-y-8">
-                  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "billing" | "debrief")} className="w-full">
-                    <TabsList className="flex w-full h-11 items-center justify-center rounded-lg bg-muted/50 p-1 text-muted-foreground mb-6 border border-border/50 shadow-sm">
-                      <TabsTrigger 
-                        value="billing" 
-                        className={cn(
-                          "flex-1 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
-                          (isApproved || (isDraftCalculated && !isDraftStale)) && "text-green-600 data-[state=active]:text-green-700"
-                        )}
-                      >
-                        {(isApproved || (isDraftCalculated && !isDraftStale)) && (
-                          <IconCircleCheckFilled className="h-4 w-4 animate-in zoom-in-50 duration-300" />
-                        )}
-                        Flight & Billing
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="debrief" 
-                        className={cn(
-                          "flex-1 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm relative",
-                          (isApproved || (booking?.lesson_progress && (!Array.isArray(booking.lesson_progress) || booking.lesson_progress.length > 0)) || saveProgressMutation.isSuccess) && "text-green-600 data-[state=active]:text-green-700"
-                        )}
-                      >
-                        {(isApproved || (booking?.lesson_progress && (!Array.isArray(booking.lesson_progress) || booking.lesson_progress.length > 0)) || saveProgressMutation.isSuccess) && (
-                          <IconCircleCheckFilled className="h-4 w-4 animate-in zoom-in-50 duration-300" />
-                        )}
-                        Lesson Debrief
-                      </TabsTrigger>
-                    </TabsList>
+              <div className="space-y-6 lg:space-y-8">
+                {/* Check-in Status Tracker */}
+                <BookingStatusTracker 
+                  stages={[
+                    { id: 'charges', label: 'Charges Approved' },
+                    { id: 'invoice', label: 'Invoice Created' },
+                    { id: 'debrief', label: 'Lesson Debrief' },
+                  ]}
+                  completedStageIds={[
+                    ...(isApproved ? ['charges'] : []),
+                    ...(checkinInvoiceId ? ['invoice'] : []),
+                    ...(lessonProgressExists ? ['debrief'] : []),
+                  ]}
+                  activeStageId={
+                    !isApproved ? 'charges' : 
+                    !checkinInvoiceId ? 'invoice' : 
+                    !lessonProgressExists ? 'debrief' : 
+                    undefined
+                  }
+                  className="mb-8"
+                />
 
-                    <TabsContent value="billing" className="mt-0 space-y-6">
-                      <Card className="bg-card shadow-md border border-border/50 rounded-xl">
-                        <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                {/* Step 1: Flight Details & Billing */}
+                <Collapsible
+                  open={!isBillingCollapsed}
+                  onOpenChange={(next) => setIsBillingCollapsed(!next)}
+                  className="space-y-4 scroll-mt-20"
+                >
+                  <div ref={billingRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <div className="flex items-center gap-2">
+                        <IconClock className="w-4 h-4 text-slate-500" />
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-tight">
+                          Flight Details & Billing
+                        </h3>
+                      </div>
+                    {isApproved && (
+                        <Badge variant="outline" className="bg-slate-100/80 dark:bg-slate-800/80 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full h-5">
+                          <div className="h-1 w-1 rounded-full bg-slate-400 mr-1.5" />
+                          Locked
+                        </Badge>
+                      )}
+                    </div>
+                    {isApproved && (
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all ml-auto sm:ml-0">
+                          {isBillingCollapsed ? "View Details" : "Collapse"}
+                          <IconChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", !isBillingCollapsed && "rotate-180")} />
+                        </Button>
+                      </CollapsibleTrigger>
+                    )}
+                  </div>
+
+                  {isApproved && isBillingCollapsed && (
+                    <div 
+                      className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-border shadow-sm cursor-pointer hover:border-primary/30 hover:shadow-md transition-all flex items-center justify-between group"
+                      onClick={() => setIsBillingCollapsed(false)}
+                    >
+                      <div className="flex flex-wrap items-center gap-y-4 gap-x-6 sm:gap-8">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">Status</span>
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                            <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Charges Finalized</span>
+                          </div>
+                        </div>
+                        <div className="h-8 w-px bg-border/60 hidden sm:block" />
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">Billing</span>
+                          <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+                            <IconClock className="h-3.5 w-3.5 text-slate-500" />
+                            <span>{billingHours.toFixed(1)}h billed</span>
+                          </div>
+                        </div>
+                        <div className="h-8 w-px bg-border/60 hidden sm:block" />
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">Flight Type</span>
+                          <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-tight">
+                            <IconPlane className="h-3.5 w-3.5 text-slate-500" />
+                            <span>{selectedFlightType?.name || "Flight"}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <IconChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground group-hover:translate-x-0.5 transition-all ml-4 shrink-0" />
+                    </div>
+                  )}
+
+                  <CollapsibleContent>
+                    <Card className="bg-card shadow-md border border-border/80 rounded-xl overflow-hidden">
+                        <CardContent className="p-4 sm:p-6">
                           <form onSubmit={(e) => e.preventDefault()}>
-                            <FieldSet className="w-full max-w-full">
-                              <FieldGroup className="w-full max-w-full">
-                                {/* Meter Readings Section */}
-                                <FieldSet className="p-4 sm:p-3 gap-4 sm:gap-3 rounded-lg w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
+                            <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 lg:gap-6">
+                              {/* Left: Meter readings */}
+                              <div>
+                                <FieldSet className="p-4 sm:p-3 gap-4 sm:gap-3 rounded-lg w-full max-w-full box-border bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 shadow-sm">
                                   <FieldGroup className="gap-4 sm:gap-3">
                                     {/* Charging basis indicator */}
                                     <div className="flex items-center justify-between gap-3">
@@ -1223,6 +1530,7 @@ export default function BookingCheckinPage() {
                                                   disabled={isApproved}
                                                   onCheckedChange={(next) => {
                                                     setHasSoloAtEnd(next)
+                                                    setHasAttemptedCalculation(false)
                                                     if (!next) {
                                                       setValue("solo_end_hobbs", null, { shouldDirty: true })
                                                       setValue("solo_end_tach", null, { shouldDirty: true })
@@ -1232,7 +1540,7 @@ export default function BookingCheckinPage() {
                                               </div>
 
                                               {hasSoloAtEnd && (
-                                                <Field data-invalid={!!splitTimes.error} className="gap-2 sm:gap-1">
+                                                <Field data-invalid={hasAttemptedCalculation && !!splitTimes.error} className="gap-2 sm:gap-1">
                                                   <FieldLabel htmlFor="solo_end_hobbs" className="text-sm sm:text-xs font-medium">Solo End Hobbs</FieldLabel>
                                                   <Input
                                                     id="solo_end_hobbs"
@@ -1245,7 +1553,7 @@ export default function BookingCheckinPage() {
                                                 </Field>
                                               )}
 
-                                              {splitTimes.error && (
+                                              {hasAttemptedCalculation && splitTimes.error && (
                                                 <div className="text-sm text-destructive">{splitTimes.error}</div>
                                               )}
 
@@ -1351,6 +1659,7 @@ export default function BookingCheckinPage() {
                                                   disabled={isApproved}
                                                   onCheckedChange={(next) => {
                                                     setHasSoloAtEnd(next)
+                                                    setHasAttemptedCalculation(false)
                                                     if (!next) {
                                                       setValue("solo_end_hobbs", null, { shouldDirty: true })
                                                       setValue("solo_end_tach", null, { shouldDirty: true })
@@ -1360,7 +1669,7 @@ export default function BookingCheckinPage() {
                                               </div>
 
                                               {hasSoloAtEnd && (
-                                                <Field data-invalid={!!splitTimes.error} className="gap-2 sm:gap-1">
+                                                <Field data-invalid={hasAttemptedCalculation && !!splitTimes.error} className="gap-2 sm:gap-1">
                                                   <FieldLabel htmlFor="solo_end_tach" className="text-sm sm:text-xs font-medium">Solo End Tacho</FieldLabel>
                                                   <Input
                                                     id="solo_end_tach"
@@ -1373,7 +1682,7 @@ export default function BookingCheckinPage() {
                                                 </Field>
                                               )}
 
-                                              {splitTimes.error && (
+                                              {hasAttemptedCalculation && splitTimes.error && (
                                                 <div className="text-sm text-destructive">{splitTimes.error}</div>
                                               )}
 
@@ -1428,36 +1737,15 @@ export default function BookingCheckinPage() {
                                         </FieldSet>
                                       </>
                                     )}
-
-                                    {/* Calculate Button */}
-                                    <div className="pt-2">
-                                      <Button
-                                        type="button"
-                                        size="lg"
-                                        onClick={() => {
-                                          void calculateDraft().catch((err) => toast.error(getErrorMessage(err)))
-                                        }}
-                                        disabled={isApproved || isCalculating}
-                                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all h-12 sm:h-11 text-base sm:text-sm font-semibold"
-                                      >
-                                        {isCalculating ? (
-                                          <IconLoader2 className="h-5 w-5 mr-2 animate-spin" />
-                                        ) : (
-                                          <IconFileText className="h-5 w-5 mr-2" />
-                                        )}
-                                        {isCalculating 
-                                          ? "Calculating..." 
-                                          : isDraftCalculated 
-                                            ? "Recalculate Flight Charges" 
-                                            : "Calculate Flight Charges"}
-                                      </Button>
-                                    </div>
                                   </FieldGroup>
                                 </FieldSet>
+                              </div>
 
-                                {/* Flight Information */}
-                                <FieldSet className="pt-4">
-                                  <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                              {/* Right: Flight information & Calculate */}
+                              <div className="flex flex-col gap-4 sm:gap-6">
+                                <div className="rounded-lg border border-border/60 bg-muted/10 p-4 sm:p-3">
+                                  <div className="text-sm font-semibold text-foreground mb-3">Flight information</div>
+                                  <FieldGroup className="grid grid-cols-1 gap-4 sm:gap-4">
                                     <Field data-invalid={!!errors.flight_type_id} className="gap-2 sm:gap-1.5">
                                       <FieldLabel htmlFor="flight_type_id" className="flex items-center gap-2 text-base sm:text-sm font-medium text-foreground">
                                         <IconClock className="h-5 w-5 sm:h-4 sm:w-4 text-primary" />
@@ -1466,14 +1754,21 @@ export default function BookingCheckinPage() {
                                       {options ? (
                                         <Select
                                           disabled={isApproved}
-                                          value={watch("flight_type_id") || "none"}
+                                          value={(watch("flight_type_id") ?? bookingFlightTypeId ?? "none") as string}
                                           onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
                                         >
-                                          <SelectTrigger id="flight_type_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20" aria-invalid={!!errors.flight_type_id}>
+                                          <SelectTrigger id="flight_type_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-slate-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20" aria-invalid={!!errors.flight_type_id}>
                                             <SelectValue placeholder="Select Flight Type" />
                                           </SelectTrigger>
                                           <SelectContent>
                                             <SelectItem value="none">No flight type</SelectItem>
+                                            {!!bookingFlightTypeId &&
+                                              !!bookingFlightTypeLabel &&
+                                              !options.flightTypes.some((ft) => ft.id === bookingFlightTypeId) && (
+                                                <SelectItem value={bookingFlightTypeId}>
+                                                  {bookingFlightTypeLabel} (inactive)
+                                                </SelectItem>
+                                              )}
                                             {options.flightTypes.map((ft) => (
                                               <SelectItem key={ft.id} value={ft.id}>
                                                 {ft.name}
@@ -1482,7 +1777,7 @@ export default function BookingCheckinPage() {
                                           </SelectContent>
                                         </Select>
                                       ) : (
-                                        <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-slate-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
                                           {booking.flight_type?.name || "—"}
                                         </div>
                                       )}
@@ -1507,14 +1802,21 @@ export default function BookingCheckinPage() {
                                       {isAdminOrInstructor && options ? (
                                         <Select
                                           disabled={isApproved}
-                                          value={watch("checked_out_instructor_id") || "none"}
+                                          value={(watch("checked_out_instructor_id") ?? bookingInstructorId ?? "none") as string}
                                           onValueChange={(value) => setValue("checked_out_instructor_id", value === "none" ? null : value, { shouldDirty: true })}
                                         >
-                                          <SelectTrigger id="checked_out_instructor_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20">
+                                          <SelectTrigger id="checked_out_instructor_id" className="w-full h-12 sm:h-10 text-base sm:text-sm transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-slate-50 dark:hover:bg-gray-800 focus:ring-2 focus:ring-primary/20">
                                             <SelectValue placeholder="Select Instructor" />
                                           </SelectTrigger>
                                           <SelectContent>
                                             <SelectItem value="none">No instructor</SelectItem>
+                                            {!!bookingInstructorId &&
+                                              !!bookingInstructorLabel &&
+                                              !options.instructors.some((i) => i.id === bookingInstructorId) && (
+                                                <SelectItem value={bookingInstructorId}>
+                                                  {bookingInstructorLabel} (inactive)
+                                                </SelectItem>
+                                              )}
                                             {options.instructors.map((instructor) => {
                                               const name = [instructor.first_name, instructor.last_name]
                                                 .filter(Boolean)
@@ -1528,7 +1830,7 @@ export default function BookingCheckinPage() {
                                           </SelectContent>
                                         </Select>
                                       ) : (
-                                        <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        <div className="px-4 sm:px-3 py-3 sm:py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-slate-50 dark:bg-gray-900/50 text-base sm:text-sm font-medium text-gray-900 dark:text-gray-100">
                                           {instructorName}
                                         </div>
                                       )}
@@ -1549,296 +1851,164 @@ export default function BookingCheckinPage() {
                                       )}
                                     </Field>
                                   </FieldGroup>
-                                </FieldSet>
-                              </FieldGroup>
-                            </FieldSet>
-                          </form>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-
-                    <TabsContent value="debrief" className="mt-0 space-y-6">
-                      <Card className="bg-card shadow-sm border border-border/50 rounded-xl overflow-hidden">
-                        <CardContent className="p-4 sm:p-6 space-y-8">
-                          {(instructionType === 'dual' || instructionType === 'trial') && !isApproved && (
-                            <div className="space-y-3">
-                              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                                <IconTarget className="h-3 w-3 text-slate-400" />
-                                Lesson Outcome
-                              </div>
-                              
-                              <div className="flex flex-col sm:flex-row gap-3">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() => setValue("lesson_status", "pass", { shouldDirty: true })}
-                                  className={cn(
-                                    "flex-1 h-12 rounded-xl border-2 transition-all font-bold text-[10px] uppercase tracking-wider shadow-none",
-                                    watch("lesson_status") === "pass"
-                                      ? "bg-green-50/50 border-green-500 text-green-700 hover:bg-green-50 hover:text-green-700"
-                                      : "bg-white border-slate-100 text-slate-400 hover:border-green-200 hover:bg-green-50/30 hover:text-green-600"
-                                  )}
-                                >
-                                  <div className={cn(
-                                    "mr-2 flex h-5 w-5 items-center justify-center rounded-full transition-colors",
-                                    watch("lesson_status") === "pass" ? "bg-green-500 text-white" : "bg-slate-100 text-slate-400"
-                                  )}>
-                                    <IconCheck className="h-3 w-3" />
-                                  </div>
-                                  Pass
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() => setValue("lesson_status", "not yet competent", { shouldDirty: true })}
-                                  className={cn(
-                                    "flex-1 h-12 rounded-xl border-2 transition-all font-bold text-[10px] uppercase tracking-wider shadow-none",
-                                    watch("lesson_status") === "not yet competent"
-                                      ? "bg-amber-50/50 border-amber-500 text-amber-700 hover:bg-amber-50 hover:text-amber-700"
-                                      : "bg-white border-slate-100 text-slate-400 hover:border-amber-200 hover:bg-amber-50/30 hover:text-amber-600"
-                                  )}
-                                >
-                                  <div className={cn(
-                                    "mr-2 flex h-5 w-5 items-center justify-center rounded-full transition-colors",
-                                    watch("lesson_status") === "not yet competent" ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-400"
-                                  )}>
-                                    <IconX className="h-3 w-3" />
-                                  </div>
-                                  NYC
-                                </Button>
-                              </div>
-
-                              {!watch("lesson_status") && (
-                                <div className="flex items-center gap-1.5 px-1">
-                                  <div className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
-                                  <p className="text-[10px] text-amber-600 font-bold uppercase tracking-tight">
-                                    Outcome is required for dual flights
-                                </p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Instructor Comments - PRIMARY */}
-                          <div className="space-y-3">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                              <IconMessage className="h-3 w-3" />
-                              Instructor Comments
-                            </div>
-                            <Textarea 
-                              {...register("instructor_comments")}
-                              placeholder="General debrief notes for the student..."
-                              className="min-h-[120px] bg-background border-border focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-                            />
-                          </div>
-
-                          {/* Next Steps - SECONDARY */}
-                          <div className="space-y-3">
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                              <IconNotebook className="h-3 w-3" />
-                              Next Steps
-                            </div>
-                            <Textarea 
-                              {...register("focus_next_lesson")}
-                              placeholder="What should be the priority next time?"
-                              className="min-h-[80px] bg-background border-border focus:ring-2 focus:ring-primary/20 transition-all text-sm"
-                            />
-                          </div>
-
-                          {/* Detailed Performance Notes Modal Trigger */}
-                          <Dialog open={isPerformanceNotesOpen} onOpenChange={setIsPerformanceNotesOpen}>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" className="w-full flex items-center justify-between px-4 h-11 hover:bg-muted/50 group border-dashed rounded-xl">
-                                <div className="flex items-center gap-2">
-                                  <IconReportAnalytics className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Detailed Performance Notes</span>
-                                </div>
-                                <Badge variant="secondary" className="text-[8px] h-4 px-1.5">Optional</Badge>
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent 
-                              className={cn(
-                                "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden",
-                                "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[640px]",
-                                "top-[calc(env(safe-area-inset-top)+1rem)] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]",
-                                "h-[calc(100dvh-2rem)] sm:h-auto sm:max-h-[calc(100dvh-4rem)]"
-                              )}
-                            >
-                              <div className="flex h-full min-h-0 flex-col bg-white">
-                                <DialogHeader className="px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 text-left sm:pt-6">
-                                  <div className="flex items-center gap-4">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-                                      <IconReportAnalytics className="h-5 w-5" />
-                                    </div>
-                                    <div>
-                                      <DialogTitle className="text-xl font-bold tracking-tight text-slate-900">
-                                        Detailed Performance Notes
-                                      </DialogTitle>
-                                      <DialogDescription className="mt-0.5 text-sm text-slate-500">
-                                        Capture specific details about the flight for the student&apos;s training record.
-                                      </DialogDescription>
-                                    </div>
-                                  </div>
-                                </DialogHeader>
-                                
-                                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 pb-6">
-                                  <div className="space-y-6">
-                                    <section>
-                                      <div className="mb-3 flex items-center gap-2">
-                                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                                        <span className="text-xs font-semibold tracking-tight text-slate-900">
-                                          Training Details
-                                        </span>
-                                      </div>
-
-                                      <div className="grid grid-cols-1 gap-5">
-                                        <div>
-                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                            LESSON HIGHLIGHTS
-                                          </label>
-                                  <Textarea 
-                                    {...register("lesson_highlights")}
-                                            placeholder="What went particularly well during the lesson?"
-                                            className="min-h-[100px] rounded-xl border-slate-200 bg-white px-3 py-2 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0 resize-none transition-all"
-                                          />
-                                        </div>
-
-                                        <div>
-                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                            AREAS FOR IMPROVEMENT
-                                          </label>
-                                  <Textarea 
-                                    {...register("areas_for_improvement")}
-                                            placeholder="What specific maneuvers or skills need more practice?"
-                                            className="min-h-[100px] rounded-xl border-slate-200 bg-white px-3 py-2 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0 resize-none transition-all"
-                                          />
-                                        </div>
-
-                                        <div>
-                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                                            AIRMANSHIP & DECISION MAKING
-                                          </label>
-                                  <Textarea 
-                                    {...register("airmanship")}
-                                            placeholder="Comment on situational awareness, decision making, and safety mindset."
-                                            className="min-h-[100px] rounded-xl border-slate-200 bg-white px-3 py-2 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0 resize-none transition-all"
-                                          />
-                                        </div>
-                                      </div>
-                                    </section>
-
-                                    <section>
-                                      <div className="mb-3 flex items-center gap-2">
-                                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                                        <span className="text-xs font-semibold tracking-tight text-slate-900">
-                                          Environment & Safety
-                                        </span>
-                                      </div>
-
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                        <div>
-                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                                      <IconCloudStorm className="h-3 w-3" />
-                                            WEATHER CONDITIONS
-                                          </label>
-                                    <Input 
-                                      {...register("weather_conditions")}
-                                            placeholder="e.g. Calm, Gusty 15kts, BKN025"
-                                            className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
-                                    />
-                                        </div>
-
-                                        <div>
-                                          <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-destructive flex items-center gap-1.5">
-                                      <IconAlertCircle className="h-3 w-3" />
-                                            SAFETY CONCERNS
-                                          </label>
-                                    <Input 
-                                      {...register("safety_concerns")}
-                                            placeholder="Any safety events or near-misses?"
-                                            className="h-10 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0 border-destructive/20"
-                                    />
-                                </div>
-                              </div>
-                                    </section>
-                                  </div>
                                 </div>
 
-                                <div className="border-t bg-white px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.05)] sm:pb-4">
-                                  <Button type="button" onClick={() => setIsPerformanceNotesOpen(false)} className="w-full h-10 rounded-xl bg-slate-900 text-xs font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800 transition-all">
-                                    Done
+                                {/* Calculate Button */}
+                                <div>
+                                  <Button
+                                    type="button"
+                                    size="lg"
+                                    onClick={() => {
+                                      void calculateDraft().catch((err) => toast.error(getErrorMessage(err)))
+                                    }}
+                                    disabled={isApproved || isCalculating}
+                                    className="w-full bg-slate-700 hover:bg-slate-800 text-white shadow-md hover:shadow-lg transition-all h-12 sm:h-11 text-base sm:text-sm font-semibold"
+                                  >
+                                    {isCalculating ? (
+                                      <IconLoader2 className="h-5 w-5 mr-2 animate-spin" />
+                                    ) : (
+                                      <IconFileText className="h-5 w-5 mr-2" />
+                                    )}
+                                    {isCalculating 
+                                      ? "Calculating..." 
+                                      : isDraftCalculated 
+                                        ? "Recalculate Flight Charges" 
+                                        : "Calculate Flight Charges"}
                                   </Button>
                                 </div>
                               </div>
-                            </DialogContent>
-                          </Dialog>
-
-                          {/* Save Debrief Progress Button */}
-                          <div className="pt-4 border-t border-border/10">
-                            <Button
-                              type="button"
-                              onClick={() => {
-                                const data = {
-                                  instructor_comments: watch("instructor_comments"),
-                                  focus_next_lesson: watch("focus_next_lesson"),
-                                  lesson_highlights: watch("lesson_highlights"),
-                                  areas_for_improvement: watch("areas_for_improvement"),
-                                  airmanship: watch("airmanship"),
-                                  weather_conditions: watch("weather_conditions"),
-                                  safety_concerns: watch("safety_concerns"),
-                                  lesson_status: watch("lesson_status"),
-                                }
-                                saveProgressMutation.mutate(data)
-                              }}
-                              disabled={saveProgressMutation.isPending || isApproved}
-                              className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-900/10 transition-all"
-                            >
-                              {saveProgressMutation.isPending ? (
-                                <>
-                                  <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin mr-2"></div>
-                                  Saving Progress...
-                                </>
-                              ) : (
-                                "Save Debrief Progress"
-                              )}
-                            </Button>
-                            <p className="mt-2 text-[10px] text-center text-muted-foreground uppercase tracking-wider font-medium px-4">
-                              Use this to save your notes while you work. Final approval still required below.
-                            </p>
-                          </div>
+                            </div>
+                          </form>
                         </CardContent>
                       </Card>
-                    </TabsContent>
-                  </Tabs>
-                </div>
+                  </CollapsibleContent>
+                </Collapsible>
+                              
+                {/* Step 2: Invoice Review & Approval */}
+                <Collapsible
+                  open={!isInvoiceCollapsed}
+                  onOpenChange={(next) => setIsInvoiceCollapsed(!next)}
+                  className="space-y-4 scroll-mt-20"
+                >
+                  <div ref={invoiceRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <div className="flex items-center gap-2">
+                        <IconFileText className="w-4 h-4 text-slate-500" />
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-tight">
+                          Invoice
+                        </h3>
+                      </div>
+                      {isApproved && (
+                        <Badge variant="outline" className="bg-slate-100/80 dark:bg-slate-800/80 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full h-5">
+                          <div className="h-1 w-1 rounded-full bg-slate-400 mr-1.5" />
+                          Finalized
+                        </Badge>
+                      )}
+                    </div>
+                    {isApproved && (
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all ml-auto sm:ml-0">
+                          {isInvoiceCollapsed ? "View Invoice" : "Collapse"}
+                          <IconChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", !isInvoiceCollapsed && "rotate-180")} />
+                        </Button>
+                      </CollapsibleTrigger>
+                    )}
+                  </div>
 
-                {/* Right Column: Invoice Panel */}
-                <div className="lg:col-span-3 space-y-6 lg:space-y-8">
-                  <Card className="bg-card shadow-md border border-border/50 rounded-xl">
-                    <CardHeader className="pb-5 border-b border-border/20">
-                      <CardTitle className="text-xl font-bold text-foreground">
-                        Invoice
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <div className="space-y-6">
+                  {isApproved && isInvoiceCollapsed && (
+                    <div 
+                      className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-border shadow-sm cursor-pointer hover:border-primary/30 hover:shadow-md transition-all flex items-center justify-between group"
+                      onClick={() => setIsInvoiceCollapsed(false)}
+                    >
+                      <div className="flex flex-wrap items-center gap-y-4 gap-x-6 sm:gap-8">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">Invoice No.</span>
+                          <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                            {invoiceQuery.data?.invoice?.invoice_number || "—"}
+                          </div>
+                        </div>
+                        <div className="h-8 w-px bg-border/60 hidden sm:block" />
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">Total Amount</span>
+                          <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+                            <span>${Number(invoiceQuery.data?.invoice?.total_amount || 0).toFixed(2)}</span>
+                          </div>
+                        </div>
+                        <div className="h-8 w-px bg-border/60 hidden sm:block" />
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">Bill To</span>
+                          <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                            {studentName}
+                          </div>
+                        </div>
+                      </div>
+                      <IconChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground group-hover:translate-x-0.5 transition-all ml-4 shrink-0" />
+                    </div>
+                  )}
+
+                  <CollapsibleContent>
                         {isApproved ? (
-                          <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                            <div className="font-semibold text-green-800">Check-in approved</div>
-                            <div className="mt-1 text-sm text-green-800/90">
-                              This check-in is locked and has been invoiced.
-                              {checkinInvoiceId && (
-                                <>
-                                  {' '}View invoice:{' '}
-                                  <Link className="underline font-medium" href={`/invoices/${checkinInvoiceId}`}>
-                                    {checkinInvoiceId}
+                      <div className="space-y-4">
+                        {invoiceQuery.isLoading || invoiceItemsQuery.isLoading || invoiceSettingsQuery.isLoading ? (
+                          <Card className="bg-card shadow-md border border-border/80 rounded-xl">
+                            <CardContent className="p-8 text-center text-muted-foreground">
+                              Loading invoice details...
+                            </CardContent>
+                          </Card>
+                        ) : invoiceQuery.data?.invoice ? (
+                          <InvoiceDocumentView
+                            settings={invoiceSettingsQuery.data?.settings || {
+                              schoolName: "Flight School",
+                              billingAddress: "",
+                              gstNumber: "",
+                              contactPhone: "",
+                              contactEmail: "",
+                              invoiceFooter: "Thank you for your business.",
+                              paymentTerms: "Payment terms: Net 30 days.",
+                            }}
+                            invoice={{
+                              invoiceNumber: invoiceQuery.data.invoice.invoice_number || `#${invoiceQuery.data.invoice.id.slice(0, 8)}`,
+                              issueDate: invoiceQuery.data.invoice.issue_date,
+                              dueDate: invoiceQuery.data.invoice.due_date,
+                              taxRate: invoiceQuery.data.invoice.tax_rate ?? 0.15,
+                              subtotal: invoiceQuery.data.invoice.subtotal,
+                              taxTotal: invoiceQuery.data.invoice.tax_total,
+                              totalAmount: invoiceQuery.data.invoice.total_amount,
+                              totalPaid: invoiceQuery.data.invoice.total_paid ?? 0,
+                              balanceDue: invoiceQuery.data.invoice.balance_due,
+                              billToName: studentName,
+                            }}
+                            items={(invoiceItemsQuery.data?.invoice_items || []).map((i: InvoiceItem) => ({
+                              id: i.id,
+                              description: i.description,
+                              quantity: i.quantity,
+                              unit_price: i.unit_price,
+                              rate_inclusive: i.rate_inclusive,
+                              line_total: i.line_total,
+                            }))}
+                            actionsSlot={
+                              <div className="flex justify-end pt-4">
+                                <Button asChild variant="outline" className="gap-2">
+                                  <Link href={`/invoices/${checkinInvoiceId}`}>
+                                    <IconFileText className="h-4 w-4" />
+                                    View Full Invoice
                                   </Link>
-                                </>
-                              )}
-                            </div>
+                                </Button>
+                              </div>
+                            }
+                          />
+                        ) : (
+                          <Card className="bg-card shadow-md border border-border/80 rounded-xl">
+                            <CardContent className="p-8 text-center text-destructive">
+                              Failed to load invoice details.
+                            </CardContent>
+                          </Card>
+                        )}
                           </div>
                         ) : (
-                          <>
+                      <Card className="bg-card shadow-md border border-border/80 rounded-xl overflow-hidden">
+                        <CardContent className="pt-6">
+                          <div className="space-y-6">
                             {(aircraftChargeRateQuery.isLoading || instructorChargeRateQuery.isLoading) && (
                               <div className="text-sm text-muted-foreground">Loading charge rates…</div>
                             )}
@@ -1863,7 +2033,11 @@ export default function BookingCheckinPage() {
                               </div>
                             )}
 
-                            {!isDraftCalculated ? null : isDraftStale ? (
+                          {!isDraftCalculated ? (
+                            <div className="rounded-lg border border-border/60 bg-muted/10 p-4 text-sm text-muted-foreground">
+                              Calculate flight charges to generate draft invoice items.
+                            </div>
+                          ) : isDraftStale ? (
                               <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
                                 Draft is out of date. Recalculate flight charges before approving.
                               </div>
@@ -2094,8 +2268,6 @@ export default function BookingCheckinPage() {
                                     </div>
                                   </div>
                                 </div>
-
-
                               </div>
                             )}
 
@@ -2104,16 +2276,668 @@ export default function BookingCheckinPage() {
                                 size="lg"
                                 onClick={() => approveMutation.mutate()}
                                 disabled={!canApprove}
-                                className="h-12 px-6 font-semibold"
+                                className="h-12 px-8 min-w-[200px] bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg hover:shadow-xl transition-all rounded-xl"
                               >
                                 {approveMutation.isPending ? "Approving..." : "Approve Check-In & Create Invoice"}
                               </Button>
                             </div>
-                          </>
-                        )}
                       </div>
                     </CardContent>
                   </Card>
+                      )}
+                    </CollapsibleContent>
+                </Collapsible>
+
+                {/* Step 3: Lesson Debrief (optional) */}
+                <div id="lesson-debrief" className="scroll-mt-20">
+                  <Collapsible
+                    open={isDebriefOpen && (isApproved || lessonProgressExists)}
+                    onOpenChange={(next) => {
+                      if (!isApproved && !lessonProgressExists) return
+                      setIsDebriefOpen(next)
+                    }}
+                    className="space-y-4 pb-12"
+                  >
+                    <div ref={debriefRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <div className="flex items-center gap-2">
+                          <IconMessage className="w-4 h-4 text-slate-500" />
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-tight">
+                            Lesson Debrief
+                          </h3>
+                        </div>
+                        <Badge variant="outline" className="bg-slate-100/80 dark:bg-slate-800/80 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full h-5">
+                          <div className="h-1 w-1 rounded-full bg-slate-400 mr-1.5" />
+                          Optional
+                        </Badge>
+                        {lessonProgressExists && (
+                          <Badge variant="outline" className="bg-green-50/50 dark:bg-green-900/10 border-green-100/50 dark:border-green-900/20 text-[10px] font-bold text-green-600/80 dark:text-green-400/80 uppercase tracking-wider px-2 py-0.5 rounded-full h-5">
+                            <div className="h-1 w-1 rounded-full bg-green-500 mr-1.5" />
+                            Saved
+                          </Badge>
+                        )}
+                      </div>
+
+                      {isApproved || lessonProgressExists ? (
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all ml-auto sm:ml-0">
+                            {isDebriefOpen ? "Hide" : "Add / Edit"}
+                            <IconChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", isDebriefOpen && "rotate-180")} />
+                          </Button>
+                        </CollapsibleTrigger>
+                      ) : (
+                        <div className="px-2.5 py-1 rounded-lg bg-muted/50 border border-border/50 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 italic ml-auto sm:ml-0">
+                          Available after approval
+                        </div>
+                      )}
+                    </div>
+
+                    {!isDebriefOpen && (
+                      <div 
+                        className={cn(
+                          "p-4 rounded-xl border transition-all flex items-center justify-between group cursor-pointer shadow-sm",
+                          lessonProgressExists 
+                            ? "bg-white dark:bg-slate-900 border-border hover:border-primary/30" 
+                            : "bg-white dark:bg-slate-900 border-primary/20 hover:border-primary/40 hover:shadow-md ring-1 ring-primary/5"
+                        )}
+                        onClick={() => setIsDebriefOpen(true)}
+                      >
+                        <div className="flex flex-wrap items-center gap-y-4 gap-x-6 sm:gap-8">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">Status</span>
+                            <div className="flex items-center gap-2">
+                              {lessonProgressExists ? (
+                                <>
+                                  <div className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+                                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Debrief Completed</span>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Action Required</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="h-8 w-px bg-border/60 hidden sm:block" />
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">Task</span>
+                            <div className="flex items-center gap-2 text-sm font-bold">
+                              {lessonProgressExists ? (
+                                <span className="text-slate-600 dark:text-slate-400">Record Updated</span>
+                              ) : (
+                                <span className="text-primary font-bold">Log Flight Debrief</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-4 shrink-0">
+                          {!lessonProgressExists && (
+                            <span className="text-[10px] font-bold text-primary uppercase tracking-wider hidden sm:inline-block mr-2">Click to debrief</span>
+                          )}
+                          <IconChevronRight className={cn(
+                            "h-4 w-4 transition-all group-hover:translate-x-0.5",
+                            lessonProgressExists ? "text-muted-foreground/50" : "text-primary"
+                          )} />
+                        </div>
+                      </div>
+                    )}
+
+                      <CollapsibleContent>
+                      <Card className="bg-card shadow-md border border-border/80 rounded-xl overflow-hidden">
+                        <CardContent className="p-4 sm:p-6 space-y-8">
+                          {/* Lesson Summary Header */}
+                          <div className="flex flex-wrap items-center gap-x-10 gap-y-5 px-1 pb-8 mb-4 border-b border-border/40">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                                <IconSchool className="h-3 w-3" />
+                                Member
+                              </div>
+                              <div className="text-sm font-bold text-foreground">{memberName}</div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                                <IconSchool className="h-3 w-3" />
+                                Instructor
+                              </div>
+                              <div className="text-sm font-bold text-foreground">{instructorName || "Instructor"}</div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                                <IconPlane className="h-3 w-3" />
+                                Aircraft
+                              </div>
+                              <div className="text-sm font-bold text-foreground">{aircraftReg}</div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                                <IconClock className="h-3 w-3" />
+                                Date
+                              </div>
+                              <div className="text-sm font-bold text-foreground">{bookingDate}</div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                                <IconNotebook className="h-3 w-3" />
+                                Lesson
+                              </div>
+                              <div className="text-sm font-bold text-foreground">{lessonName}</div>
+                            </div>
+                            {syllabusName && (
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                                  <IconFileText className="h-3 w-3" />
+                                  Syllabus
+                                </div>
+                                <div className="text-sm font-bold text-foreground">{syllabusName}</div>
+                              </div>
+                            )}
+                          </div>
+
+                          <FieldSet className="gap-8">
+                            {(instructionType === 'dual' || instructionType === 'trial') && (
+                              <Field className="gap-3">
+                                <FieldLabel className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                  <IconTarget className="h-3.5 w-3.5" />
+                                  Lesson Outcome
+                                  <span className="ml-1 text-[10px] font-medium lowercase italic text-muted-foreground/60">(optional)</span>
+                                </FieldLabel>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setValue("lesson_status", "pass", { shouldDirty: true })}
+                                  className={cn(
+                                      "h-14 rounded-xl border-2 transition-all flex items-center justify-center gap-3",
+                                    watch("lesson_status") === "pass"
+                                        ? "bg-green-50/50 border-green-500 text-green-700 shadow-sm"
+                                        : "bg-background border-border text-muted-foreground hover:border-green-200 hover:bg-green-50/30 hover:text-green-600"
+                                  )}
+                                >
+                                  <div className={cn(
+                                      "flex h-6 w-6 items-center justify-center rounded-full transition-colors",
+                                      watch("lesson_status") === "pass" ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"
+                                  )}>
+                                      <IconCheck className="h-3.5 w-3.5" />
+                                  </div>
+                                    <span className="font-bold text-xs uppercase tracking-wider">Pass</span>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setValue("lesson_status", "not yet competent", { shouldDirty: true })}
+                                  className={cn(
+                                      "h-14 rounded-xl border-2 transition-all flex items-center justify-center gap-3",
+                                    watch("lesson_status") === "not yet competent"
+                                        ? "bg-amber-50/50 border-amber-500 text-amber-700 shadow-sm"
+                                        : "bg-background border-border text-muted-foreground hover:border-amber-200 hover:bg-amber-50/30 hover:text-amber-600"
+                                  )}
+                                >
+                                  <div className={cn(
+                                      "flex h-6 w-6 items-center justify-center rounded-full transition-colors",
+                                      watch("lesson_status") === "not yet competent" ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground"
+                                  )}>
+                                      <IconX className="h-3.5 w-3.5" />
+                                  </div>
+                                    <span className="font-bold text-xs uppercase tracking-wider">NYC</span>
+                                </Button>
+                              </div>
+                              </Field>
+                          )}
+
+                          {/* Instructor Comments - PRIMARY */}
+                            <Field className="gap-3">
+                              <FieldLabel className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                <IconMessage className="h-3.5 w-3.5" />
+                              Instructor Comments
+                              </FieldLabel>
+                            <Textarea 
+                              {...register("instructor_comments")}
+                              placeholder="General debrief notes for the student..."
+                                className="min-h-[140px] bg-background border-border focus:ring-2 focus:ring-primary/20 transition-all text-sm rounded-xl"
+                            />
+                            </Field>
+
+                          {/* Next Steps - SECONDARY */}
+                            <Field className="gap-3">
+                              <FieldLabel className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                <IconNotebook className="h-3.5 w-3.5" />
+                              Next Steps
+                              </FieldLabel>
+                            <Textarea 
+                              {...register("focus_next_lesson")}
+                              placeholder="What should be the priority next time?"
+                                className="min-h-[100px] bg-background border-border focus:ring-2 focus:ring-primary/20 transition-all text-sm rounded-xl"
+                              />
+                            </Field>
+
+                            {/* Full Debrief - Collapsible Extension */}
+                            <Collapsible
+                              open={isPerformanceNotesExpanded}
+                              onOpenChange={setIsPerformanceNotesExpanded}
+                              className="border-t border-border/40 pt-2 mt-2"
+                            >
+                              <CollapsibleTrigger asChild>
+                                <div 
+                                  role="button"
+                                  tabIndex={0}
+                                  className="w-full h-14 px-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-900/30 group transition-all rounded-xl relative overflow-hidden cursor-pointer outline-none"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      setIsPerformanceNotesExpanded(!isPerformanceNotesExpanded);
+                                    }
+                                  }}
+                                >
+                                  {/* Interaction Hint: Vertical bar */}
+                                  <div className="absolute left-0 top-3 bottom-3 w-1 bg-primary/80 scale-y-0 group-hover:scale-y-100 transition-transform origin-center rounded-r-full" />
+                                  
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100/80 dark:bg-slate-800/80 border border-border/50 group-hover:border-primary/30 group-hover:bg-primary/5 transition-all">
+                                      <IconReportAnalytics className="h-4.5 w-4.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                    </div>
+                                    <div className="text-left">
+                                      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 group-hover:text-primary/70 transition-colors">
+                                        Lesson Details
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">
+                                          Full Debrief
+                                        </span>
+                                        {!isPerformanceNotesExpanded && (
+                                          <Badge variant="secondary" className="text-[9px] h-4 px-1.5 bg-muted/60 border-none font-bold uppercase tracking-tight">Optional</Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[10px] font-medium text-muted-foreground/60 group-hover:text-primary/70 transition-colors hidden sm:inline">
+                                      {isPerformanceNotesExpanded ? "Hide details" : "Show more details"}
+                                    </span>
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border/40 group-hover:border-primary/30 group-hover:bg-primary/5 transition-all">
+                                      <IconChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-transform duration-200", isPerformanceNotesExpanded && "rotate-180")} />
+                                    </div>
+                                  </div>
+                                </div>
+                              </CollapsibleTrigger>
+
+                              <CollapsibleContent>
+                                <div className="pt-6 space-y-10">
+                                  {/* Training Details Section */}
+                                  <div className="space-y-6">
+                                    <div className="flex items-center gap-3">
+                                      <div className="h-5 w-1 rounded-full bg-primary/30" />
+                                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary/80">
+                                        Training Details
+                                      </h4>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-6">
+                                      <Field className="gap-2">
+                                        <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Lesson Highlights</FieldLabel>
+                                        <Textarea 
+                                          {...register("lesson_highlights")}
+                                          placeholder="What went particularly well?"
+                                          className="min-h-[100px] bg-background/50 border-border/60 focus:ring-2 focus:ring-primary/20 transition-all text-sm rounded-xl resize-none"
+                                        />
+                                      </Field>
+
+                                      <Field className="gap-2">
+                                        <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Areas for Improvement</FieldLabel>
+                                        <Textarea 
+                                          {...register("areas_for_improvement")}
+                                          placeholder="What needs more practice?"
+                                          className="min-h-[100px] bg-background/50 border-border/60 focus:ring-2 focus:ring-primary/20 transition-all text-sm rounded-xl resize-none"
+                                        />
+                                      </Field>
+
+                                      <Field className="gap-2">
+                                        <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Airmanship & Decision Making</FieldLabel>
+                                        <Textarea 
+                                          {...register("airmanship")}
+                                          placeholder="Comments on situational awareness, safety mindset, etc."
+                                          className="min-h-[100px] bg-background/50 border-border/60 focus:ring-2 focus:ring-primary/20 transition-all text-sm rounded-xl resize-none"
+                                        />
+                                      </Field>
+                                    </div>
+                                  </div>
+
+                                  <Separator className="bg-border/30" />
+
+                                  {/* Environment & Safety Section */}
+                                  <div className="space-y-6">
+                                    <div className="flex items-center gap-3">
+                                      <div className="h-5 w-1 rounded-full bg-destructive/30" />
+                                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-destructive/80">
+                                        Environment & Safety
+                                      </h4>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                      <Field className="gap-2">
+                                        <FieldLabel className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                                          <IconCloudStorm className="h-3 w-3" />
+                                          Weather Conditions
+                                        </FieldLabel>
+                                        <Input 
+                                          {...register("weather_conditions")}
+                                          placeholder="e.g. Calm, Gusty 15kts"
+                                          className="h-11 bg-background/50 border-border/60 focus:ring-2 focus:ring-primary/20 transition-all text-sm rounded-xl"
+                                        />
+                                      </Field>
+
+                                      <Field className="gap-2">
+                                        <FieldLabel className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-destructive/80">
+                                          <IconAlertCircle className="h-3 w-3" />
+                                          Safety Concerns
+                                        </FieldLabel>
+                                        <Input 
+                                          {...register("safety_concerns")}
+                                          placeholder="Any safety events?"
+                                          className="h-11 bg-background border-destructive/20 focus:ring-2 focus:ring-destructive/20 transition-all text-sm rounded-xl"
+                                        />
+                                      </Field>
+                                    </div>
+                                  </div>
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+
+                            {/* Flight Experience - Collapsible Extension */}
+                            <Collapsible
+                              open={isExperienceExpanded}
+                              onOpenChange={setIsExperienceExpanded}
+                              className="border-t border-border/40 pt-2 mt-2"
+                            >
+                              <CollapsibleTrigger asChild>
+                                <div 
+                                  role="button"
+                                  tabIndex={0}
+                                  className="w-full h-14 px-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-900/30 group transition-all rounded-xl relative overflow-hidden cursor-pointer outline-none"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      setIsExperienceExpanded(!isExperienceExpanded);
+                                    }
+                                  }}
+                                >
+                                  {/* Interaction Hint: Vertical bar */}
+                                  <div className="absolute left-0 top-3 bottom-3 w-1 bg-primary/80 scale-y-0 group-hover:scale-y-100 transition-transform origin-center rounded-r-full" />
+
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100/80 dark:bg-slate-800/80 border border-border/50 group-hover:border-primary/30 group-hover:bg-primary/5 transition-all">
+                                      <IconTrophy className="h-4.5 w-4.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                    </div>
+                                    <div className="text-left">
+                                      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 group-hover:text-primary/70 transition-colors">
+                                        Hours & Landings
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">
+                                          Flight Experience
+                                        </span>
+                                        {!isExperienceExpanded && experienceEntries.length > 0 && (
+                                          <Badge variant="secondary" className="text-[9px] h-4 px-1.5 bg-muted/60 border-none font-bold uppercase tracking-tight">
+                                            {experienceEntries.length} {experienceEntries.length === 1 ? "entry" : "entries"}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[10px] font-medium text-muted-foreground/60 group-hover:text-primary/70 transition-colors hidden sm:inline">
+                                      {isExperienceExpanded ? "Hide log" : "Record time & landings"}
+                                    </span>
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border/40 group-hover:border-primary/30 group-hover:bg-primary/5 transition-all">
+                                      <IconChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-transform duration-200", isExperienceExpanded && "rotate-180")} />
+                                    </div>
+                                  </div>
+                                </div>
+                              </CollapsibleTrigger>
+
+                              <CollapsibleContent>
+                                <div className="pt-6">
+                                  <div className="rounded-xl border border-border/80 bg-white/60 dark:bg-slate-900/30 p-4 sm:p-5 space-y-5">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border/40">
+                                      <div className="space-y-1">
+                                        <div className="text-sm font-bold text-foreground flex items-center gap-2">
+                                          Log flight experience
+                                          {experienceDirty && (
+                                            <Badge
+                                              variant="outline"
+                                              className="text-[10px] font-bold uppercase tracking-wider bg-amber-50/60 dark:bg-amber-900/10 border-amber-200/60 dark:border-amber-900/20 text-amber-700/80 dark:text-amber-400/80 rounded-full h-5 px-2"
+                                            >
+                                              Unsaved
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={addExperienceEntry}
+                                        className="h-9 rounded-xl font-bold text-xs"
+                                      >
+                                        <IconPlus className="h-4 w-4 mr-2" />
+                                        Add experience
+                                      </Button>
+                                    </div>
+
+                                    {(experienceTypesQuery.isLoading || bookingExperienceQuery.isLoading) && (
+                                      <div className="py-8 flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                                        <IconLoader2 className="h-4 w-4 animate-spin" />
+                                        Loading experience…
+                                      </div>
+                                    )}
+
+                                    {(experienceTypesQuery.isError || bookingExperienceQuery.isError) && (
+                                      <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20 text-sm text-destructive flex items-center gap-3">
+                                        <IconAlertCircle className="h-4 w-4" />
+                                        Failed to load experience.
+                                      </div>
+                                    )}
+
+                                    {!(experienceTypesQuery.isLoading || bookingExperienceQuery.isLoading) && (
+                                      <div className="space-y-4 max-w-2xl">
+                                        {experienceEntries.length > 0 ? (
+                                          <div className="space-y-4">
+                                            <div className="hidden sm:grid sm:grid-cols-[1fr_100px_120px_40px] gap-4 px-1">
+                                              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80 ml-1">Type</div>
+                                              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">Value</div>
+                                              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">Unit</div>
+                                              <div />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                              {experienceEntries.map((entry, idx) => {
+                                                const unit = entry.unit ?? "hours"
+                                                const valuePlaceholder = unit === "hours" ? "1.0" : "3"
+                                                const step = unit === "hours" ? "0.1" : "1"
+
+                                                return (
+                                                  <div
+                                                    key={idx}
+                                                    className="group relative rounded-xl border border-border/40 bg-background/30 hover:bg-background/50 transition-all p-3"
+                                                  >
+                                                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_120px_40px] gap-4 items-center">
+                                                      <div className="space-y-1.5 sm:space-y-0">
+                                                        <div className="sm:hidden text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Type</div>
+                                                        <Select
+                                                          value={entry.experience_type_id}
+                                                          onValueChange={(value) => {
+                                                            setExperienceEntries((prev) => {
+                                                              const next = [...prev]
+                                                              next[idx] = { ...next[idx], experience_type_id: value }
+                                                              return next
+                                                            })
+                                                            setExperienceDirty(true)
+                                                          }}
+                                                        >
+                                                          <SelectTrigger className="h-10 w-full rounded-lg bg-background/50 border-border/60 hover:bg-background transition-colors">
+                                                            <SelectValue placeholder="Select type" />
+                                                          </SelectTrigger>
+                                                          <SelectContent>
+                                                            {(experienceTypesQuery.data || [])
+                                                              .filter((t) => t.is_active && !t.voided_at)
+                                                              .map((t) => (
+                                                                <SelectItem key={t.id} value={t.id}>
+                                                                  {t.name}
+                                                                </SelectItem>
+                                                              ))}
+                                                          </SelectContent>
+                                                        </Select>
+                                                      </div>
+
+                                                      <div className="space-y-1.5 sm:space-y-0">
+                                                        <div className="sm:hidden text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Value</div>
+                                                        <Input
+                                                          value={entry.value}
+                                                          onChange={(e) => {
+                                                            const v = e.target.value
+                                                            setExperienceEntries((prev) => {
+                                                              const next = [...prev]
+                                                              next[idx] = { ...next[idx], value: v }
+                                                              return next
+                                                            })
+                                                            setExperienceDirty(true)
+                                                          }}
+                                                          inputMode={unit === "hours" ? "decimal" : "numeric"}
+                                                          placeholder={valuePlaceholder}
+                                                          type="number"
+                                                          step={step}
+                                                          min="0"
+                                                          className="h-10 w-full rounded-lg tabular-nums bg-background/50 border-border/60 hover:bg-background transition-colors"
+                                                        />
+                                                      </div>
+
+                                                      <div className="space-y-1.5 sm:space-y-0">
+                                                        <div className="sm:hidden text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Unit</div>
+                                                        <Select
+                                                          value={unit}
+                                                          onValueChange={(value) => {
+                                                            setExperienceEntries((prev) => {
+                                                              const next = [...prev]
+                                                              const nextUnit = value as ExperienceUnit
+                                                              const currentValue = next[idx]?.value ?? ""
+                                                              const coerced =
+                                                                (nextUnit === "count" || nextUnit === "landings") && currentValue
+                                                                  ? String(Math.trunc(Number(currentValue)))
+                                                                  : currentValue
+                                                              next[idx] = { ...next[idx], unit: nextUnit, value: coerced }
+                                                              return next
+                                                            })
+                                                            setExperienceDirty(true)
+                                                          }}
+                                                        >
+                                                          <SelectTrigger className="h-10 w-full rounded-lg bg-background/50 border-border/60 hover:bg-background transition-colors">
+                                                            <SelectValue />
+                                                          </SelectTrigger>
+                                                          <SelectContent>
+                                                            <SelectItem value="hours">Hours</SelectItem>
+                                                            <SelectItem value="count">Count</SelectItem>
+                                                            <SelectItem value="landings">Landings</SelectItem>
+                                                          </SelectContent>
+                                                        </Select>
+                                                      </div>
+
+                                                      <div className="flex items-center justify-end sm:pt-0 pt-2">
+                                                        <Button
+                                                          type="button"
+                                                          variant="ghost"
+                                                          onClick={() => {
+                                                            setExperienceEntries((prev) => prev.filter((_, i) => i !== idx))
+                                                            setExperienceDirty(true)
+                                                          }}
+                                                          className="h-10 w-10 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                                          aria-label="Remove experience entry"
+                                                        >
+                                                          <IconTrash className="h-4 w-4" />
+                                                        </Button>
+                                                      </div>
+
+                                                      {(unit === "count" || unit === "landings") && (
+                                                        <div className="sm:col-start-2 sm:col-span-2 text-[10px] text-muted-foreground/70 italic px-1">
+                                                          Note: Entries must be whole numbers.
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                )
+                                              })}
+                                            </div>
+
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              onClick={addExperienceEntry}
+                                              className="w-full h-10 border border-dashed border-border/60 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all rounded-xl text-xs font-bold gap-2"
+                                            >
+                                              <IconPlus className="h-4 w-4" />
+                                              Add another experience entry
+                                            </Button>
+                                          </div>
+                                        ) : (
+                                          <div className="py-4 text-center">
+                                            <p className="text-xs text-muted-foreground italic">No experience logged for this flight.</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </FieldSet>
+
+                          {/* Save Debrief Button */}
+                          <div className="pt-6 border-t border-border/40 flex flex-col items-center sm:items-end">
+                            <Button
+                              type="button"
+                              onClick={async () => {
+                                const hadExperienceDirty = experienceDirty
+                                const data = {
+                                  instructor_comments: watch("instructor_comments"),
+                                  focus_next_lesson: watch("focus_next_lesson"),
+                                  lesson_highlights: watch("lesson_highlights"),
+                                  areas_for_improvement: watch("areas_for_improvement"),
+                                  airmanship: watch("airmanship"),
+                                  weather_conditions: watch("weather_conditions"),
+                                  safety_concerns: watch("safety_concerns"),
+                                  lesson_status: watch("lesson_status"),
+                                }
+                                try {
+                                  await saveProgressMutation.mutateAsync(data)
+                                  if (hadExperienceDirty) {
+                                    await saveExperienceMutation.mutateAsync()
+                                  }
+                                  toast.success(hadExperienceDirty ? "Debrief & experience saved" : "Debrief saved")
+                                } catch (err) {
+                                  toast.error(getErrorMessage(err))
+                                }
+                              }}
+                              disabled={saveProgressMutation.isPending || saveExperienceMutation.isPending}
+                              className="w-full sm:w-auto px-8 min-w-[160px] h-12 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all shadow-md"
+                            >
+                              {saveProgressMutation.isPending || saveExperienceMutation.isPending ? (
+                                <>
+                                  <IconLoader2 className="h-4 w-4 animate-spin mr-2" />
+                                  Saving...
+                                </>
+                              ) : (
+                                <>
+                                  <IconCheck className="h-4 w-4 mr-2" />
+                                  Save Debrief
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </CardContent>
+                    </Card>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </div>
               </div>
             </div>

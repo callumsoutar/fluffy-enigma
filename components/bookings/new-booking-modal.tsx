@@ -4,7 +4,7 @@ import * as React from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { format, addDays, isSameDay, startOfDay, endOfDay, parseISO } from "date-fns"
+import { format, addDays } from "date-fns"
 import { CalendarIcon, Check, ChevronsUpDown, User, Plane, NotebookPen, Plus, Repeat, AlertCircle } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -19,7 +19,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -474,6 +473,9 @@ export function NewBookingModal(props: {
   const [occurrenceConflicts, setOccurrenceConflicts] = React.useState<Record<string, { aircraft: boolean; instructor: boolean }>>({})
   const [checkingOccurrences, setCheckingOccurrences] = React.useState(false)
 
+  const aircraftIdWatched = form.watch("aircraftId")
+  const instructorIdWatched = form.watch("instructorId")
+
   // Batch check occurrences for conflicts
   React.useEffect(() => {
     if (!open || !isRecurring || occurrences.length <= 1) {
@@ -486,8 +488,8 @@ export function NewBookingModal(props: {
       const conflicts: Record<string, { aircraft: boolean; instructor: boolean }> = {}
       
       try {
-        const aircraftId = form.getValues("aircraftId")
-        const instructorId = form.getValues("instructorId")
+        const aircraftId = aircraftIdWatched
+        const instructorId = instructorIdWatched
 
         // Check each occurrence (except the first one which is handled by the main overlap check)
         // Actually, let's check ALL of them to be safe and consistent
@@ -516,7 +518,7 @@ export function NewBookingModal(props: {
 
     const timer = setTimeout(checkConflicts, 500)
     return () => clearTimeout(timer)
-  }, [open, isRecurring, occurrences, excludeBookingId, form.watch("aircraftId"), form.watch("instructorId")])
+  }, [open, isRecurring, occurrences, excludeBookingId, aircraftIdWatched, instructorIdWatched])
 
   const hasConflicts = Object.keys(occurrenceConflicts).length > 0
 
@@ -542,7 +544,7 @@ export function NewBookingModal(props: {
       const isRecurringMode = values.isRecurring && occurrences.length > 0
 
       let endpoint = "/api/bookings"
-      let payload: any
+      let payload: Record<string, unknown>
 
       if (isRecurringMode) {
         endpoint = "/api/bookings/batch"
@@ -565,7 +567,7 @@ export function NewBookingModal(props: {
         const startIso = combineLocalDateAndTimeToIso(values.date, values.startTime)
         const endIso = combineLocalDateAndTimeToIso(values.date, values.endTime)
         
-        payload = {
+        const singlePayload: Record<string, unknown> = {
           aircraft_id: values.aircraftId,
           start_time: startIso,
           end_time: endIso,
@@ -578,12 +580,14 @@ export function NewBookingModal(props: {
         }
 
         if (isStaff && values.member?.id) {
-          payload.user_id = values.member.id
+          singlePayload.user_id = values.member.id
         }
 
         if (isStaff && statusOverride) {
-          payload.status = statusOverride
+          singlePayload.status = statusOverride
         }
+        
+        payload = singlePayload
       }
 
       const res = await fetch(endpoint, {

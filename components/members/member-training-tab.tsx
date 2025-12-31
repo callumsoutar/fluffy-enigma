@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { GraduationCap, Target, Plus, BookOpen, Plane, FileText, CheckCircle2, User, ChevronDown, ChevronUp, MessageSquare, Book, Info } from "lucide-react"
+import { GraduationCap, Target, Plus, BookOpen, Plane, FileText, CheckCircle2, User, ChevronDown, ChevronUp, MessageSquare } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,6 +25,7 @@ import type { AircraftType } from "@/lib/types/aircraft"
 import type { InstructorWithUser } from "@/lib/types/instructors"
 import { createSyllabusEnrollmentSchema, logExamResultSchema } from "@/lib/validation/training"
 import { MemberFlightTrainingTable } from "./member-flight-training-table"
+import { MemberFlightExperienceTable } from "./member-flight-experience-table"
 
 type EnrollmentWithSyllabus = StudentSyllabusEnrollment & {
   syllabus?: Pick<Syllabus, "id" | "name" | "description" | "is_active" | "voided_at"> | null
@@ -41,11 +42,36 @@ type ExamResultWithExam = ExamResult & {
   } | null
 }
 
+type FlightExperience = {
+  id: string
+  occurred_at: string
+  value: number
+  unit: string
+  notes: string | null
+  conditions: string | null
+  experience_type: {
+    id: string
+    name: string
+  } | null
+  instructor: {
+    user: {
+      first_name: string | null
+      last_name: string | null
+    } | null
+  } | null
+  booking: {
+    aircraft: {
+      registration: string
+    } | null
+  } | null
+}
+
 type TrainingResponse = {
   training: {
     examResults: ExamResultWithExam[]
     enrollments: EnrollmentWithSyllabus[]
     syllabi: Syllabus[]
+    flightExperience: FlightExperience[]
   }
 }
 
@@ -318,7 +344,7 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
   const queryClient = useQueryClient()
   const [enrollOpen, setEnrollOpen] = React.useState(false)
   const [logExamOpen, setLogExamOpen] = React.useState(false)
-  const [activeTab, setActiveTab] = React.useState("syllabus")
+  const [activeTab, setActiveTab] = React.useState("flight")
   const [underlineStyle, setUnderlineStyle] = React.useState({ left: 0, width: 0 })
   const tabRefs = React.useRef<Record<string, HTMLButtonElement | null>>({})
   const tabsListRef = React.useRef<HTMLDivElement>(null)
@@ -416,16 +442,12 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
   const training = data?.training
   const enrollments = training?.enrollments ?? []
   const examResults = React.useMemo(() => training?.examResults ?? [], [training])
-  const syllabi = training?.syllabi ?? []
+  const syllabi = React.useMemo(() => training?.syllabi ?? [], [training])
 
   // Calculate progress for each syllabus
   const syllabusProgress = React.useMemo(() => {
     return syllabi.map(s => {
       const totalExams = s.number_of_exams || 0
-      const passedInSyllabus = examResults.filter(r => 
-        r.result === "PASS" && 
-        r.exam?.syllabus_id === s.id
-      ).length
       
       // Count unique passed exams (in case of multiple attempts for the same exam)
       const uniquePassedIds = new Set(
@@ -677,9 +699,9 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                 />
                 
                 {[
+                  { id: "flight", label: "Flight Training", icon: Plane },
                   { id: "syllabus", label: "Syllabus", icon: BookOpen },
                   { id: "exams", label: "Exams", icon: FileText },
-                  { id: "flight", label: "Flight Training", icon: Plane },
                 ].map((tab) => {
                   const Icon = tab.icon
                   return (
@@ -701,6 +723,16 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
         </div>
 
         <div className="pt-6">
+          <Tabs.Content value="flight" className="space-y-8 outline-none">
+            <div className="space-y-8">
+              <MemberFlightTrainingTable memberId={memberId} />
+              
+              <div className="pt-2 border-t border-slate-100">
+                <MemberFlightExperienceTable experience={training?.flightExperience ?? []} />
+              </div>
+            </div>
+          </Tabs.Content>
+
           <Tabs.Content value="syllabus" className="space-y-6 outline-none">
             {/* Syllabus Enrollments */}
             <Card className="shadow-sm border border-border/50 bg-card overflow-hidden rounded-lg">
@@ -955,10 +987,6 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                 </div>
               )}
             </div>
-          </Tabs.Content>
-
-          <Tabs.Content value="flight" className="space-y-6 outline-none">
-            <MemberFlightTrainingTable memberId={memberId} />
           </Tabs.Content>
         </div>
       </Tabs.Root>

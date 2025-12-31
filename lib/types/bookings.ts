@@ -118,6 +118,10 @@ export interface BookingWithRelations extends Booking {
     id: string
     name: string
     description: string | null
+    syllabus?: {
+      id: string
+      name: string
+    } | null
   } | null
   checked_out_aircraft?: {
     id: string

@@ -832,6 +832,17 @@ export default function BookingCheckoutPage() {
     ? [booking.instructor.first_name, booking.instructor.last_name].filter(Boolean).join(" ") || booking.instructor.user?.email || "—"
     : "—"
 
+  const bookingInstructorId = booking?.checked_out_instructor_id ?? booking?.instructor_id ?? null
+  const bookingAircraftId = booking?.checked_out_aircraft_id ?? booking?.aircraft_id ?? null
+  const bookingFlightTypeId = booking?.flight_type_id ?? null
+  const bookingLessonId = booking?.lesson_id ?? null
+
+  const bookingInstructorLabel = instructorName
+  const bookingAircraftLabel = booking.aircraft
+    ? `${booking.aircraft.registration} - ${booking.aircraft.manufacturer} ${booking.aircraft.type}`
+    : "—"
+  const bookingFlightTypeLabel = booking.flight_type?.name || "—"
+  const bookingLessonLabel = booking.lesson?.name || "—"
 
   return (
     <>
@@ -1052,7 +1063,7 @@ export default function BookingCheckoutPage() {
                                   </FieldLabel>
                                   {options ? (
                                     <Select
-                                      value={watch("checked_out_aircraft_id") || "none"}
+                                      value={(watch("checked_out_aircraft_id") ?? bookingAircraftId ?? "none") as string}
                                       onValueChange={(value) => setValue("checked_out_aircraft_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
                                       <SelectTrigger id="checked_out_aircraft_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -1060,6 +1071,13 @@ export default function BookingCheckoutPage() {
                                       </SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="none">No aircraft</SelectItem>
+                                        {!!bookingAircraftId &&
+                                          !!bookingAircraftLabel &&
+                                          !options.aircraft.some((a) => a.id === bookingAircraftId) && (
+                                            <SelectItem value={bookingAircraftId}>
+                                              {bookingAircraftLabel} (inactive)
+                                            </SelectItem>
+                                          )}
                                         {options.aircraft.map((aircraft) => (
                                           <SelectItem key={aircraft.id} value={aircraft.id}>
                                             {aircraft.registration} - {aircraft.manufacturer} {aircraft.type} {aircraft.model && `(${aircraft.model})`}
@@ -1083,7 +1101,7 @@ export default function BookingCheckoutPage() {
                                   </FieldLabel>
                                   {isAdminOrInstructor && options ? (
                                     <Select
-                                      value={watch("checked_out_instructor_id") || "none"}
+                                      value={(watch("checked_out_instructor_id") ?? bookingInstructorId ?? "none") as string}
                                       onValueChange={(value) => setValue("checked_out_instructor_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
                                       <SelectTrigger id="checked_out_instructor_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -1091,6 +1109,13 @@ export default function BookingCheckoutPage() {
                                       </SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="none">No instructor</SelectItem>
+                                        {!!bookingInstructorId &&
+                                          !!bookingInstructorLabel &&
+                                          !options.instructors.some((i) => i.id === bookingInstructorId) && (
+                                            <SelectItem value={bookingInstructorId}>
+                                              {bookingInstructorLabel} (inactive)
+                                            </SelectItem>
+                                          )}
                                         {options.instructors.map((instructor) => {
                                           const name = [instructor.first_name, instructor.last_name]
                                             .filter(Boolean)
@@ -1117,7 +1142,7 @@ export default function BookingCheckoutPage() {
                                   </FieldLabel>
                                   {options ? (
                                     <Select
-                                      value={watch("flight_type_id") || "none"}
+                                      value={(watch("flight_type_id") ?? bookingFlightTypeId ?? "none") as string}
                                       onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
                                       <SelectTrigger id="flight_type_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800" aria-invalid={!!errors.flight_type_id}>
@@ -1125,6 +1150,13 @@ export default function BookingCheckoutPage() {
                                       </SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="none">No flight type</SelectItem>
+                                        {!!bookingFlightTypeId &&
+                                          !!bookingFlightTypeLabel &&
+                                          !options.flightTypes.some((ft) => ft.id === bookingFlightTypeId) && (
+                                            <SelectItem value={bookingFlightTypeId}>
+                                              {bookingFlightTypeLabel} (inactive)
+                                            </SelectItem>
+                                          )}
                                         {options.flightTypes.map((ft) => (
                                           <SelectItem key={ft.id} value={ft.id}>
                                             {ft.name}
@@ -1149,7 +1181,7 @@ export default function BookingCheckoutPage() {
                                   </FieldLabel>
                                   {options ? (
                                     <Select
-                                      value={watch("lesson_id") || "none"}
+                                      value={(watch("lesson_id") ?? bookingLessonId ?? "none") as string}
                                       onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
                                     >
                                       <SelectTrigger id="lesson_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800" aria-invalid={!!errors.lesson_id}>
@@ -1157,6 +1189,13 @@ export default function BookingCheckoutPage() {
                                       </SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="none">No lesson selected</SelectItem>
+                                        {!!bookingLessonId &&
+                                          !!bookingLessonLabel &&
+                                          !options.lessons.some((l) => l.id === bookingLessonId) && (
+                                            <SelectItem value={bookingLessonId}>
+                                              {bookingLessonLabel} (inactive)
+                                            </SelectItem>
+                                          )}
                                         {options.lessons.map((lesson) => (
                                           <SelectItem key={lesson.id} value={lesson.id}>
                                             {lesson.name}

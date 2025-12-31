@@ -22,7 +22,7 @@ const formSchema = z.object({
   email: z.string().trim().toLowerCase().email("A valid email is required"),
   phone: z.string().trim().max(20, "Phone number too long").optional(),
   street_address: z.string().trim().max(200, "Street address too long").optional(),
-  send_invitation: z.boolean().default(false),
+  send_invitation: z.boolean(),
 })
 
 type FormValues = z.infer<typeof formSchema>

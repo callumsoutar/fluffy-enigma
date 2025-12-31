@@ -3,8 +3,7 @@
 import * as React from "react"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
-import { Loader2, Plane, User, MessageSquare, Calendar, AlertCircle } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Loader2, MessageSquare, AlertCircle } from "lucide-react"
 
 interface FlightTrainingComment {
   id: string
@@ -100,27 +99,26 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 bg-slate-50/30 rounded-xl border border-dashed border-slate-200">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mb-4" />
-        <p className="text-sm text-slate-500 font-semibold tracking-tight">Loading instructor comments...</p>
-        <p className="text-xs text-slate-400 mt-1">Fetching latest training records</p>
+      <div className="flex flex-col items-center justify-center py-20 bg-slate-50/30 rounded-lg border border-dashed border-slate-200">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400 mb-4" />
+        <p className="text-sm text-slate-500">Loading instructor comments...</p>
       </div>
     )
   }
 
   if (isError) {
     return (
-      <div className="rounded-xl border border-rose-200 bg-rose-50 p-8 text-center">
-        <div className="h-12 w-12 rounded-full bg-rose-100 flex items-center justify-center mx-auto mb-4">
-          <AlertCircle className="h-6 w-6 text-rose-600" />
+      <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
+        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+          <AlertCircle className="h-5 w-5 text-slate-400" />
         </div>
-        <h4 className="text-sm font-bold text-rose-900 mb-1">Unable to load comments</h4>
-        <p className="text-xs text-rose-600 max-w-[300px] mx-auto mb-6">
+        <h4 className="text-sm font-semibold text-slate-900 mb-1">Unable to load comments</h4>
+        <p className="text-xs text-slate-500 max-w-[300px] mx-auto mb-6">
           {error instanceof Error ? error.message : "A connection error occurred while fetching training data."}
         </p>
         <button 
           onClick={() => refetch()}
-          className="bg-white hover:bg-rose-100 text-rose-700 text-xs font-bold py-2 px-4 rounded-lg border border-rose-200 transition-colors shadow-sm"
+          className="bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold py-2 px-4 rounded-md border border-slate-200 transition-colors shadow-sm"
         >
           Try Again
         </button>
@@ -132,11 +130,11 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
 
   if (allComments.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 p-16 text-center bg-slate-50/30">
-        <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-          <MessageSquare className="w-8 h-8 text-slate-300" />
+      <div className="rounded-lg border border-dashed border-slate-200 p-16 text-center bg-slate-50/30">
+        <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+          <MessageSquare className="w-6 h-6 text-slate-300" />
         </div>
-        <h3 className="text-sm font-bold text-slate-700">No instructor comments found</h3>
+        <h3 className="text-sm font-semibold text-slate-900">No instructor comments found</h3>
         <p className="text-xs text-slate-500 mt-2 max-w-[280px] mx-auto leading-relaxed">
           Instructor comments recorded during flight lessons will appear here automatically.
         </p>
@@ -147,51 +145,37 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
   return (
     <div className="space-y-4 animate-in fade-in duration-500">
       <div className="flex items-center justify-between px-1 mb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Instructor Feedback</h3>
-        </div>
-        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+        <h3 className="text-sm font-semibold text-slate-900">Instructor Feedback</h3>
+        <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
           {allComments.length} Records
         </span>
       </div>
 
-      <div className="hidden md:block overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="hidden md:block overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/50">
-              <th className="px-6 py-3 text-left font-bold text-[11px] uppercase tracking-wider text-slate-500 w-[160px]">Date</th>
-              <th className="px-6 py-3 text-left font-bold text-[11px] uppercase tracking-wider text-slate-500 w-[140px]">Aircraft</th>
-              <th className="px-6 py-3 text-left font-bold text-[11px] uppercase tracking-wider text-slate-500 w-[200px]">Instructor</th>
-              <th className="px-6 py-3 text-left font-bold text-[11px] uppercase tracking-wider text-slate-500">Comments</th>
+              <th className="px-6 py-3 text-left font-semibold text-xs text-slate-500 w-[160px]">Date</th>
+              <th className="px-6 py-3 text-left font-semibold text-xs text-slate-500 w-[140px]">Aircraft</th>
+              <th className="px-6 py-3 text-left font-semibold text-xs text-slate-500 w-[200px]">Instructor</th>
+              <th className="px-6 py-3 text-left font-semibold text-xs text-slate-500">Comments</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {allComments.map((comment) => (
-              <tr key={comment.id} className="group transition-colors hover:bg-slate-50/50">
-                <td className="px-6 py-4 align-middle">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-3.5 h-3.5 text-slate-300" />
-                    <span className="text-slate-700 font-bold">{formatDateTime(comment.date)}</span>
-                  </div>
+              <tr key={comment.id} className="transition-colors hover:bg-slate-50/50">
+                <td className="px-6 py-4 align-middle whitespace-nowrap text-slate-700">
+                  {formatDateTime(comment.date)}
+                </td>
+                <td className="px-6 py-4 align-middle text-slate-900 font-medium">
+                  {comment.booking?.aircraft?.registration || "-"}
+                </td>
+                <td className="px-6 py-4 align-middle text-slate-700">
+                  {comment.instructor?.user?.first_name} {comment.instructor?.user?.last_name}
                 </td>
                 <td className="px-6 py-4 align-middle">
-                  <div className="flex items-center gap-2">
-                    <Plane className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="font-bold text-slate-900">{comment.booking?.aircraft?.registration || "-"}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 align-middle">
-                  <div className="flex items-center gap-2">
-                    <User className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="font-medium text-slate-700">
-                      {comment.instructor?.user?.first_name} {comment.instructor?.user?.last_name}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 align-middle">
-                  <p className="text-slate-600 leading-relaxed italic text-[13px] border-l-2 border-indigo-100 pl-3 py-1 bg-indigo-50/20 rounded-r-md">
-                    {comment.instructor_comments || "No comments recorded"}
+                  <p className="text-slate-600 leading-normal">
+                    {comment.instructor_comments || "-"}
                   </p>
                 </td>
               </tr>
@@ -201,33 +185,27 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
       </div>
 
       {/* Mobile View */}
-      <div className="md:hidden space-y-4">
+      <div className="md:hidden space-y-3">
         {allComments.map((comment) => (
-          <div key={comment.id} className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />
-            <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-2">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <span className="font-bold text-xs text-slate-900">{formatDateTime(comment.date)}</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded text-[10px] font-bold text-slate-600 border border-slate-100">
-                <Plane className="w-2.5 h-2.5" />
+          <div key={comment.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex justify-between items-start mb-2">
+              <span className="font-semibold text-xs text-slate-900">{formatDateTime(comment.date)}</span>
+              <span className="text-[10px] font-semibold text-slate-600">
                 {comment.booking?.aircraft?.registration || "-"}
-              </div>
+              </span>
             </div>
             
-            <div className="mb-4">
-              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">Instructor</div>
-              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900">
-                <User className="w-3 h-3 text-slate-400" />
+            <div className="mb-2">
+              <div className="text-[10px] text-slate-500 mb-0.5">Instructor</div>
+              <div className="text-xs text-slate-900 font-medium">
                 {comment.instructor?.user?.first_name} {comment.instructor?.user?.last_name}
               </div>
             </div>
 
             <div>
-              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Comments</div>
-              <p className="text-[13px] text-slate-600 leading-relaxed italic border-l-2 border-indigo-100 pl-3 py-1 bg-indigo-50/20 rounded-r-md">
-                {comment.instructor_comments || "No comments recorded"}
+              <div className="text-[10px] text-slate-500 mb-1">Comments</div>
+              <p className="text-sm text-slate-600 leading-normal">
+                {comment.instructor_comments || "-"}
               </p>
             </div>
           </div>
@@ -237,16 +215,16 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
       {/* Load More Trigger */}
       <div ref={loadMoreRef} className="h-12 w-full flex items-center justify-center pt-4">
         {isFetchingNextPage ? (
-          <div className="flex items-center gap-2 text-indigo-500">
+          <div className="flex items-center gap-2 text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-[10px] font-bold uppercase tracking-widest">Loading more...</span>
+            <span className="text-[10px] font-medium uppercase tracking-widest">Loading more...</span>
           </div>
         ) : hasNextPage ? (
-          <div className="h-1 w-full bg-slate-50 rounded-full overflow-hidden">
-            <div className="h-full bg-indigo-100 animate-pulse w-full" />
+          <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-slate-200 animate-pulse w-full" />
           </div>
         ) : allComments.length > 0 ? (
-          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">End of comments</p>
+          <p className="text-[10px] font-medium text-slate-300 uppercase tracking-widest">End of records</p>
         ) : null}
       </div>
     </div>

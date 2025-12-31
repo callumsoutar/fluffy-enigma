@@ -367,7 +367,7 @@ export async function POST(request: NextRequest) {
     authUserId = inviteData.user.id
   }
 
-  const insertPayload: Record<string, any> = {
+  const insertPayload: Record<string, string | boolean | null> = {
     email,
     first_name: first_name ?? null,
     last_name: last_name ?? null,

@@ -74,7 +74,11 @@ export async function GET(
       lesson:lesson_id (
         id,
         name,
-        description
+        description,
+        syllabus:syllabus_id (
+          id,
+          name
+        )
       ),
       checked_out_aircraft:checked_out_aircraft_id (
         id,
@@ -198,10 +202,33 @@ export async function PATCH(
   // Use validated data
   body = bodyValidation.data
 
+  // Lesson debrief fields are stored in lesson_progress (not bookings).
+  // We support saving/updating these independently of check-in approval state.
+  const debriefPayload = {
+    instructor_comments: body.instructor_comments,
+    lesson_highlights: body.lesson_highlights,
+    areas_for_improvement: body.areas_for_improvement,
+    airmanship: body.airmanship,
+    focus_next_lesson: body.focus_next_lesson,
+    safety_concerns: body.safety_concerns,
+    weather_conditions: body.weather_conditions,
+    lesson_status: body.lesson_status,
+  } as const
+
+  const hasAnyDebriefKey =
+    body.instructor_comments !== undefined ||
+    body.lesson_highlights !== undefined ||
+    body.areas_for_improvement !== undefined ||
+    body.airmanship !== undefined ||
+    body.focus_next_lesson !== undefined ||
+    body.safety_concerns !== undefined ||
+    body.weather_conditions !== undefined ||
+    body.lesson_status !== undefined
+
   // First, check if booking exists and user has access
   const { data: existingBooking, error: fetchError } = await supabase
     .from('bookings')
-    .select('user_id, instructor_id, status, cancelled_at, checked_out_at')
+    .select('user_id, instructor_id, checked_out_instructor_id, lesson_id, status, cancelled_at, checked_out_at')
     .eq('id', bookingId)
     .single()
 
@@ -391,92 +418,187 @@ export async function PATCH(
     }
   }
 
-  // Update booking
-  const { data: updatedBooking, error: updateError } = await supabase
-    .from('bookings')
-    .update(updateData)
-    .eq('id', bookingId)
-    .select(`
-      *,
-      aircraft:aircraft_id (
+  // Upsert lesson progress when debrief keys are present.
+  // - If there's NO existing record and NO meaningful content, we skip creation (no side effects).
+  // - If a record exists, we allow clearing fields by setting null/empty.
+  if (hasAnyDebriefKey) {
+    const { data: existingProgress, error: lpFetchError } = await supabase
+      .from('lesson_progress')
+      .select('id')
+      .eq('booking_id', bookingId)
+      .maybeSingle()
+
+    if (lpFetchError) {
+      console.error('Error fetching lesson_progress for booking:', lpFetchError)
+      return NextResponse.json({ error: 'Failed to save lesson debrief' }, { status: 500 })
+    }
+
+    const contentStrings = [
+      debriefPayload.instructor_comments,
+      debriefPayload.lesson_highlights,
+      debriefPayload.areas_for_improvement,
+      debriefPayload.airmanship,
+      debriefPayload.focus_next_lesson,
+      debriefPayload.safety_concerns,
+      debriefPayload.weather_conditions,
+      debriefPayload.lesson_status,
+    ]
+
+    const hasMeaningfulDebriefContent = contentStrings.some((v) => {
+      if (v == null) return false
+      if (typeof v !== 'string') return true
+      return v.trim().length > 0
+    })
+
+    if (existingProgress || hasMeaningfulDebriefContent) {
+      const resolvedInstructorId =
+        body.checked_out_instructor_id ??
+        existingBooking.checked_out_instructor_id ??
+        existingBooking.instructor_id ??
+        null
+
+      const progressData = {
+        booking_id: bookingId,
+        user_id: existingBooking.user_id,
+        lesson_id: existingBooking.lesson_id ?? null,
+        instructor_id: resolvedInstructorId,
+        instructor_comments: debriefPayload.instructor_comments ?? null,
+        lesson_highlights: debriefPayload.lesson_highlights ?? null,
+        areas_for_improvement: debriefPayload.areas_for_improvement ?? null,
+        airmanship: debriefPayload.airmanship ?? null,
+        focus_next_lesson: debriefPayload.focus_next_lesson ?? null,
+        safety_concerns: debriefPayload.safety_concerns ?? null,
+        weather_conditions: debriefPayload.weather_conditions ?? null,
+        status: debriefPayload.lesson_status ?? null,
+        date: new Date().toISOString(),
+      }
+
+      if (existingProgress?.id) {
+        const { error: lpUpdateError } = await supabase
+          .from('lesson_progress')
+          .update(progressData)
+          .eq('id', existingProgress.id)
+
+        if (lpUpdateError) {
+          console.error('Error updating lesson_progress:', lpUpdateError)
+          return NextResponse.json({ error: 'Failed to save lesson debrief' }, { status: 500 })
+        }
+      } else {
+        const { error: lpInsertError } = await supabase
+          .from('lesson_progress')
+          .insert(progressData)
+
+        if (lpInsertError) {
+          console.error('Error inserting lesson_progress:', lpInsertError)
+          return NextResponse.json({ error: 'Failed to save lesson debrief' }, { status: 500 })
+        }
+      }
+    }
+  }
+
+  const selectShape = `
+    *,
+    aircraft:aircraft_id (
+      id,
+      registration,
+      type,
+      model,
+      manufacturer,
+      record_hobbs,
+      record_tacho,
+      record_airswitch
+    ),
+    student:user_id (
+      id,
+      first_name,
+      last_name,
+      email
+    ),
+    instructor:instructors!instructor_id (
+      id,
+      first_name,
+      last_name,
+      user:user_id (
         id,
-        registration,
-        type,
-        model,
-        manufacturer,
-        record_hobbs,
-        record_tacho,
-        record_airswitch
-      ),
-      student:user_id (
+        email
+      )
+    ),
+    flight_type:flight_type_id (
+      id,
+      name,
+      instruction_type
+    ),
+    lesson:lesson_id (
+      id,
+      name,
+      description
+    ),
+    checked_out_aircraft:checked_out_aircraft_id (
+      id,
+      registration,
+      type,
+      model,
+      manufacturer,
+      record_hobbs,
+      record_tacho,
+      record_airswitch
+    ),
+    checked_out_instructor:instructors!bookings_checked_out_instructor_id_fkey (
+      id,
+      first_name,
+      last_name,
+      user_id,
+      user:users!instructors_user_id_fkey (
         id,
         first_name,
         last_name,
         email
-      ),
-      instructor:instructors!instructor_id (
-        id,
-        first_name,
-        last_name,
-        user:user_id (
-          id,
-          email
-        )
-      ),
-      flight_type:flight_type_id (
-        id,
-        name,
-        instruction_type
-      ),
-      lesson:lesson_id (
-        id,
-        name,
-        description
-      ),
-      checked_out_aircraft:checked_out_aircraft_id (
-        id,
-        registration,
-        type,
-        model,
-        manufacturer,
-        record_hobbs,
-        record_tacho,
-        record_airswitch
-      ),
-      checked_out_instructor:instructors!bookings_checked_out_instructor_id_fkey (
-        id,
-        first_name,
-        last_name,
-        user_id,
-        user:users!instructors_user_id_fkey (
-          id,
-          first_name,
-          last_name,
-          email
-        )
-      ),
-      lesson_progress:lesson_progress (
-        id,
-        instructor_comments,
-        lesson_highlights,
-        areas_for_improvement,
-        airmanship,
-        focus_next_lesson,
-        safety_concerns,
-        weather_conditions,
-        status,
-        attempt
       )
-    `)
-    .single()
-
-  if (updateError) {
-    console.error('Error updating booking:', updateError)
-    return NextResponse.json(
-      { error: 'Failed to update booking' },
-      { status: 500 }
+    ),
+    lesson_progress:lesson_progress (
+      id,
+      instructor_comments,
+      lesson_highlights,
+      areas_for_improvement,
+      airmanship,
+      focus_next_lesson,
+      safety_concerns,
+      weather_conditions,
+      status,
+      attempt
     )
+  `
+
+  // Update booking only when there are actual booking fields to persist.
+  // This allows "Save Debrief" to work even when the booking is immutable post-approval.
+  const shouldUpdateBooking = Object.keys(updateData).length > 0
+  if (shouldUpdateBooking) {
+    const { data: updatedBooking, error: updateError } = await supabase
+      .from('bookings')
+      .update(updateData)
+      .eq('id', bookingId)
+      .select(selectShape)
+      .single()
+
+    if (updateError) {
+      console.error('Error updating booking:', updateError)
+      return NextResponse.json({ error: 'Failed to update booking' }, { status: 500 })
+    }
+
+    return NextResponse.json({ booking: updatedBooking as BookingWithRelations })
   }
 
-  return NextResponse.json({ booking: updatedBooking as BookingWithRelations })
+  // No booking fields to update; still return the current booking (with lesson_progress)
+  const { data: bookingRow, error: bookingFetchError } = await supabase
+    .from('bookings')
+    .select(selectShape)
+    .eq('id', bookingId)
+    .single()
+
+  if (bookingFetchError || !bookingRow) {
+    console.error('Error fetching booking after saving debrief:', bookingFetchError)
+    return NextResponse.json({ error: 'Failed to fetch booking' }, { status: 500 })
+  }
+
+  return NextResponse.json({ booking: bookingRow as BookingWithRelations })
 }

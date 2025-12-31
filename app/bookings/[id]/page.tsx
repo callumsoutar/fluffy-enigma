@@ -780,6 +780,18 @@ export default function BookingDetailPage() {
     ? [booking.instructor.first_name, booking.instructor.last_name].filter(Boolean).join(" ") || booking.instructor.user?.email || "—"
     : "—"
 
+  const bookingInstructorId = booking?.instructor_id ?? null
+  const bookingAircraftId = booking?.aircraft_id ?? null
+  const bookingFlightTypeId = booking?.flight_type_id ?? null
+  const bookingLessonId = booking?.lesson_id ?? null
+
+  const bookingInstructorLabel = instructorName
+  const bookingAircraftLabel = booking.aircraft
+    ? `${booking.aircraft.registration} - ${booking.aircraft.manufacturer} ${booking.aircraft.type}`
+    : "—"
+  const bookingFlightTypeLabel = booking.flight_type?.name || "—"
+  const bookingLessonLabel = booking.lesson?.name || "—"
+
   // Format date for display
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "—"
@@ -1314,7 +1326,7 @@ export default function BookingDetailPage() {
                               </FieldLabel>
                               {options ? (
                                 <Select
-                                  value={watch("instructor_id") || "none"}
+                                  value={(watch("instructor_id") ?? bookingInstructorId ?? "none") as string}
                                   onValueChange={(value) => setValue("instructor_id", value === "none" ? null : value, { shouldDirty: true })}
                                   disabled={isReadOnly}
                                 >
@@ -1323,6 +1335,13 @@ export default function BookingDetailPage() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">No instructor</SelectItem>
+                                    {!!bookingInstructorId &&
+                                      !!bookingInstructorLabel &&
+                                      !options.instructors.some((i) => i.id === bookingInstructorId) && (
+                                        <SelectItem value={bookingInstructorId}>
+                                          {bookingInstructorLabel} (inactive)
+                                        </SelectItem>
+                                      )}
                                     {options.instructors.map((instructor) => {
                                       const name = [instructor.first_name, instructor.last_name]
                                         .filter(Boolean)
@@ -1350,7 +1369,7 @@ export default function BookingDetailPage() {
                             </FieldLabel>
                             {options ? (
                               <Select
-                                value={watch("aircraft_id")}
+                                value={(watch("aircraft_id") ?? bookingAircraftId ?? "none") as string}
                                 onValueChange={(value) => setValue("aircraft_id", value, { shouldDirty: true })}
                                 disabled={isReadOnly}
                               >
@@ -1358,6 +1377,13 @@ export default function BookingDetailPage() {
                                   <SelectValue placeholder="Select Aircraft" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  {!!bookingAircraftId &&
+                                    !!bookingAircraftLabel &&
+                                    !options.aircraft.some((a) => a.id === bookingAircraftId) && (
+                                      <SelectItem value={bookingAircraftId}>
+                                        {bookingAircraftLabel} (inactive)
+                                      </SelectItem>
+                                    )}
                                   {options.aircraft.map((aircraft) => (
                                     <SelectItem key={aircraft.id} value={aircraft.id}>
                                       {aircraft.registration} - {aircraft.manufacturer} {aircraft.type} {aircraft.model && `(${aircraft.model})`}
@@ -1381,7 +1407,7 @@ export default function BookingDetailPage() {
                             </FieldLabel>
                             {options ? (
                               <Select
-                                value={watch("flight_type_id") || "none"}
+                                value={(watch("flight_type_id") ?? bookingFlightTypeId ?? "none") as string}
                                 onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
                                 disabled={isReadOnly}
                               >
@@ -1390,6 +1416,13 @@ export default function BookingDetailPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="none">No flight type</SelectItem>
+                                  {!!bookingFlightTypeId &&
+                                    !!bookingFlightTypeLabel &&
+                                    !options.flightTypes.some((ft) => ft.id === bookingFlightTypeId) && (
+                                      <SelectItem value={bookingFlightTypeId}>
+                                        {bookingFlightTypeLabel} (inactive)
+                                      </SelectItem>
+                                    )}
                                   {options.flightTypes.map((ft) => (
                                     <SelectItem key={ft.id} value={ft.id}>
                                       {ft.name}
@@ -1433,7 +1466,7 @@ export default function BookingDetailPage() {
                             </FieldLabel>
                             {options ? (
                               <Select
-                                value={watch("lesson_id") || "none"}
+                                value={(watch("lesson_id") ?? bookingLessonId ?? "none") as string}
                                 onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
                                 disabled={isReadOnly}
                               >
@@ -1442,6 +1475,13 @@ export default function BookingDetailPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="none">No lesson selected</SelectItem>
+                                  {!!bookingLessonId &&
+                                    !!bookingLessonLabel &&
+                                    !options.lessons.some((l) => l.id === bookingLessonId) && (
+                                      <SelectItem value={bookingLessonId}>
+                                        {bookingLessonLabel} (inactive)
+                                      </SelectItem>
+                                    )}
                                   {options.lessons.map((lesson) => (
                                     <SelectItem key={lesson.id} value={lesson.id}>
                                       {lesson.name}

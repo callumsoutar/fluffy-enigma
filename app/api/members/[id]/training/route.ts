@@ -128,11 +128,54 @@ export async function GET(
     return NextResponse.json({ error: "Failed to fetch syllabi" }, { status: 500 })
   }
 
+  // Fetch flight experience with joined experience type and instructor
+  const { data: flightExperience, error: experienceError } = await supabase
+    .from("flight_experience")
+    .select(
+      `
+        id,
+        user_id,
+        booking_id,
+        instructor_id,
+        experience_type_id,
+        value,
+        unit,
+        occurred_at,
+        notes,
+        conditions,
+        experience_type:experience_type_id (
+          id,
+          name
+        ),
+        instructor:instructor_id (
+          id,
+          user:user_id (
+            first_name,
+            last_name
+          )
+        ),
+        booking:booking_id (
+          id,
+          aircraft:aircraft_id (
+            registration
+          )
+        )
+      `
+    )
+    .eq("user_id", memberId)
+    .order("occurred_at", { ascending: false })
+
+  if (experienceError) {
+    console.error("Error fetching flight experience:", experienceError)
+    return NextResponse.json({ error: "Failed to fetch flight experience" }, { status: 500 })
+  }
+
   return NextResponse.json({
     training: {
       examResults: examResults || [],
       enrollments: enrollments || [],
       syllabi: syllabi || [],
+      flightExperience: flightExperience || [],
     },
   })
 }

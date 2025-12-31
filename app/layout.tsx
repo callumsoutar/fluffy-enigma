@@ -4,6 +4,9 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { SpeedInsights } from "@vercel/speed-insights/next"
+
+<SpeedInsights />
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

@@ -281,11 +281,16 @@ export function ResourceTimelineScheduler() {
   const isMobile = useIsMobile()
   const queryClient = useQueryClient()
 
-  const [selectedDate, setSelectedDate] = React.useState<Date>(() => startOfDay(new Date()))
+  const [selectedDate, setSelectedDate] = React.useState<Date | null>(null)
   const [newBookingOpen, setNewBookingOpen] = React.useState(false)
   const [newBookingPrefill, setNewBookingPrefill] = React.useState<NewBookingPrefill | undefined>(undefined)
   const [cancelModalOpen, setCancelModalOpen] = React.useState(false)
   const [selectedBookingForCancel, setSelectedBookingForCancel] = React.useState<BookingWithRelations | null>(null)
+
+  // Initialize date on client-side only to avoid hydration mismatch
+  React.useEffect(() => {
+    setSelectedDate(startOfDay(new Date()))
+  }, [])
 
   const config: TimelineConfig = React.useMemo(
     () => ({
@@ -297,7 +302,7 @@ export function ResourceTimelineScheduler() {
   )
 
   const { slots, start: timelineStart, end: timelineEnd } = React.useMemo(
-    () => buildTimeSlots(selectedDate, config),
+    () => selectedDate ? buildTimeSlots(selectedDate, config) : { slots: [], start: new Date(), end: new Date() },
     [selectedDate, config]
   )
 
@@ -305,8 +310,8 @@ export function ResourceTimelineScheduler() {
   const slotMinWidth = 56 // px (denser, improves visible range on mobile)
   const timelineMinWidth = isMobile ? slotCount * slotMinWidth : undefined
 
-  const dayRange = React.useMemo(() => getSelectedDayRangeUtc(selectedDate), [selectedDate])
-  const dateKey = React.useMemo(() => formatDate(selectedDate, "yyyy-MM-dd"), [selectedDate])
+  const dayRange = React.useMemo(() => selectedDate ? getSelectedDayRangeUtc(selectedDate) : { startUtcIso: '', endUtcIso: '' }, [selectedDate])
+  const dateKey = React.useMemo(() => selectedDate ? formatDate(selectedDate, "yyyy-MM-dd") : '', [selectedDate])
 
   const { data: aircraft = [], isLoading: isLoadingAircraft } = useQuery({
     queryKey: ["scheduler", "aircraft"],
@@ -324,6 +329,7 @@ export function ResourceTimelineScheduler() {
     queryKey: ["scheduler", "roster-rules", dateKey],
     queryFn: () => fetchRosterRules(dateKey),
     staleTime: 60_000,
+    enabled: !!selectedDate && !!dateKey,
   })
 
   const instructorAvailabilityById = React.useMemo(() => {
@@ -334,9 +340,10 @@ export function ResourceTimelineScheduler() {
     queryKey: ["scheduler", "bookings", dayRange.startUtcIso, dayRange.endUtcIso],
     queryFn: () => fetchBookingsForRange(dayRange),
     staleTime: 15_000,
+    enabled: !!selectedDate && !!dayRange.startUtcIso,
   })
 
-  const isLoading = isLoadingAircraft || isLoadingInstructors || isLoadingRoster || isLoadingBookings
+  const isLoading = !selectedDate || isLoadingAircraft || isLoadingInstructors || isLoadingRoster || isLoadingBookings
 
   const instructorResources: InstructorResource[] = React.useMemo(() => {
     // Only show instructors who have at least one active roster rule for this day
@@ -371,7 +378,7 @@ export function ResourceTimelineScheduler() {
   }, [bookingsRaw])
 
   const navigateDate = React.useCallback((deltaDays: number) => {
-    setSelectedDate((d) => startOfDay(addDays(d, deltaDays)))
+    setSelectedDate((d) => d ? startOfDay(addDays(d, deltaDays)) : null)
   }, [])
 
   const goToToday = React.useCallback(() => {
@@ -438,6 +445,7 @@ export function ResourceTimelineScheduler() {
       clientX: number
       container: HTMLDivElement
     }) => {
+      if (!selectedDate) return
       const rect = container.getBoundingClientRect()
       if (!rect.width) return
       const x = Math.max(0, Math.min(clientX - rect.left, rect.width))
@@ -488,13 +496,13 @@ export function ResourceTimelineScheduler() {
                 aria-label="Select date"
               >
                 <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                <span className="truncate">{formatDateLabel(selectedDate)}</span>
+                <span className="truncate">{selectedDate ? formatDateLabel(selectedDate) : "Loading..."}</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
               <Calendar
                 mode="single"
-                selected={selectedDate}
+                selected={selectedDate ?? undefined}
                 onSelect={handleDateSelect}
                 initialFocus
               />
@@ -519,9 +527,12 @@ export function ResourceTimelineScheduler() {
         <div className="hidden sm:flex items-center gap-2">
           <Button
             onClick={() => {
-              setNewBookingPrefill({ date: selectedDate, startTime: "09:00" })
-              setNewBookingOpen(true)
+              if (selectedDate) {
+                setNewBookingPrefill({ date: selectedDate, startTime: "09:00" })
+                setNewBookingOpen(true)
+              }
             }}
+            disabled={!selectedDate}
           >
             <CalendarDays className="h-4 w-4 mr-2" />
             New booking

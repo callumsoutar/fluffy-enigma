@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 
+import { createClient } from "@/lib/supabase/server"
 import { requireOperationsAccess } from "@/lib/api/require-operations-access"
 import type { RosterRule } from "@/lib/types/roster"
 
@@ -75,9 +76,13 @@ const rosterRuleCreateSchema = z
   })
 
 export async function GET(request: NextRequest) {
-  const auth = await requireOperationsAccess(request)
-  if ("error" in auth) {
-    return auth.error
+  // Allow all authenticated users to view roster rules (needed for scheduler)
+  // Write operations still restricted via requireOperationsAccess
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   const searchParams = new URL(request.url).searchParams
@@ -94,7 +99,6 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const { supabase } = auth
   const query = supabase.from("roster_rules").select(rosterRuleSelect)
 
   if (parsedParams.data.date) {

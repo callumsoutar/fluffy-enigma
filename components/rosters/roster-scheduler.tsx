@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { useIsMobile } from "@/hooks/use-mobile"
 import {
   buildTimeSlots,
   formatTimeLabel,
@@ -20,14 +19,20 @@ import {
 import { RosterShiftModal } from "@/components/rosters/roster-shift-modal"
 import type { InstructorWithUser } from "@/lib/types/instructors"
 import type { RosterRule } from "@/lib/types/roster"
+import { useSettingsManager } from "@/hooks/use-settings"
+import type { TimelineConfig } from "@/components/scheduler/scheduler-utils"
 
-const TIMELINE_CONFIG = {
-  startHour: 6,
-  endHour: 22,
-  intervalMinutes: 30,
+function parseTimeToMinutes(time: string) {
+  // Accepts "HH:MM" or "HH:MM:SS"
+  const [hhRaw, mmRaw] = time.split(":")
+  const hh = Number(hhRaw)
+  const mm = Number(mmRaw)
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
+  return hh * 60 + mm
 }
 
-const ROW_HEIGHT = 42
+const ROW_HEIGHT = 44
 const LEFT_COL_WIDTH = "w-[160px] sm:w-[220px]"
 
 function startOfDay(date: Date) {
@@ -80,21 +85,80 @@ interface DraftSlot {
 }
 
 export function RosterScheduler() {
-  const isMobile = useIsMobile()
   const queryClient = useQueryClient()
 
   const [selectedDate, setSelectedDate] = React.useState(() => startOfDay(new Date()))
   const [draftSlot, setDraftSlot] = React.useState<DraftSlot | null>(null)
   const [editingRule, setEditingRule] = React.useState<RosterRule | null>(null)
 
+  // Fetch business hours settings
+  const { getSettingValue, settings } = useSettingsManager("general")
+
+  // Parse business hours and create timeline config
+  const TIMELINE_CONFIG: TimelineConfig = React.useMemo(() => {
+    const openTime = getSettingValue<string>("business_open_time", "09:00:00")
+    const closeTime = getSettingValue<string>("business_close_time", "17:00:00")
+    const is24Hours = getSettingValue<boolean>("business_is_24_hours", false)
+    const isClosed = getSettingValue<boolean>("business_is_closed", false)
+
+    // If closed, show a minimal range (still show something)
+    if (isClosed) {
+      return {
+        startHour: 0,
+        endHour: 24,
+        intervalMinutes: 30,
+      }
+    }
+
+    // If 24/7, show full day
+    if (is24Hours) {
+      return {
+        startHour: 0,
+        endHour: 24,
+        intervalMinutes: 30,
+      }
+    }
+
+    // Regular hours: parse time strings to get hours
+    const openMinutes = parseTimeToMinutes(openTime)
+    const closeMinutes = parseTimeToMinutes(closeTime)
+
+    // Default fallback if parsing fails
+    if (openMinutes === null || closeMinutes === null) {
+      return {
+        startHour: 6,
+        endHour: 22,
+        intervalMinutes: 30,
+      }
+    }
+
+    const startHour = Math.floor(openMinutes / 60)
+    const endHour = Math.ceil(closeMinutes / 60)
+
+    return {
+      startHour,
+      endHour,
+      intervalMinutes: 30,
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings])
+
   const { slots, start: timelineStart, end: timelineEnd } = React.useMemo(
     () => buildTimeSlots(selectedDate, TIMELINE_CONFIG),
-    [selectedDate]
+    [selectedDate, TIMELINE_CONFIG]
   )
 
   const slotCount = slots.length
-  const slotMinWidth = 56
-  const timelineMinWidth = isMobile ? slotCount * slotMinWidth : undefined
+  // Prevent cramped time labels by enforcing a minimum per-slot width and allowing horizontal scroll.
+  // Layout only (no roster/time math changes).
+  const slotMinWidthPx = React.useMemo(() => {
+    // Reduced ~25% vs previous values to match smaller header label typography.
+    if (TIMELINE_CONFIG.intervalMinutes >= 30) return 42
+    if (TIMELINE_CONFIG.intervalMinutes >= 20) return 36
+    if (TIMELINE_CONFIG.intervalMinutes >= 15) return 33
+    return 30
+  }, [TIMELINE_CONFIG.intervalMinutes])
+  const timelineMinWidth = slotCount > 0 ? slotCount * slotMinWidthPx : undefined
 
   const dayKey = format(selectedDate, "yyyy-MM-dd")
   const rosterQueryKey = React.useMemo(() => ["roster-rules", dayKey], [dayKey])
@@ -228,7 +292,7 @@ export function RosterScheduler() {
         isRecurring: true,
       })
     },
-    [dayKey, openDraft, slotCount, slots, selectedDate, timelineEnd, timelineStart]
+    [dayKey, openDraft, slotCount, slots, selectedDate, timelineEnd, timelineStart, TIMELINE_CONFIG.intervalMinutes]
   )
 
   const handleModalClose = React.useCallback(() => {
@@ -281,7 +345,7 @@ export function RosterScheduler() {
     }
 
     return (
-      <div className="divide-y border-t border-border/60">
+      <div className="border-t border-border/60">
         {instructorOptions.map((instructor) => (
           <RosterTimelineRow
             key={instructor.id}
@@ -349,7 +413,8 @@ export function RosterScheduler() {
             {instructorOptions.map((instructor) => (
               <div
                 key={instructor.id}
-                className="flex h-11 items-center border-b border-border/60 px-3 text-sm font-semibold text-foreground last:border-b-0"
+                className="flex items-center border-b border-border/60 px-3 text-sm font-semibold text-foreground last:border-b-0"
+                style={{ height: ROW_HEIGHT }}
               >
                 {instructor.name}
               </div>
@@ -367,9 +432,11 @@ export function RosterScheduler() {
                   {slots.map((slot) => (
                     <div
                       key={slot.getTime()}
-                      className="flex items-center justify-center border-r last:border-r-0 px-0.5 text-[10px] text-muted-foreground"
+                      className="flex items-center justify-center border-r last:border-r-0 px-0.5 text-[8px] text-muted-foreground sm:text-[9px]"
                     >
-                      {formatTimeLabel(slot)}
+                      <span className="select-none whitespace-nowrap font-medium tabular-nums">
+                        {formatTimeLabel(slot)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -518,7 +585,7 @@ function RosterTimelineRow({
   })
 
   return (
-    <div className="relative" style={{ height: rowHeight }}>
+    <div className="relative border-b border-border/60 last:border-b-0" style={{ height: rowHeight }}>
       <div
         ref={containerRef}
         className="absolute inset-0 cursor-pointer"
@@ -533,7 +600,7 @@ function RosterTimelineRow({
             <div
               key={`${instructorId}-${slot.toISOString()}`}
               className={cn(
-                "border-r border-border/60",
+                "border-r border-border/60 last:border-r-0",
                 idx % 2 === 1 ? "bg-muted/[0.02]" : "",
                 slot.getMinutes() === 0 ? "bg-muted/[0.04]" : ""
               )}

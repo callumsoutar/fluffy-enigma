@@ -8,17 +8,18 @@ import { aircraftCreateSchema } from '@/lib/validation/aircraft'
  * GET /api/aircraft
  * 
  * Fetch aircraft with optional filters
- * Requires authentication and instructor/admin/owner role
+ * Requires authentication only (all authenticated users can view aircraft)
  * 
  * Security:
- * - Only instructors, admins, and owners can access
+ * - All authenticated users can view aircraft (needed for scheduler/booking)
  * - RLS policies enforce final data access
+ * - Write operations (POST, PATCH, DELETE) still restricted to instructors and above
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Check authentication
+  // Check authentication - all authenticated users can view aircraft
   if (!user) {
     return NextResponse.json(
       { error: 'Unauthorized' },
@@ -26,14 +27,8 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Check authorization - only instructors, admins, and owners can view aircraft
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: 'Forbidden: Insufficient permissions' },
-      { status: 403 }
-    )
-  }
+  // No additional role check needed for viewing aircraft
+  // Students and members need to see aircraft in the scheduler for booking purposes
 
   // Get query parameters
   const searchParams = request.nextUrl.searchParams

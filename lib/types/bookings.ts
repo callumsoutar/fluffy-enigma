@@ -174,3 +174,56 @@ export interface BookingsResponse {
   bookings: BookingWithRelations[]
   total: number
 }
+
+/**
+ * Scheduler feed booking shape.
+ *
+ * This is intentionally narrower than BookingWithRelations:
+ * - Used by GET /api/bookings/scheduler
+ * - Allows field masking (e.g., purpose can be null for privacy)
+ */
+export interface SchedulerBookingWithRelations {
+  id: string
+  aircraft_id: string
+  user_id: string | null
+  instructor_id: string | null
+  start_time: string
+  end_time: string
+  status: BookingStatus
+  booking_type: BookingType
+  purpose: string | null
+  cancelled_at: string | null
+
+  // Optional masked fields (kept nullable so the API can safely strip them)
+  remarks?: string | null
+  notes?: string | null
+  description?: string | null
+
+  aircraft?: {
+    id: string
+    registration: string
+    type: string
+    model?: string | null
+    manufacturer?: string | null
+  } | null
+  student?: {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    email: string | null
+  } | null
+  instructor?: {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    user?: {
+      id: string
+      email: string | null
+    } | null
+  } | null
+}
+
+export interface SchedulerBookingsResponse {
+  bookings: SchedulerBookingWithRelations[]
+  total: number
+}

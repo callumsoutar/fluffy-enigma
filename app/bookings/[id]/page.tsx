@@ -18,7 +18,6 @@ import {
   IconDeviceFloppy,
   IconRotateClockwise,
   IconChevronDown,
-  IconInfoCircle,
   IconUsers,
   IconBook,
   IconDotsVertical,
@@ -433,12 +432,19 @@ export default function BookingDetailPage() {
   const [memberSearchOpen, setMemberSearchOpen] = React.useState(false)
   const [cancelModalOpen, setCancelModalOpen] = React.useState(false)
 
+  // Track if form has been initialized to prevent marking as dirty on initial load
+  const isInitializedRef = React.useRef(false)
+
   // Populate form when booking loads/changes (query-cached)
+  // Wait for both booking AND options to be available to prevent form dirty state on initial load
   React.useEffect(() => {
-    if (!booking) return
+    if (!booking || !options) return
     
     const start = parseDateTime(booking.start_time)
     const end = parseDateTime(booking.end_time)
+    
+    // Reset initialization flag before updating state
+    isInitializedRef.current = false
     
     setStartDate(start.date)
     setStartTime(start.time)
@@ -457,7 +463,12 @@ export default function BookingDetailPage() {
         purpose: booking.purpose || "",
         remarks: booking.remarks || null,
       })
-  }, [booking, reset])
+    
+    // Mark as initialized after a tick to let all effects settle
+    setTimeout(() => {
+      isInitializedRef.current = true
+    }, 0)
+  }, [booking, options, reset])
 
   // Auto-set end date to start date if end date is not set
   React.useEffect(() => {
@@ -467,23 +478,36 @@ export default function BookingDetailPage() {
   }, [startDate, endDate])
 
   // Update form values when date/time changes
+  // Only mark as dirty if this is a user change (after initialization)
   React.useEffect(() => {
     if (startDate && startTime) {
       const isoString = combineDateTime(startDate, startTime)
-      setValue("start_time", isoString, { shouldDirty: true })
+      setValue("start_time", isoString, { shouldDirty: isInitializedRef.current })
     } else if (!startDate || !startTime) {
-      setValue("start_time", "", { shouldDirty: true })
+      setValue("start_time", "", { shouldDirty: isInitializedRef.current })
     }
   }, [startDate, startTime, setValue])
 
   React.useEffect(() => {
     if (endDate && endTime) {
       const isoString = combineDateTime(endDate, endTime)
-      setValue("end_time", isoString, { shouldDirty: true })
+      setValue("end_time", isoString, { shouldDirty: isInitializedRef.current })
     } else if (!endDate || !endTime) {
-      setValue("end_time", "", { shouldDirty: true })
+      setValue("end_time", "", { shouldDirty: isInitializedRef.current })
     }
   }, [endDate, endTime, setValue])
+
+  // Clear aircraft when booking type is changed to "groundwork"
+  // Note: This is handled directly in the onValueChange handler for better UX,
+  // but kept as a safeguard useEffect for programmatic changes
+  const bookingType = watch("booking_type")
+  const aircraftId = watch("aircraft_id")
+  React.useEffect(() => {
+    if (!isInitializedRef.current) return // Don't clear on initial load
+    if (bookingType === "groundwork" && aircraftId) {
+      setValue("aircraft_id", "", { shouldDirty: true })
+    }
+  }, [bookingType, aircraftId, setValue])
 
   const updateMutation = useMutation({
     mutationFn: (data: BookingFormData) =>
@@ -567,6 +591,9 @@ export default function BookingDetailPage() {
       const start = parseDateTime(booking.start_time)
       const end = parseDateTime(booking.end_time)
       
+      // Reset initialization flag before updating state
+      isInitializedRef.current = false
+      
       setStartDate(start.date)
       setStartTime(start.time)
       setEndDate(end.date)
@@ -584,11 +611,18 @@ export default function BookingDetailPage() {
         purpose: booking.purpose || '',
         remarks: booking.remarks || null,
       })
+      
+      // Mark as initialized after a tick to let all effects settle
+      setTimeout(() => {
+        isInitializedRef.current = true
+      }, 0)
+      
       toast.info('Changes reverted')
     }
   }
 
   const isAdminOrInstructor = role === 'owner' || role === 'admin' || role === 'instructor'
+  const isMemberOrStudent = role === "member" || role === "student"
   const isComplete = booking?.status === 'complete'
   const isCancelled = booking?.status === 'cancelled'
   const isReadOnly = isComplete || isCancelled
@@ -1318,49 +1352,47 @@ export default function BookingDetailPage() {
                           )}
 
                           {/* Instructor Field */}
-                          {isAdminOrInstructor && (
-                            <Field>
-                              <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                                <IconSchool className="h-4 w-4 text-primary" />
-                                Instructor
-                              </FieldLabel>
-                              {options ? (
-                                <Select
-                                  value={(watch("instructor_id") ?? bookingInstructorId ?? "none") as string}
-                                  onValueChange={(value) => setValue("instructor_id", value === "none" ? null : value, { shouldDirty: true })}
-                                  disabled={isReadOnly}
-                                >
-                                  <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
-                                    <SelectValue placeholder="Select Instructor" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">No instructor</SelectItem>
-                                    {!!bookingInstructorId &&
-                                      !!bookingInstructorLabel &&
-                                      !options.instructors.some((i) => i.id === bookingInstructorId) && (
-                                        <SelectItem value={bookingInstructorId}>
-                                          {bookingInstructorLabel} (inactive)
-                                        </SelectItem>
-                                      )}
-                                    {options.instructors.map((instructor) => {
-                                      const name = [instructor.first_name, instructor.last_name]
-                                        .filter(Boolean)
-                                        .join(" ") || instructor.user?.email || "Unknown"
-                                      return (
-                                        <SelectItem key={instructor.id} value={instructor.id}>
-                                          {name}
-                                        </SelectItem>
-                                      )
-                                    })}
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
-                                  {instructorName !== "—" ? instructorName : "—"}
-                                </div>
-                              )}
-                            </Field>
-                          )}
+                          <Field>
+                            <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                              <IconSchool className="h-4 w-4 text-primary" />
+                              Instructor
+                            </FieldLabel>
+                            {options ? (
+                              <Select
+                                value={(watch("instructor_id") ?? bookingInstructorId ?? "none") as string}
+                                onValueChange={(value) => setValue("instructor_id", value === "none" ? null : value, { shouldDirty: true })}
+                                disabled={isReadOnly}
+                              >
+                                <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
+                                  <SelectValue placeholder="Select Instructor" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No instructor</SelectItem>
+                                  {!!bookingInstructorId &&
+                                    !!bookingInstructorLabel &&
+                                    !options.instructors.some((i) => i.id === bookingInstructorId) && (
+                                      <SelectItem value={bookingInstructorId}>
+                                        {bookingInstructorLabel} (inactive)
+                                      </SelectItem>
+                                    )}
+                                  {options.instructors.map((instructor) => {
+                                    const name = [instructor.first_name, instructor.last_name]
+                                      .filter(Boolean)
+                                      .join(" ") || instructor.user?.email || "Unknown"
+                                    return (
+                                      <SelectItem key={instructor.id} value={instructor.id}>
+                                        {name}
+                                      </SelectItem>
+                                    )
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {instructorName !== "—" ? instructorName : "—"}
+                              </div>
+                            )}
+                          </Field>
 
                           <Field>
                             <FieldLabel className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -1409,7 +1441,7 @@ export default function BookingDetailPage() {
                               <Select
                                 value={(watch("flight_type_id") ?? bookingFlightTypeId ?? "none") as string}
                                 onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || isMemberOrStudent}
                               >
                                 <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                   <SelectValue placeholder="Select Flight Type" />
@@ -1444,7 +1476,13 @@ export default function BookingDetailPage() {
                             </FieldLabel>
                             <Select
                               value={watch("booking_type")}
-                              onValueChange={(value) => setValue("booking_type", value as BookingType, { shouldDirty: true })}
+                              onValueChange={(value) => {
+                                setValue("booking_type", value as BookingType, { shouldDirty: true })
+                                // Clear aircraft if changing to groundwork
+                                if (value === "groundwork" && watch("aircraft_id")) {
+                                  setValue("aircraft_id", "", { shouldDirty: true })
+                                }
+                              }}
                               disabled={isReadOnly}
                             >
                               <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
@@ -1468,7 +1506,7 @@ export default function BookingDetailPage() {
                               <Select
                                 value={(watch("lesson_id") ?? bookingLessonId ?? "none") as string}
                                 onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || isMemberOrStudent}
                               >
                                 <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
                                   <SelectValue placeholder="Select Lesson" />
@@ -1662,7 +1700,7 @@ export default function BookingDetailPage() {
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <Link
                     href="/bookings"
-                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-all cursor-pointer active:scale-95"
                   >
                     <IconArrowLeft className="h-4 w-4" />
                     Back to Bookings
@@ -2024,7 +2062,7 @@ export default function BookingDetailPage() {
                                 <IconSchool className="h-4 w-4 text-foreground" />
                                 Instructor
                               </FieldLabel>
-                              {isAdminOrInstructor && options ? (
+                              {options ? (
                                 <Select
                                   value={watch("instructor_id") || "none"}
                                   onValueChange={(value) => setValue("instructor_id", value === "none" ? null : value, { shouldDirty: true })}
@@ -2035,6 +2073,13 @@ export default function BookingDetailPage() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">No instructor</SelectItem>
+                                    {!!bookingInstructorId &&
+                                      !!bookingInstructorLabel &&
+                                      !options.instructors.some((i) => i.id === bookingInstructorId) && (
+                                        <SelectItem value={bookingInstructorId}>
+                                          {bookingInstructorLabel} (inactive)
+                                        </SelectItem>
+                                      )}
                                     {options.instructors.map((instructor) => {
                                       const name = [instructor.first_name, instructor.last_name]
                                         .filter(Boolean)
@@ -2094,13 +2139,20 @@ export default function BookingDetailPage() {
                                 <Select
                                   value={watch("flight_type_id") || "none"}
                                   onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
-                                  disabled={isReadOnly}
+                                  disabled={isReadOnly || isMemberOrStudent}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Flight Type" />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">No flight type</SelectItem>
+                                    {!!bookingFlightTypeId &&
+                                      !!bookingFlightTypeLabel &&
+                                      !options.flightTypes.some((ft) => ft.id === bookingFlightTypeId) && (
+                                        <SelectItem value={bookingFlightTypeId}>
+                                          {bookingFlightTypeLabel} (inactive)
+                                        </SelectItem>
+                                      )}
                                     {options.flightTypes.map((ft) => (
                                       <SelectItem key={ft.id} value={ft.id}>
                                         {ft.name}
@@ -2122,7 +2174,13 @@ export default function BookingDetailPage() {
                               </FieldLabel>
                               <Select
                                 value={watch("booking_type")}
-                                onValueChange={(value) => setValue("booking_type", value as BookingType, { shouldDirty: true })}
+                                onValueChange={(value) => {
+                                  setValue("booking_type", value as BookingType, { shouldDirty: true })
+                                  // Clear aircraft if changing to groundwork
+                                  if (value === "groundwork" && watch("aircraft_id")) {
+                                    setValue("aircraft_id", "", { shouldDirty: true })
+                                  }
+                                }}
                                 disabled={isReadOnly}
                               >
                                 <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
@@ -2146,13 +2204,20 @@ export default function BookingDetailPage() {
                                 <Select
                                   value={watch("lesson_id") || "none"}
                                   onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
-                                  disabled={isReadOnly}
+                                  disabled={isReadOnly || isMemberOrStudent}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <SelectValue placeholder="Select Lesson" />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">No lesson selected</SelectItem>
+                                    {!!bookingLessonId &&
+                                      !!bookingLessonLabel &&
+                                      !options.lessons.some((l) => l.id === bookingLessonId) && (
+                                        <SelectItem value={bookingLessonId}>
+                                          {bookingLessonLabel} (inactive)
+                                        </SelectItem>
+                                      )}
                                     {options.lessons.map((lesson) => (
                                       <SelectItem key={lesson.id} value={lesson.id}>
                                         {lesson.name}
@@ -2218,42 +2283,39 @@ export default function BookingDetailPage() {
                         
                         {/* Member Card */}
                         <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-3 shadow-sm">
-                          <div className="flex items-start justify-between">
+                          <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <IconUser className="h-4 w-4 text-foreground" />
                               <span className="text-sm font-medium text-foreground">Member</span>
                             </div>
-                            <IconInfoCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <Badge variant="outline" className="text-xs font-semibold border-gray-300 text-gray-700 dark:text-gray-300 dark:border-gray-600 shrink-0">
+                              Student
+                            </Badge>
                           </div>
-                          <Badge variant="outline" className="text-xs font-semibold border-gray-300 text-gray-700 dark:text-gray-300 dark:border-gray-600">
-                            Student
-                          </Badge>
                           <div className="font-bold text-base text-gray-900 dark:text-gray-100">{studentName}</div>
                           {booking.student?.email && (
                             <div className="text-sm text-gray-600 dark:text-gray-400">{booking.student.email}</div>
                           )}
                         </div>
 
-                        {/* Solo Booking / Instructor Card */}
-                        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-3 shadow-sm">
-                          <div className="flex items-center gap-2">
-                            <IconUser className="h-4 w-4 text-foreground" />
-                            <span className="text-sm font-medium text-foreground">Solo Booking</span>
-                          </div>
-                          {instructorName !== "—" ? (
-                            <>
-                              <Badge variant="outline" className="text-xs font-semibold border-gray-300 text-gray-700 dark:text-gray-300 dark:border-gray-600">
+                        {/* Instructor Card - Only render if instructor exists */}
+                        {instructorName !== "—" && booking.instructor && (
+                          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-3 shadow-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <IconUser className="h-4 w-4 text-foreground" />
+                                <span className="text-sm font-medium text-foreground">Instructor</span>
+                              </div>
+                              <Badge variant="outline" className="text-xs font-semibold border-gray-300 text-gray-700 dark:text-gray-300 dark:border-gray-600 shrink-0">
                                 Staff
                               </Badge>
-                              <div className="font-bold text-base text-gray-900 dark:text-gray-100">{instructorName}</div>
-                              {booking.instructor?.user?.email && (
-                                <div className="text-sm text-gray-600 dark:text-gray-400">{booking.instructor.user.email}</div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="text-sm text-gray-600 dark:text-gray-400">No instructor assigned</div>
-                          )}
-                        </div>
+                            </div>
+                            <div className="font-bold text-base text-gray-900 dark:text-gray-100">{instructorName}</div>
+                            {booking.instructor?.user?.email && (
+                              <div className="text-sm text-gray-600 dark:text-gray-400">{booking.instructor.user.email}</div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Aircraft Section */}
@@ -2288,17 +2350,18 @@ export default function BookingDetailPage() {
 
               {/* Audit Log - Table Format at Bottom */}
               <Card className="shadow-md border border-border/50 bg-card rounded-xl mt-8">
-                <CardHeader className="pb-2 sm:pb-3 border-b border-border/20">
-                  <button
+                <CardHeader className="p-0 border-b border-border/20">
+                  <Button
+                    variant="ghost"
                     type="button"
                     onClick={() => setAuditLogOpen(!auditLogOpen)}
-                    className="flex items-center gap-2 w-full text-left"
+                    className="flex items-center gap-2 w-full h-auto py-4 px-6 text-left hover:bg-muted/50 transition-all rounded-none"
                   >
                     <IconChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground transition-transform ${auditLogOpen ? '' : '-rotate-90'}`} />
                     <CardTitle className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
                       Booking History
                     </CardTitle>
-                  </button>
+                  </Button>
                 </CardHeader>
                 {auditLogOpen && (
                   <CardContent className="pt-3 sm:pt-4 px-0 sm:px-6">

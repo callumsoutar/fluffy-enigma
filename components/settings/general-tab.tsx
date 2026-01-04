@@ -24,6 +24,7 @@ import {
 import { useSettingsManager } from "@/hooks/use-settings";
 import { toast } from "sonner";
 import { AircraftTypesConfig } from "./AircraftTypesConfig";
+import { BusinessHoursConfig } from "./business-hours-config";
 
 const generalTabs = [
   { id: "school-info", label: "School Information", icon: IconBuilding },
@@ -487,6 +488,11 @@ export function GeneralTab() {
                     displayed throughout the application.
                   </p>
                 </div>
+              </div>
+
+              {/* Business Hours */}
+              <div className="space-y-6">
+                <BusinessHoursConfig />
               </div>
             </div>
           </Tabs.Content>

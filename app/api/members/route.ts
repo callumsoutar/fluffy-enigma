@@ -27,17 +27,25 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Check authorization - only instructors, admins, and owners can view members
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
-  if (!hasAccess) {
+  // Check authorization
+  // - Staff (owner, admin, instructor) can view all members
+  // - Members can only view instructors (needed for booking)
+  const isStaff = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  
+  // Get query params early to check if this is an instructor-only request
+  const searchParams = request.nextUrl.searchParams
+  const personType = searchParams.get('person_type')
+  const isInstructorOnlyRequest = personType === 'instructor'
+  
+  // If not staff and not requesting instructors only, deny access
+  if (!isStaff && !isInstructorOnlyRequest) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
       { status: 403 }
     )
   }
 
-  // Get and validate query parameters
-  const searchParams = request.nextUrl.searchParams
+  // Validate query parameters (searchParams already retrieved above)
   
   // Build query object from URL params
   const queryParams: Record<string, string | undefined> = {}
@@ -61,6 +69,14 @@ export async function GET(request: NextRequest) {
     search: validationResult.data.search,
     is_active: validationResult.data.is_active,
     membership_type_id: validationResult.data.membership_type_id,
+  }
+
+  // Additional security check: members can only request instructors
+  if (!isStaff && filters.person_type !== 'instructor') {
+    return NextResponse.json(
+      { error: 'Forbidden: Members can only view instructors' },
+      { status: 403 }
+    )
   }
 
   // Build base query - select users with related data

@@ -301,7 +301,7 @@ function BookingCard({ booking }: { booking: BookingWithRelations }) {
 
   return (
     <div 
-      className="group relative transition-all cursor-pointer bg-background border-b last:border-b-0 hover:bg-accent/5"
+      className="group relative transition-all cursor-pointer bg-background border-b last:border-b-0 hover:bg-accent/5 active:scale-[0.98]"
       onClick={() => router.push(`/bookings/${booking.id}`)}
     >
       <div className="px-4 py-3">
@@ -555,7 +555,7 @@ export function BookingsTable({
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-all border-b-2 whitespace-nowrap flex-shrink-0",
+                  "flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-all border-b-2 whitespace-nowrap flex-shrink-0 cursor-pointer active:scale-95",
                   isActive 
                     ? "border-slate-900 text-slate-900" 
                     : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"

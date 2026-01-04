@@ -1374,17 +1374,20 @@ export default function BookingCheckinPage() {
                   stages={[
                     { id: 'charges', label: 'Charges Approved' },
                     { id: 'invoice', label: 'Invoice Created' },
-                    { id: 'debrief', label: 'Lesson Debrief' },
+                    // Only show debrief stage if not a solo flight
+                    ...(instructionType !== 'solo' ? [{ id: 'debrief', label: 'Lesson Debrief' }] : []),
                   ]}
                   completedStageIds={[
                     ...(isApproved ? ['charges'] : []),
                     ...(checkinInvoiceId ? ['invoice'] : []),
-                    ...(lessonProgressExists ? ['debrief'] : []),
+                    // Only include debrief in completed stages if not a solo flight
+                    ...(instructionType !== 'solo' && lessonProgressExists ? ['debrief'] : []),
                   ]}
                   activeStageId={
                     !isApproved ? 'charges' : 
                     !checkinInvoiceId ? 'invoice' : 
-                    !lessonProgressExists ? 'debrief' : 
+                    // Skip debrief stage for solo flights
+                    (instructionType !== 'solo' && !lessonProgressExists) ? 'debrief' : 
                     undefined
                   }
                   className="mb-8"
@@ -2288,7 +2291,8 @@ export default function BookingCheckinPage() {
                     </CollapsibleContent>
                 </Collapsible>
 
-                {/* Step 3: Lesson Debrief (optional) */}
+                {/* Step 3: Lesson Debrief (optional) - Only for non-solo flights */}
+                {instructionType !== 'solo' && (
                 <div id="lesson-debrief" className="scroll-mt-20">
                   <Collapsible
                     open={isDebriefOpen && (isApproved || lessonProgressExists)}
@@ -2939,6 +2943,7 @@ export default function BookingCheckinPage() {
                     </CollapsibleContent>
                   </Collapsible>
                 </div>
+                )}
               </div>
             </div>
           </div>

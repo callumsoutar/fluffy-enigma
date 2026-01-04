@@ -3,6 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { userHasAnyRole } from '@/lib/auth/roles'
 import { bookingIdSchema } from '@/lib/validation/bookings'
 
+async function getInstructorIdForUser(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data } = await supabase
+    .from("instructors")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle()
+  return data?.id ?? null
+}
+
 /**
  * GET /api/bookings/[id]/audit
  * 
@@ -44,10 +53,11 @@ export async function GET(
 
   // Check permissions before revealing if booking exists (prevent information leakage)
   const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const instructorIdForUser = await getInstructorIdForUser(supabase, user.id)
   const canAccess = booking && (
     isAdminOrInstructor || 
     booking.user_id === user.id ||
-    booking.instructor_id === user.id
+    (!!instructorIdForUser && booking.instructor_id === instructorIdForUser)
   )
 
   if (bookingError || !booking || !canAccess) {

@@ -8,7 +8,6 @@ import { toast } from "sonner"
 import { format as formatDate } from "date-fns"
 
 import { cn } from "@/lib/utils"
-import { useIsMobile } from "@/hooks/use-mobile"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -40,12 +39,19 @@ import {
   type TimelineConfig,
 } from "./scheduler-utils"
 
-import type { BookingStatus, BookingWithRelations, BookingsResponse } from "@/lib/types/bookings"
+import type {
+  BookingStatus,
+  BookingWithRelations,
+  SchedulerBookingWithRelations,
+  SchedulerBookingsResponse,
+} from "@/lib/types/bookings"
 import type { AircraftResponse, AircraftWithType } from "@/lib/types/aircraft"
 import type { MemberWithRelations, MembersResponse } from "@/lib/types/members"
 import type { RosterRule } from "@/lib/types/roster"
 import { NewBookingModal, type NewBookingPrefill } from "@/components/bookings/new-booking-modal"
 import { CancelBookingModal } from "@/components/bookings/cancel-booking-modal"
+import { useAuth } from "@/contexts/auth-context"
+import { useSettingsManager } from "@/hooks/use-settings"
 
 type Resource =
   | { kind: "instructor"; data: InstructorResource }
@@ -55,13 +61,17 @@ type SchedulerBooking = {
   id: string
   startsAt: Date
   endsAt: Date
-  studentName: string
+  primaryLabel: string
   instructorId: string | null
   aircraftId: string
   userId: string | null
   status: BookingStatus
   aircraftLabel?: string
   instructorLabel?: string
+  canOpen: boolean
+  canCancel: boolean
+  canViewContact: boolean
+  canConfirm: boolean
 }
 
 // UI/layout tuning only (no behavior changes)
@@ -213,9 +223,9 @@ async function fetchBookingsForRange(range: { startUtcIso: string; endUtcIso: st
   params.set("start_date", range.startUtcIso)
   params.set("end_date", range.endUtcIso)
 
-  const res = await fetch(`/api/bookings?${params.toString()}`)
+  const res = await fetch(`/api/bookings/scheduler?${params.toString()}`)
   if (!res.ok) throw new Error("Failed to fetch bookings")
-  const data = (await res.json()) as BookingsResponse
+  const data = (await res.json()) as SchedulerBookingsResponse
   return data.bookings
 }
 
@@ -250,36 +260,57 @@ function getDisplayNameForMember(m: Pick<MemberWithRelations, "first_name" | "la
   return full || m.email
 }
 
-function bookingToSchedulerBooking(b: BookingWithRelations): SchedulerBooking | null {
+function bookingToSchedulerBooking(
+  b: SchedulerBookingWithRelations,
+  viewer: { userId: string | null; isStaff: boolean }
+): SchedulerBooking | null {
   if (!b.start_time || !b.end_time) return null
+
+  // Skip cancelled bookings
+  if (b.status === "cancelled" || b.cancelled_at) return null
+
   const startsAt = parseSupabaseUtcTimestamp(b.start_time)
   const endsAt = parseSupabaseUtcTimestamp(b.end_time)
   const studentName =
-    b.student ? [b.student.first_name, b.student.last_name].filter(Boolean).join(" ").trim() || b.student.email : "Unassigned"
+    b.student
+      ? [b.student.first_name, b.student.last_name].filter(Boolean).join(" ").trim() || "Booked"
+      : ""
+  const primaryLabel = studentName || b.purpose || "Unassigned"
   const aircraftLabel = b.aircraft ? `${b.aircraft.registration} (${b.aircraft.type})` : undefined
   const instructorLabel =
     b.instructor
-      ? [b.instructor.first_name, b.instructor.last_name].filter(Boolean).join(" ").trim() || b.instructor.user?.email || undefined
+      ? [b.instructor.first_name, b.instructor.last_name].filter(Boolean).join(" ").trim() || undefined
       : undefined
+
+  const isOwn = !!viewer.userId && b.user_id === viewer.userId
+  const canOpen = viewer.isStaff || isOwn
+  const canCancel = (viewer.isStaff || isOwn) && b.status !== "complete"
+  const canViewContact = viewer.isStaff || isOwn
+  const canConfirm = viewer.isStaff && b.status === "unconfirmed"
 
   return {
     id: b.id,
     startsAt,
     endsAt,
-    studentName,
+    primaryLabel,
     instructorId: b.instructor_id,
     aircraftId: b.aircraft_id,
     userId: b.user_id,
     status: b.status,
     aircraftLabel,
     instructorLabel,
+    canOpen,
+    canCancel,
+    canViewContact,
+    canConfirm,
   }
 }
 
 export function ResourceTimelineScheduler() {
   const router = useRouter()
-  const isMobile = useIsMobile()
   const queryClient = useQueryClient()
+  const { user, hasAnyRole } = useAuth()
+  const isStaff = hasAnyRole(["owner", "admin", "instructor"])
 
   const [selectedDate, setSelectedDate] = React.useState<Date | null>(null)
   const [newBookingOpen, setNewBookingOpen] = React.useState(false)
@@ -292,14 +323,57 @@ export function ResourceTimelineScheduler() {
     setSelectedDate(startOfDay(new Date()))
   }, [])
 
-  const config: TimelineConfig = React.useMemo(
-    () => ({
-      startHour: 7,
-      endHour: 19,
+  // Fetch business hours settings
+  const { getSettingValue, settings } = useSettingsManager("general")
+
+  // Parse business hours and create timeline config
+  const config: TimelineConfig = React.useMemo(() => {
+    const openTime = getSettingValue<string>("business_open_time", "09:00:00")
+    const closeTime = getSettingValue<string>("business_close_time", "17:00:00")
+    const is24Hours = getSettingValue<boolean>("business_is_24_hours", false)
+    const isClosed = getSettingValue<boolean>("business_is_closed", false)
+
+    // If closed, show a minimal range (still show something)
+    if (isClosed) {
+      return {
+        startHour: 0,
+        endHour: 24,
+        intervalMinutes: 30,
+      }
+    }
+
+    // If 24/7, show full day
+    if (is24Hours) {
+      return {
+        startHour: 0,
+        endHour: 24,
+        intervalMinutes: 30,
+      }
+    }
+
+    // Regular hours: parse time strings to get hours
+    const openMinutes = parseTimeToMinutes(openTime)
+    const closeMinutes = parseTimeToMinutes(closeTime)
+
+    // Default fallback if parsing fails
+    if (openMinutes === null || closeMinutes === null) {
+      return {
+        startHour: 7,
+        endHour: 19,
+        intervalMinutes: 30,
+      }
+    }
+
+    const startHour = Math.floor(openMinutes / 60)
+    const endHour = Math.ceil(closeMinutes / 60)
+
+    return {
+      startHour,
+      endHour,
       intervalMinutes: 30,
-    }),
-    []
-  )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings])
 
   const { slots, start: timelineStart, end: timelineEnd } = React.useMemo(
     () => selectedDate ? buildTimeSlots(selectedDate, config) : { slots: [], start: new Date(), end: new Date() },
@@ -307,8 +381,17 @@ export function ResourceTimelineScheduler() {
   )
 
   const slotCount = slots.length
-  const slotMinWidth = 56 // px (denser, improves visible range on mobile)
-  const timelineMinWidth = isMobile ? slotCount * slotMinWidth : undefined
+  // Prevent cramped time labels by enforcing a minimum per-slot width and allowing horizontal scroll.
+  // This is purely a layout safeguard (no behavioral/time math changes).
+  const slotMinWidthPx = React.useMemo(() => {
+    // Current config is typically 30 mins, but keep this safe if interval changes later.
+    // Reduced ~25% vs previous values to match smaller header label typography.
+    if (config.intervalMinutes >= 30) return 42
+    if (config.intervalMinutes >= 20) return 36
+    if (config.intervalMinutes >= 15) return 33
+    return 30
+  }, [config.intervalMinutes])
+  const timelineMinWidth = slotCount > 0 ? slotCount * slotMinWidthPx : undefined
 
   const dayRange = React.useMemo(() => selectedDate ? getSelectedDayRangeUtc(selectedDate) : { startUtcIso: '', endUtcIso: '' }, [selectedDate])
   const dateKey = React.useMemo(() => selectedDate ? formatDate(selectedDate, "yyyy-MM-dd") : '', [selectedDate])
@@ -371,11 +454,12 @@ export function ResourceTimelineScheduler() {
   }, [aircraft])
 
   const bookings = React.useMemo(() => {
+    const viewer = { userId: user?.id ?? null, isStaff }
     const mapped = bookingsRaw
-      .map(bookingToSchedulerBooking)
+      .map((b) => bookingToSchedulerBooking(b, viewer))
       .filter((x): x is SchedulerBooking => !!x)
     return mapped
-  }, [bookingsRaw])
+  }, [bookingsRaw, user?.id, isStaff])
 
   const navigateDate = React.useCallback((deltaDays: number) => {
     setSelectedDate((d) => d ? startOfDay(addDays(d, deltaDays)) : null)
@@ -392,6 +476,12 @@ export function ResourceTimelineScheduler() {
 
   const handleBookingClick = React.useCallback(
     (booking: SchedulerBooking) => {
+      if (!booking.canOpen) {
+        toast.message("Busy slot", {
+          description: "You can only open your own bookings.",
+        })
+        return
+      }
       router.push(`/bookings/${booking.id}`)
     },
     [router]
@@ -615,11 +705,16 @@ export function ResourceTimelineScheduler() {
                         <div
                           key={slot.toISOString()}
                           className={cn(
-                            "flex items-center justify-center border-r border-border/60 px-0.5 text-[10px] text-muted-foreground sm:px-1 sm:text-xs",
+                            "flex items-center justify-center border-r border-border/60 px-0.5 text-[8px] text-muted-foreground sm:px-1 sm:text-[9px]",
                             "last:border-r-0"
                           )}
                         >
-                          <div className={cn("select-none font-medium", showLabel ? "" : "opacity-40")}>
+                          <div
+                            className={cn(
+                              "select-none whitespace-nowrap font-medium tabular-nums",
+                              showLabel ? "" : "opacity-40"
+                            )}
+                          >
                             {formatTimeLabel(slot)}
                           </div>
                         </div>
@@ -777,6 +872,10 @@ function TimelineRow({
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const router = useRouter()
+  const [hoveredSlotIdx, setHoveredSlotIdx] = React.useState<number | null>(null)
+  const hoveredSlot = hoveredSlotIdx === null ? null : (slots[hoveredSlotIdx] ?? null)
+  const hoveredAvailable = hoveredSlot && isSlotAvailable ? isSlotAvailable(hoveredSlot) : true
+  const hoveredTimeLabel = hoveredSlot ? formatDate(hoveredSlot, "h:mmaaa").toLowerCase() : null
 
   return (
     <div className="relative" style={{ height }}>
@@ -784,6 +883,16 @@ function TimelineRow({
       <div
         ref={containerRef}
         className="absolute inset-0 cursor-default"
+        onMouseMove={(e) => {
+          if (!containerRef.current) return
+          const rect = containerRef.current.getBoundingClientRect()
+          if (!rect.width) return
+          const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
+          const rawIdx = Math.floor((x / rect.width) * slotCount)
+          const idx = Math.max(0, Math.min(rawIdx, slotCount - 1))
+          setHoveredSlotIdx((prev) => (prev === idx ? prev : idx))
+        }}
+        onMouseLeave={() => setHoveredSlotIdx(null)}
         onClick={(e) => {
           if (!containerRef.current) return
           if (isSlotAvailable) {
@@ -825,6 +934,36 @@ function TimelineRow({
         </div>
       </div>
 
+      {/* Hover hint (desktop only) */}
+      <div className="pointer-events-none absolute inset-0 hidden sm:block">
+        {hoveredSlot && hoveredTimeLabel && (
+          <div
+            className="absolute z-10"
+            style={{
+              left: `${((hoveredSlotIdx ?? 0) + 0.5) * (100 / Math.max(1, slotCount))}%`,
+              top: -6,
+              transform: "translate(-50%, -100%)",
+            }}
+          >
+            <div
+              className={cn(
+                "relative rounded-md px-2 py-1 text-[11px] font-medium tabular-nums shadow-lg",
+                "backdrop-blur",
+                "ring-1",
+                "after:absolute after:left-1/2 after:top-full after:-translate-x-1/2",
+                "after:border-[6px] after:border-transparent",
+                hoveredAvailable
+                  ? "bg-slate-900/90 text-white ring-white/10 after:border-t-slate-900/90"
+                  : "bg-muted-foreground/90 text-white ring-white/10 after:border-t-muted-foreground/90"
+              )}
+            >
+              {hoveredAvailable ? "Create booking from " : "Unavailable at "}
+              <span className="font-semibold">{hoveredTimeLabel}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Booking blocks */}
       {/* NOTE: This layer must not block hover/clicks on the grid when empty.
           We disable pointer events on the full overlay and re-enable them on actual booking blocks. */}
@@ -838,7 +977,7 @@ function TimelineRow({
           })
           if (!layout) return null
 
-          const label = booking.studentName
+          const label = booking.primaryLabel
           const range = formatTimeRangeLabel(booking.startsAt, booking.endsAt)
 
           return (
@@ -896,7 +1035,7 @@ function TimelineRow({
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-semibold leading-tight">
-                            {booking.studentName}
+                            {booking.primaryLabel}
                           </div>
                           <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Clock className="h-3.5 w-3.5" />
@@ -933,7 +1072,7 @@ function TimelineRow({
                       </div>
 
                       <div className="pt-0.5 text-[11px] text-muted-foreground">
-                        Click to open booking
+                        {booking.canOpen ? "Click to open booking" : "Busy slot"}
                       </div>
                     </div>
                   </div>
@@ -946,16 +1085,18 @@ function TimelineRow({
                   <Eye className="h-4 w-4" />
                   View Aircraft
                 </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={() => {
-                    onCancelBooking(booking)
-                  }}
-                  variant="destructive"
-                >
-                  <X className="h-4 w-4" />
-                  Cancel Booking
-                </ContextMenuItem>
-                {booking.userId && (
+                {booking.canCancel && (
+                  <ContextMenuItem
+                    onClick={() => {
+                      onCancelBooking(booking)
+                    }}
+                    variant="destructive"
+                  >
+                    <X className="h-4 w-4" />
+                    Cancel Booking
+                  </ContextMenuItem>
+                )}
+                {booking.userId && booking.canViewContact && (
                   <ContextMenuItem
                     onClick={() => router.push(`/members/${booking.userId}`)}
                   >
@@ -963,7 +1104,7 @@ function TimelineRow({
                     View Contact Details
                   </ContextMenuItem>
                 )}
-                {booking.status === 'unconfirmed' && (
+                {booking.canConfirm && (
                   <>
                     <ContextMenuSeparator />
                     <ContextMenuItem

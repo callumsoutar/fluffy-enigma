@@ -16,6 +16,7 @@ import {
   IconRoute,
   IconGasStation,
   IconCheck,
+  IconChevronDown,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -26,12 +27,16 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { Button } from "@/components/ui/button"
 import { BookingHeader } from "@/components/bookings/booking-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Field,
-  FieldContent,
   FieldDescription,
   FieldError,
   FieldGroup,
@@ -53,6 +58,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ChevronDownIcon } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { CheckoutWarnings } from "@/components/bookings/checkout-warnings"
+import { CheckoutObservations } from "@/components/bookings/checkout-observations"
 import type { BookingWithRelations } from "@/lib/types/bookings"
 import { bookingUpdateSchema } from "@/lib/validation/bookings"
 import { z } from "zod"
@@ -255,16 +262,34 @@ export default function BookingCheckoutPage() {
 
   // Get selected aircraft ID from form
   const selectedAircraftId = watch("checked_out_aircraft_id") || booking?.checked_out_aircraft_id || booking?.aircraft_id
+  const selectedInstructorId = watch("checked_out_instructor_id") || booking?.checked_out_instructor_id || booking?.instructor_id
 
-  // Fetch selected aircraft details to get current meter readings
+  // Fetch selected aircraft details to get current meter readings and fuel consumption
   const aircraftQuery = useQuery({
     queryKey: ["aircraft", selectedAircraftId],
-    queryFn: () => fetchJson<{ aircraft: { id: string; registration: string; current_tach: number; current_hobbs: number } }>(`/api/aircraft/${selectedAircraftId}`),
+    queryFn: () => fetchJson<{ 
+      aircraft: { 
+        id: string; 
+        registration: string; 
+        current_tach: number; 
+        current_hobbs: number;
+        fuel_consumption: number | null;
+      } 
+    }>(`/api/aircraft/${selectedAircraftId}`),
     enabled: !!selectedAircraftId,
     staleTime: 30_000,
   })
 
   const selectedAircraft = aircraftQuery.data?.aircraft ?? null
+
+  const fuelOnBoard = watch("fuel_on_board")
+  const fuelConsumption = selectedAircraft?.fuel_consumption
+
+  const endurance = React.useMemo(() => {
+    if (!fuelOnBoard || typeof fuelOnBoard !== "number" || isNaN(fuelOnBoard) || !fuelConsumption || fuelConsumption <= 0) return null
+    const hours = fuelOnBoard / fuelConsumption
+    return hours.toFixed(1)
+  }, [fuelOnBoard, fuelConsumption])
 
   // Helper function to normalize date strings to a format Zod accepts
   const normalizeDateString = (value: string | null | undefined): string | null => {
@@ -885,6 +910,16 @@ export default function BookingCheckoutPage() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                 {/* Left Column: Flight Log Form */}
                 <div className="lg:col-span-2 space-y-6 lg:space-y-8">
+                  {/* Checkout Warnings */}
+                  <CheckoutWarnings 
+                    memberId={booking?.user_id ?? undefined}
+                    instructorId={selectedInstructorId || undefined}
+                    aircraftId={selectedAircraftId || undefined}
+                  />
+                  {/* Checkout Observations */}
+                  <CheckoutObservations 
+                    aircraftId={selectedAircraftId || undefined}
+                  />
                   {/* Flight Log Form */}
                   <Card className="bg-card shadow-md border border-border/50 rounded-xl">
                     <CardHeader className="pb-6 border-b border-border/20">
@@ -897,354 +932,386 @@ export default function BookingCheckoutPage() {
                       <form onSubmit={handleFormSubmit}>
                         <FieldSet className="w-full max-w-full">
                           <FieldGroup className="w-full max-w-full">
-                            {/* Booking Times */}
-                            <FieldSet className="p-6 rounded-xl w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
-                              
-                            
-                              <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                <Field data-invalid={!!errors.start_time}>
-                                  <FieldLabel htmlFor="start_time">Booking Start</FieldLabel>
-                                  <div className="flex gap-3 items-end">
-                                    <div className="flex-1">
-                                      <Popover open={openActualStartDate} onOpenChange={setOpenActualStartDate}>
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            id="start_time"
-                                            variant="outline"
-                                            className="w-full justify-between font-normal h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
-                                            aria-invalid={!!errors.start_time}
-                                          >
-                                            {actualStartDate
-                                              ? actualStartDate.toLocaleDateString("en-US", {
-                                                  day: "2-digit",
-                                                  month: "short",
-                                                  year: "numeric",
-                                                })
-                                              : "Select date"}
-                                            <ChevronDownIcon className="h-4 w-4" />
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto overflow-hidden p-0" align="start">
-                                          <Calendar
-                                            mode="single"
-                                            selected={actualStartDate}
-                                            captionLayout="dropdown"
-                                            onSelect={(date) => {
-                                              setActualStartDate(date)
-                                              setOpenActualStartDate(false)
-                                              if (date && !actualEndDate) {
-                                                setActualEndDate(date)
-                                              }
-                                            }}
-                                          />
-                                        </PopoverContent>
-                                      </Popover>
-                                    </div>
-                                    <div className="w-32">
-                                      <Select
-                                        value={actualStartTime || "none"}
-                                        onValueChange={(value) => setActualStartTime(value === "none" ? "" : value)}
-                                      >
-                                        <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
-                                          <SelectValue placeholder="Time">
-                                            {actualStartTime ? formatTimeForDisplay(actualStartTime) : "Time"}
-                                          </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent className="max-h-[200px]">
-                                          <SelectItem value="none">Select time</SelectItem>
-                                          {TIME_OPTIONS.map((time) => (
-                                            <SelectItem key={time} value={time}>
-                                              {formatTimeForDisplay(time)}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                            {/* Collapsible Booking Information */}
+                            <Collapsible defaultOpen={false} className="w-full">
+                              <CollapsibleTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  className="flex w-full items-center justify-between py-4 px-2 h-auto hover:bg-muted/30 transition-all group rounded-xl gap-3"
+                                >
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <IconInfoCircle className="h-5 w-5 text-muted-foreground group-data-[state=open]:text-primary transition-colors flex-shrink-0" />
+                                    <div className="flex flex-col items-start text-left min-w-0 flex-1">
+                                      <span className="text-base font-bold text-foreground group-hover:text-primary transition-colors">Booking Information</span>
+                                      <p className="text-xs text-muted-foreground leading-relaxed break-words">
+                                        <span className="group-data-[state=open]:hidden">
+                                          <span className="hidden sm:inline">Click to view or edit aircraft, instructor, lesson, and remarks</span>
+                                          <span className="sm:hidden">Tap to view booking details</span>
+                                        </span>
+                                        <span className="hidden group-data-[state=open]:inline text-primary/80 font-medium italic">Showing full booking configuration</span>
+                                      </p>
                                     </div>
                                   </div>
-                                  <FieldError errors={errors.start_time ? [{ message: errors.start_time.message }] : undefined} />
-                                </Field>
-
-                                <Field data-invalid={!!errors.end_time}>
-                                  <FieldLabel htmlFor="end_time">Booking End</FieldLabel>
-                                  <div className="flex gap-3 items-end">
-                                    <div className="flex-1">
-                                      <Popover open={openActualEndDate} onOpenChange={setOpenActualEndDate}>
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            id="end_time"
-                                            variant="outline"
-                                            className="w-full justify-between font-normal h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
-                                            aria-invalid={!!errors.end_time}
-                                          >
-                                            {actualEndDate
-                                              ? actualEndDate.toLocaleDateString("en-US", {
-                                                  day: "2-digit",
-                                                  month: "short",
-                                                  year: "numeric",
-                                                })
-                                              : "Select date"}
-                                            <ChevronDownIcon className="h-4 w-4" />
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto overflow-hidden p-0" align="start">
-                                          <Calendar
-                                            mode="single"
-                                            selected={actualEndDate}
-                                            captionLayout="dropdown"
-                                            onSelect={(date) => {
-                                              setActualEndDate(date)
-                                              setOpenActualEndDate(false)
-                                            }}
-                                            disabled={actualStartDate ? { before: actualStartDate } : undefined}
-                                          />
-                                        </PopoverContent>
-                                      </Popover>
-                                    </div>
-                                    <div className="w-32">
-                                      <Select
-                                        value={actualEndTime || "none"}
-                                        onValueChange={(value) => setActualEndTime(value === "none" ? "" : value)}
-                                      >
-                                        <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
-                                          <SelectValue placeholder="Time">
-                                            {actualEndTime ? formatTimeForDisplay(actualEndTime) : "Time"}
-                                          </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent className="max-h-[200px]">
-                                          <SelectItem value="none">Select time</SelectItem>
-                                          {TIME_OPTIONS.map((time) => (
-                                            <SelectItem key={time} value={time}>
-                                              {formatTimeForDisplay(time)}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
+                                  <div className="flex items-center gap-2 pl-2 flex-shrink-0">
+                                    <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground group-hover:text-primary transition-colors hidden sm:inline">
+                                      <span className="group-data-[state=open]:hidden">Expand</span>
+                                      <span className="hidden group-data-[state=open]:inline">Collapse</span>
+                                    </span>
+                                    <IconChevronDown className="h-6 w-6 sm:h-5 sm:w-5 text-muted-foreground transition-all duration-300 group-data-[state=open]:rotate-180 group-hover:text-primary flex-shrink-0" />
                                   </div>
-                                  <FieldError errors={errors.end_time ? [{ message: errors.end_time.message }] : undefined} />
-                                </Field>
-                              </FieldGroup>
-                            </FieldSet>
-
-                            {/* Booking Information - Two Column Layout */}
-                            <FieldSet>
-                              <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <Field>
-                                  <FieldLabel htmlFor="checked_out_aircraft_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
-                                    <IconPlane className="h-4 w-4 text-primary" />
-                                    Aircraft
-                                    {selectedAircraft && (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <button
-                                            type="button"
-                                            className="inline-flex items-center justify-center rounded-full hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-                                            aria-label="Aircraft meter readings"
+                                </Button>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="space-y-6 px-2 pb-6 pt-2">
+                                {/* Booking Times */}
+                                <FieldSet className="w-full max-w-full">
+                                  <FieldGroup className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    <Field data-invalid={!!errors.start_time}>
+                                      <FieldLabel htmlFor="start_time">Booking Start</FieldLabel>
+                                      <div className="flex gap-3 items-end">
+                                        <div className="flex-1">
+                                          <Popover open={openActualStartDate} onOpenChange={setOpenActualStartDate}>
+                                            <PopoverTrigger asChild>
+                                              <Button
+                                                id="start_time"
+                                                variant="outline"
+                                                className="w-full justify-between font-normal h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
+                                                aria-invalid={!!errors.start_time}
+                                              >
+                                                {actualStartDate
+                                                  ? actualStartDate.toLocaleDateString("en-US", {
+                                                      day: "2-digit",
+                                                      month: "short",
+                                                      year: "numeric",
+                                                    })
+                                                  : "Select date"}
+                                                <ChevronDownIcon className="h-4 w-4" />
+                                              </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                                              <Calendar
+                                                mode="single"
+                                                selected={actualStartDate}
+                                                captionLayout="dropdown"
+                                                onSelect={(date) => {
+                                                  setActualStartDate(date)
+                                                  setOpenActualStartDate(false)
+                                                  if (date && !actualEndDate) {
+                                                    setActualEndDate(date)
+                                                  }
+                                                }}
+                                              />
+                                            </PopoverContent>
+                                          </Popover>
+                                        </div>
+                                        <div className="w-32">
+                                          <Select
+                                            value={actualStartTime || "none"}
+                                            onValueChange={(value) => setActualStartTime(value === "none" ? "" : value)}
                                           >
-                                            <IconInfoCircle className="h-4 w-4 text-muted-foreground" />
-                                          </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          <div className="space-y-1">
-                                            <p className="font-semibold text-xs mb-1">Aircraft Meter Readings</p>
-                                            <p className="text-xs">Will be used as start values:</p>
-                                            <div className="flex gap-4 text-xs mt-1">
-                                              <span>
-                                                <span className="font-semibold">Tach:</span> {selectedAircraft.current_tach?.toFixed(1) ?? '—'}
-                                              </span>
-                                              <span>
-                                                <span className="font-semibold">Hobbs:</span> {selectedAircraft.current_hobbs?.toFixed(1) ?? '—'}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    )}
-                                  </FieldLabel>
-                                  {options ? (
-                                    <Select
-                                      value={(watch("checked_out_aircraft_id") ?? bookingAircraftId ?? "none") as string}
-                                      onValueChange={(value) => setValue("checked_out_aircraft_id", value === "none" ? null : value, { shouldDirty: true })}
-                                    >
-                                      <SelectTrigger id="checked_out_aircraft_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
-                                        <SelectValue placeholder="Select Aircraft" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">No aircraft</SelectItem>
-                                        {!!bookingAircraftId &&
-                                          !!bookingAircraftLabel &&
-                                          !options.aircraft.some((a) => a.id === bookingAircraftId) && (
-                                            <SelectItem value={bookingAircraftId}>
-                                              {bookingAircraftLabel} (inactive)
-                                            </SelectItem>
-                                          )}
-                                        {options.aircraft.map((aircraft) => (
-                                          <SelectItem key={aircraft.id} value={aircraft.id}>
-                                            {aircraft.registration} - {aircraft.manufacturer} {aircraft.type} {aircraft.model && `(${aircraft.model})`}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {booking.aircraft
-                                        ? `${booking.aircraft.registration} - ${booking.aircraft.manufacturer} ${booking.aircraft.type}`
-                                        : "—"}
-                                    </div>
-                                  )}
-                                </Field>
+                                            <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
+                                              <SelectValue placeholder="Time">
+                                                {actualStartTime ? formatTimeForDisplay(actualStartTime) : "Time"}
+                                              </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-[200px]">
+                                              <SelectItem value="none">Select time</SelectItem>
+                                              {TIME_OPTIONS.map((time) => (
+                                                <SelectItem key={time} value={time}>
+                                                  {formatTimeForDisplay(time)}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </div>
+                                      <FieldError errors={errors.start_time ? [{ message: errors.start_time.message }] : undefined} />
+                                    </Field>
 
-                                <Field>
-                                  <FieldLabel htmlFor="checked_out_instructor_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
-                                    <IconSchool className="h-4 w-4 text-foreground" />
-                                    Instructor
-                                  </FieldLabel>
-                                  {isAdminOrInstructor && options ? (
-                                    <Select
-                                      value={(watch("checked_out_instructor_id") ?? bookingInstructorId ?? "none") as string}
-                                      onValueChange={(value) => setValue("checked_out_instructor_id", value === "none" ? null : value, { shouldDirty: true })}
-                                    >
-                                      <SelectTrigger id="checked_out_instructor_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
-                                        <SelectValue placeholder="Select Instructor" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">No instructor</SelectItem>
-                                        {!!bookingInstructorId &&
-                                          !!bookingInstructorLabel &&
-                                          !options.instructors.some((i) => i.id === bookingInstructorId) && (
-                                            <SelectItem value={bookingInstructorId}>
-                                              {bookingInstructorLabel} (inactive)
-                                            </SelectItem>
-                                          )}
-                                        {options.instructors.map((instructor) => {
-                                          const name = [instructor.first_name, instructor.last_name]
-                                            .filter(Boolean)
-                                            .join(" ") || instructor.user?.email || "Unknown"
-                                          return (
-                                            <SelectItem key={instructor.id} value={instructor.id}>
-                                              {name}
-                                            </SelectItem>
-                                          )
-                                        })}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {instructorName}
-                                    </div>
-                                  )}
-                                </Field>
+                                    <Field data-invalid={!!errors.end_time}>
+                                      <FieldLabel htmlFor="end_time">Booking End</FieldLabel>
+                                      <div className="flex gap-3 items-end">
+                                        <div className="flex-1">
+                                          <Popover open={openActualEndDate} onOpenChange={setOpenActualEndDate}>
+                                            <PopoverTrigger asChild>
+                                              <Button
+                                                id="end_time"
+                                                variant="outline"
+                                                className="w-full justify-between font-normal h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
+                                                aria-invalid={!!errors.end_time}
+                                              >
+                                                {actualEndDate
+                                                  ? actualEndDate.toLocaleDateString("en-US", {
+                                                      day: "2-digit",
+                                                      month: "short",
+                                                      year: "numeric",
+                                                    })
+                                                  : "Select date"}
+                                                <ChevronDownIcon className="h-4 w-4" />
+                                              </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                                              <Calendar
+                                                mode="single"
+                                                selected={actualEndDate}
+                                                captionLayout="dropdown"
+                                                onSelect={(date) => {
+                                                  setActualEndDate(date)
+                                                  setOpenActualEndDate(false)
+                                                }}
+                                                disabled={actualStartDate ? { before: actualStartDate } : undefined}
+                                              />
+                                            </PopoverContent>
+                                          </Popover>
+                                        </div>
+                                        <div className="w-32">
+                                          <Select
+                                            value={actualEndTime || "none"}
+                                            onValueChange={(value) => setActualEndTime(value === "none" ? "" : value)}
+                                          >
+                                            <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
+                                              <SelectValue placeholder="Time">
+                                                {actualEndTime ? formatTimeForDisplay(actualEndTime) : "Time"}
+                                              </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-[200px]">
+                                              <SelectItem value="none">Select time</SelectItem>
+                                              {TIME_OPTIONS.map((time) => (
+                                                <SelectItem key={time} value={time}>
+                                                  {formatTimeForDisplay(time)}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </div>
+                                      <FieldError errors={errors.end_time ? [{ message: errors.end_time.message }] : undefined} />
+                                    </Field>
+                                  </FieldGroup>
+                                </FieldSet>
 
-                                <Field data-invalid={!!errors.flight_type_id}>
-                                  <FieldLabel htmlFor="flight_type_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
-                                    <IconClock className="h-4 w-4 text-foreground" />
-                                    Flight Type
-                                  </FieldLabel>
-                                  {options ? (
-                                    <Select
-                                      value={(watch("flight_type_id") ?? bookingFlightTypeId ?? "none") as string}
-                                      onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
-                                    >
-                                      <SelectTrigger id="flight_type_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800" aria-invalid={!!errors.flight_type_id}>
-                                        <SelectValue placeholder="Select Flight Type" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">No flight type</SelectItem>
-                                        {!!bookingFlightTypeId &&
-                                          !!bookingFlightTypeLabel &&
-                                          !options.flightTypes.some((ft) => ft.id === bookingFlightTypeId) && (
-                                            <SelectItem value={bookingFlightTypeId}>
-                                              {bookingFlightTypeLabel} (inactive)
-                                            </SelectItem>
-                                          )}
-                                        {options.flightTypes.map((ft) => (
-                                          <SelectItem key={ft.id} value={ft.id}>
-                                            {ft.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {booking.flight_type?.name || "—"}
-                                    </div>
-                                  )}
-                                  {errors.flight_type_id && (
-                                    <p className="text-sm text-destructive mt-1">{errors.flight_type_id.message}</p>
-                                  )}
-                                </Field>
+                                {/* Booking Information Details */}
+                                <FieldSet>
+                                  <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Field>
+                                      <FieldLabel htmlFor="checked_out_aircraft_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                        <IconPlane className="h-4 w-4 text-primary" />
+                                        Aircraft
+                                        {selectedAircraft && (
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                className="h-5 w-5 rounded-full"
+                                                aria-label="Aircraft meter readings"
+                                              >
+                                                <IconInfoCircle className="h-4 w-4 text-muted-foreground" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <div className="space-y-1">
+                                                <p className="font-semibold text-xs mb-1">Aircraft Meter Readings</p>
+                                                <p className="text-xs">Will be used as start values:</p>
+                                                <div className="flex gap-4 text-xs mt-1">
+                                                  <span>
+                                                    <span className="font-semibold">Tach:</span> {selectedAircraft.current_tach?.toFixed(1) ?? '—'}
+                                                  </span>
+                                                  <span>
+                                                    <span className="font-semibold">Hobbs:</span> {selectedAircraft.current_hobbs?.toFixed(1) ?? '—'}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        )}
+                                      </FieldLabel>
+                                      {options ? (
+                                        <Select
+                                          value={(watch("checked_out_aircraft_id") ?? bookingAircraftId ?? "none") as string}
+                                          onValueChange={(value) => setValue("checked_out_aircraft_id", value === "none" ? null : value, { shouldDirty: true })}
+                                        >
+                                          <SelectTrigger id="checked_out_aircraft_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
+                                            <SelectValue placeholder="Select Aircraft" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">No aircraft</SelectItem>
+                                            {!!bookingAircraftId &&
+                                              !!bookingAircraftLabel &&
+                                              !options.aircraft.some((a) => a.id === bookingAircraftId) && (
+                                                <SelectItem value={bookingAircraftId}>
+                                                  {bookingAircraftLabel} (inactive)
+                                                </SelectItem>
+                                              )}
+                                            {options.aircraft.map((aircraft) => (
+                                              <SelectItem key={aircraft.id} value={aircraft.id}>
+                                                {aircraft.registration} - {aircraft.manufacturer} {aircraft.type} {aircraft.model && `(${aircraft.model})`}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                          {booking.aircraft
+                                            ? `${booking.aircraft.registration} - ${booking.aircraft.manufacturer} ${booking.aircraft.type}`
+                                            : "—"}
+                                        </div>
+                                      )}
+                                    </Field>
 
-                                <Field data-invalid={!!errors.lesson_id}>
-                                  <FieldLabel htmlFor="lesson_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
-                                    <IconFileText className="h-4 w-4 text-foreground" />
-                                    Lesson
-                                  </FieldLabel>
-                                  {options ? (
-                                    <Select
-                                      value={(watch("lesson_id") ?? bookingLessonId ?? "none") as string}
-                                      onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
-                                    >
-                                      <SelectTrigger id="lesson_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800" aria-invalid={!!errors.lesson_id}>
-                                        <SelectValue placeholder="Select Lesson" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">No lesson selected</SelectItem>
-                                        {!!bookingLessonId &&
-                                          !!bookingLessonLabel &&
-                                          !options.lessons.some((l) => l.id === bookingLessonId) && (
-                                            <SelectItem value={bookingLessonId}>
-                                              {bookingLessonLabel} (inactive)
-                                            </SelectItem>
-                                          )}
-                                        {options.lessons.map((lesson) => (
-                                          <SelectItem key={lesson.id} value={lesson.id}>
-                                            {lesson.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {booking.lesson_id ? "Lesson selected" : "No lesson selected"}
-                                    </div>
-                                  )}
-                                  {errors.lesson_id && (
-                                    <p className="text-sm text-destructive mt-1">{errors.lesson_id.message}</p>
-                                  )}
-                                </Field>
+                                    <Field>
+                                      <FieldLabel htmlFor="checked_out_instructor_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                        <IconSchool className="h-4 w-4 text-foreground" />
+                                        Instructor
+                                      </FieldLabel>
+                                      {isAdminOrInstructor && options ? (
+                                        <Select
+                                          value={(watch("checked_out_instructor_id") ?? bookingInstructorId ?? "none") as string}
+                                          onValueChange={(value) => setValue("checked_out_instructor_id", value === "none" ? null : value, { shouldDirty: true })}
+                                        >
+                                          <SelectTrigger id="checked_out_instructor_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
+                                            <SelectValue placeholder="Select Instructor" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">No instructor</SelectItem>
+                                            {!!bookingInstructorId &&
+                                              !!bookingInstructorLabel &&
+                                              !options.instructors.some((i) => i.id === bookingInstructorId) && (
+                                                <SelectItem value={bookingInstructorId}>
+                                                  {bookingInstructorLabel} (inactive)
+                                                </SelectItem>
+                                              )}
+                                            {options.instructors.map((instructor) => {
+                                              const name = [instructor.first_name, instructor.last_name]
+                                                .filter(Boolean)
+                                                .join(" ") || instructor.user?.email || "Unknown"
+                                              return (
+                                                <SelectItem key={instructor.id} value={instructor.id}>
+                                                  {name}
+                                                </SelectItem>
+                                              )
+                                            })}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                          {instructorName}
+                                        </div>
+                                      )}
+                                    </Field>
 
-                                <Field data-invalid={!!errors.purpose}>
-                                  <FieldLabel htmlFor="purpose" className="text-sm font-medium text-foreground">Description</FieldLabel>
-                                  <Textarea
-                                    id="purpose"
-                                    {...register("purpose")}
-                                    placeholder="Enter booking description"
-                                    className="min-h-[100px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus-visible:ring-primary/20"
-                                    aria-invalid={!!errors.purpose}
-                                  />
-                                  {errors.purpose && (
-                                    <p className="text-sm text-destructive mt-1">{errors.purpose.message}</p>
-                                  )}
-                                </Field>
+                                    <Field data-invalid={!!errors.flight_type_id}>
+                                      <FieldLabel htmlFor="flight_type_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                        <IconClock className="h-4 w-4 text-foreground" />
+                                        Flight Type
+                                      </FieldLabel>
+                                      {options ? (
+                                        <Select
+                                          value={(watch("flight_type_id") ?? bookingFlightTypeId ?? "none") as string}
+                                          onValueChange={(value) => setValue("flight_type_id", value === "none" ? null : value, { shouldDirty: true })}
+                                        >
+                                          <SelectTrigger id="flight_type_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800" aria-invalid={!!errors.flight_type_id}>
+                                            <SelectValue placeholder="Select Flight Type" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">No flight type</SelectItem>
+                                            {!!bookingFlightTypeId &&
+                                              !!bookingFlightTypeLabel &&
+                                              !options.flightTypes.some((ft) => ft.id === bookingFlightTypeId) && (
+                                                <SelectItem value={bookingFlightTypeId}>
+                                                  {bookingFlightTypeLabel} (inactive)
+                                                </SelectItem>
+                                              )}
+                                            {options.flightTypes.map((ft) => (
+                                              <SelectItem key={ft.id} value={ft.id}>
+                                                {ft.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                          {booking.flight_type?.name || "—"}
+                                        </div>
+                                      )}
+                                      {errors.flight_type_id && (
+                                        <p className="text-sm text-destructive mt-1">{errors.flight_type_id.message}</p>
+                                      )}
+                                    </Field>
 
-                                <Field data-invalid={!!errors.remarks}>
-                                  <FieldLabel htmlFor="remarks" className="flex items-center gap-2 text-sm font-medium text-foreground">
-                                    <IconInfoCircle className="h-4 w-4 text-foreground" />
-                                    Operational Remarks
-                                  </FieldLabel>
-                                  <Textarea
-                                    id="remarks"
-                                    {...register("remarks")}
-                                    placeholder="Enter operational remarks or warnings"
-                                    className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 min-h-[100px] focus-visible:ring-amber-500/20"
-                                    aria-invalid={!!errors.remarks}
-                                  />
-                                  {errors.remarks && (
-                                    <p className="text-sm text-destructive mt-1">{errors.remarks.message}</p>
-                                  )}
-                                </Field>
-                              </FieldGroup>
-                            </FieldSet>
+                                    <Field data-invalid={!!errors.lesson_id}>
+                                      <FieldLabel htmlFor="lesson_id" className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                        <IconFileText className="h-4 w-4 text-foreground" />
+                                        Lesson
+                                      </FieldLabel>
+                                      {options ? (
+                                        <Select
+                                          value={(watch("lesson_id") ?? bookingLessonId ?? "none") as string}
+                                          onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
+                                        >
+                                          <SelectTrigger id="lesson_id" className="w-full transition-colors border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800" aria-invalid={!!errors.lesson_id}>
+                                            <SelectValue placeholder="Select Lesson" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">No lesson selected</SelectItem>
+                                            {!!bookingLessonId &&
+                                              !!bookingLessonLabel &&
+                                              !options.lessons.some((l) => l.id === bookingLessonId) && (
+                                                <SelectItem value={bookingLessonId}>
+                                                  {bookingLessonLabel} (inactive)
+                                                </SelectItem>
+                                              )}
+                                            {options.lessons.map((lesson) => (
+                                              <SelectItem key={lesson.id} value={lesson.id}>
+                                                {lesson.name}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <div className="px-3 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-900/50 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                          {booking.lesson_id ? "Lesson selected" : "No lesson selected"}
+                                        </div>
+                                      )}
+                                      {errors.lesson_id && (
+                                        <p className="text-sm text-destructive mt-1">{errors.lesson_id.message}</p>
+                                      )}
+                                    </Field>
+
+                                    <Field data-invalid={!!errors.purpose}>
+                                      <FieldLabel htmlFor="purpose" className="text-sm font-medium text-foreground">Description</FieldLabel>
+                                      <Textarea
+                                        id="purpose"
+                                        {...register("purpose")}
+                                        placeholder="Enter booking description"
+                                        className="min-h-[100px] border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus-visible:ring-primary/20"
+                                        aria-invalid={!!errors.purpose}
+                                      />
+                                      {errors.purpose && (
+                                        <p className="text-sm text-destructive mt-1">{errors.purpose.message}</p>
+                                      )}
+                                    </Field>
+
+                                    <Field data-invalid={!!errors.remarks}>
+                                      <FieldLabel htmlFor="remarks" className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                        <IconInfoCircle className="h-4 w-4 text-foreground" />
+                                        Operational Remarks
+                                      </FieldLabel>
+                                      <Textarea
+                                        id="remarks"
+                                        {...register("remarks")}
+                                        placeholder="Enter operational remarks or warnings"
+                                        className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 min-h-[100px] focus-visible:ring-amber-500/20"
+                                        aria-invalid={!!errors.remarks}
+                                      />
+                                      {errors.remarks && (
+                                        <p className="text-sm text-destructive mt-1">{errors.remarks.message}</p>
+                                      )}
+                                    </Field>
+                                  </FieldGroup>
+                                </FieldSet>
+                              </CollapsibleContent>
+                            </Collapsible>
 
                             {/* Flight Details */}
                             <FieldSet>
@@ -1267,10 +1334,28 @@ export default function BookingCheckoutPage() {
                                 </Field>
 
                                 <Field data-invalid={!!errors.fuel_on_board}>
-                                  <FieldLabel htmlFor="fuel_on_board" className="flex items-center gap-2">
-                                    <IconGasStation className="h-4 w-4 text-foreground" />
-                                    Fuel on Board (L)
-                                  </FieldLabel>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <FieldLabel htmlFor="fuel_on_board" className="flex items-center gap-2">
+                                      <IconGasStation className="h-4 w-4 text-foreground" />
+                                      Useable Fuel
+                                    </FieldLabel>
+                                    {endurance && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <div className="flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20 cursor-help transition-colors hover:bg-primary/20 animate-in fade-in zoom-in-95 duration-200">
+                                            <IconClock className="h-3 w-3" />
+                                            <span>{endurance}h Endurance</span>
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" align="end" className="text-xs">
+                                          <div className="flex flex-col gap-1">
+                                            <p className="font-medium text-muted-foreground">Safe Endurance Calculation</p>
+                                            <p>{fuelOnBoard}L / {fuelConsumption}L/hr = <span className="font-bold text-foreground">{endurance} hours</span></p>
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                  </div>
                                   <Input
                                     id="fuel_on_board"
                                     type="number"
@@ -1354,26 +1439,24 @@ export default function BookingCheckoutPage() {
                                   </div>
                                   <FieldError errors={errors.eta ? [{ message: errors.eta.message }] : undefined} />
                                 </Field>
-                              </FieldGroup>
-                            </FieldSet>
 
-                            {/* Checklists */}
-                            <FieldSet className="p-6 rounded-xl w-full max-w-full box-border bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
-                              <div className="flex items-center gap-2 w-full">
-                                <IconFileText className="h-4 w-4 shrink-0" />
-                                <FieldLegend className="text-base font-medium break-words">Checklists</FieldLegend>
-                              </div>
-                              <FieldGroup className="mt-2">
-                                <Field orientation="horizontal">
+                                {/* Compact Checklist Row */}
+                                <div className="md:col-span-2 flex items-center justify-between p-3.5 rounded-xl bg-gray-50/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm mt-2">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+                                      <IconFileText className="h-4 w-4 text-primary" />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-semibold text-foreground">Briefing Completed</p>
+                                      <p className="text-[11px] text-muted-foreground">Confirm all pre-flight briefings are finished</p>
+                                    </div>
+                                  </div>
                                   <Switch
                                     id="briefing_completed"
                                     checked={watch("briefing_completed") ?? false}
                                     onCheckedChange={(checked) => setValue("briefing_completed", checked, { shouldDirty: true })}
                                   />
-                                  <FieldContent>
-                                    <FieldLabel htmlFor="briefing_completed">Briefing Completed</FieldLabel>
-                                  </FieldContent>
-                                </Field>
+                                </div>
                               </FieldGroup>
                             </FieldSet>
 

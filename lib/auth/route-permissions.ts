@@ -13,6 +13,31 @@ export interface RoutePermission {
   exact?: boolean; // If true, path must match exactly (not just start with)
 }
 
+function escapeRegexLiteral(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Supports simple dynamic segments in the permission path:
+ * - Next.js-style: /bookings/[id]/checkin
+ * - Express-style: /bookings/:id/checkin
+ * - Wildcard segment: *
+ */
+function permissionToRegex(permissionPath: string, exact: boolean): RegExp {
+  const segments = permissionPath.split('/').map((seg) => {
+    if (seg === '') return ''
+    if (seg === '*') return '.*'
+    if ((seg.startsWith('[') && seg.endsWith(']')) || seg.startsWith(':')) return '[^/]+'
+    return escapeRegexLiteral(seg)
+  })
+
+  const pattern = segments.join('/')
+  // For prefix matches, ensure we match the start and a segment boundary.
+  return exact
+    ? new RegExp(`^${pattern}$`)
+    : new RegExp(`^${pattern}(?:$|/)`)
+}
+
 /**
  * Route permissions matrix
  * Routes are checked in order - first match wins
@@ -41,9 +66,16 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   { path: '/equipment', allowedRoles: ['owner', 'admin', 'instructor'] },
   { path: '/invoices', allowedRoles: ['owner', 'admin', 'instructor'] },
   { path: '/tasks', allowedRoles: ['owner', 'admin', 'instructor'] },
+
+  // Booking operational flows (staff only)
+  // These are intentionally stricter than /bookings (which students can access for self-service booking).
+  { path: '/bookings/[id]/checkin', allowedRoles: ['owner', 'admin', 'instructor'], exact: true },
+  { path: '/bookings/[id]/checkout', allowedRoles: ['owner', 'admin', 'instructor'], exact: true },
+  // API endpoints for check-in flows (defense in depth; handlers also enforce this)
+  { path: '/api/bookings/[id]/checkin', allowedRoles: ['owner', 'admin', 'instructor'] },
   
-  // Member and above
-  { path: '/scheduler', allowedRoles: ['owner', 'admin', 'instructor', 'member'] },
+  // Member and above (students can also view for booking purposes)
+  { path: '/scheduler', allowedRoles: ['owner', 'admin', 'instructor', 'member', 'student'] },
   
   // All authenticated users
   { path: '/bookings', allowedRoles: ['owner', 'admin', 'instructor', 'member', 'student'] },
@@ -53,19 +85,11 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
  * Find the permission configuration for a given path
  */
 export function getRoutePermission(pathname: string): RoutePermission | null {
-  // Check exact matches first
-  const exactMatch = ROUTE_PERMISSIONS.find(
-    perm => perm.exact && perm.path === pathname
-  );
-  if (exactMatch) return exactMatch;
-  
-  // Check prefix matches
-  const prefixMatch = ROUTE_PERMISSIONS.find(
-    perm => !perm.exact && pathname.startsWith(perm.path)
-  );
-  if (prefixMatch) return prefixMatch;
-  
-  return null;
+  for (const perm of ROUTE_PERMISSIONS) {
+    const regex = permissionToRegex(perm.path, !!perm.exact)
+    if (regex.test(pathname)) return perm
+  }
+  return null
 }
 
 /**

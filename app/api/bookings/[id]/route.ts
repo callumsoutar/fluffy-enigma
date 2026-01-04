@@ -4,6 +4,15 @@ import { userHasAnyRole } from '@/lib/auth/roles'
 import { bookingIdSchema, bookingUpdateSchema } from '@/lib/validation/bookings'
 import type { BookingWithRelations } from '@/lib/types/bookings'
 
+async function getInstructorIdForUser(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data } = await supabase
+    .from("instructors")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle()
+  return data?.id ?? null
+}
+
 /**
  * GET /api/bookings/[id]
  * 
@@ -130,12 +139,13 @@ export async function GET(
   // Check permissions before revealing if booking exists (prevent information leakage)
   const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
   const bookingData = booking as BookingWithRelations
+  const instructorIdForUser = await getInstructorIdForUser(supabase, user.id)
 
   // Users can only access their own bookings unless admin/instructor
   // Also check if user is the assigned instructor
   const canAccess = isAdminOrInstructor || 
                     bookingData.user_id === user.id ||
-                    bookingData.instructor_id === user.id
+                    (!!instructorIdForUser && bookingData.instructor_id === instructorIdForUser)
 
   if (!booking || !canAccess) {
     // Return generic "not found" to prevent information leakage
@@ -241,9 +251,10 @@ export async function PATCH(
 
   // Check permissions
   const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const instructorIdForUser = await getInstructorIdForUser(supabase, user.id)
   const canEdit = isAdminOrInstructor || 
                   existingBooking.user_id === user.id ||
-                  existingBooking.instructor_id === user.id
+                  (!!instructorIdForUser && existingBooking.instructor_id === instructorIdForUser)
 
   if (!canEdit) {
     return NextResponse.json(

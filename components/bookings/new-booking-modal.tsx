@@ -37,6 +37,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useDebounce } from "@/hooks/use-debounce"
 import type { BookingType, BookingWithRelations } from "@/lib/types/bookings"
+import type { RosterRule } from "@/lib/types/roster"
 
 type BookingOptionsResponse = {
   aircraft: { id: string; registration: string; type: string; model: string | null; manufacturer: string | null }[]
@@ -100,9 +101,10 @@ const formSchema = z.object({
     ctx.addIssue({ code: "custom", path: ["endTime"], message: "End time must be after start time" })
   }
 
-  if (data.bookingType === "flight" && !data.flightTypeId) {
-    ctx.addIssue({ code: "custom", path: ["flightTypeId"], message: "Flight type is required" })
-  }
+  // Flight type is only required for staff when booking type is flight
+  // Members/students don't need to specify flight type
+  // Note: This validation will be enforced in the component's submit handler based on role
+  // We keep it optional here to allow member/student bookings without flight type
 
   if (data.isRecurring) {
     if (data.recurringDays.length === 0) {
@@ -219,6 +221,10 @@ type BookingOverlapsResponse = {
   unavailable_instructor_ids: string[]
 }
 
+type RosterRulesResponse = {
+  roster_rules: RosterRule[]
+}
+
 async function fetchBookingOverlaps(params: {
   startIso: string
   endIso: string
@@ -232,6 +238,30 @@ async function fetchBookingOverlaps(params: {
   const res = await fetch(`/api/bookings/overlaps?${sp.toString()}`)
   if (!res.ok) throw new Error("Failed to load booking overlaps")
   return (await res.json()) as BookingOverlapsResponse
+}
+
+function toYyyyMmDd(date: Date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
+
+function hhmmToMinutes(val: string) {
+  // Accept "HH:MM" or "HH:MM:SS"
+  const [hStr, mStr] = val.split(":")
+  const h = Number(hStr)
+  const m = Number(mStr)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return NaN
+  return h * 60 + m
+}
+
+async function fetchRosterRulesForDate(params: { dateYyyyMmDd: string }): Promise<RosterRulesResponse> {
+  const sp = new URLSearchParams()
+  sp.set("date", params.dateYyyyMmDd)
+  const res = await fetch(`/api/roster-rules?${sp.toString()}`)
+  if (!res.ok) throw new Error("Failed to load roster rules")
+  return (await res.json()) as RosterRulesResponse
 }
 
 export type NewBookingPrefill = {
@@ -258,6 +288,7 @@ export function NewBookingModal(props: {
   const { user, role, hasAnyRole } = useAuth()
 
   const isStaff = hasAnyRole(["owner", "admin", "instructor"])
+  const isMemberOrStudent = role === "member" || role === "student"
 
   const [bookingMode, setBookingMode] = React.useState<"regular" | "trial">("regular")
 
@@ -322,9 +353,17 @@ export function NewBookingModal(props: {
       recurringDays: [],
       repeatUntil: null,
     })
+    // Always set to "regular" mode, especially for members/students who can't see trial flights
     setBookingMode("regular")
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, prefill?.date, prefill?.startTime, prefill?.aircraftId, prefill?.instructorId, prefill?.member])
+
+  // Ensure bookingMode is always "regular" for members/students
+  React.useEffect(() => {
+    if (isMemberOrStudent && bookingMode !== "regular") {
+      setBookingMode("regular")
+    }
+  }, [isMemberOrStudent, bookingMode])
 
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -363,6 +402,11 @@ export function NewBookingModal(props: {
     }
   }, [isValidTimeRange, selectedDate, startTime, endTime])
 
+  const rosterDateKey = React.useMemo(() => {
+    if (!selectedDate) return null
+    return toYyyyMmDd(selectedDate)
+  }, [selectedDate])
+
   // Debounce to avoid refetching overlaps aggressively while the user is selecting times/dates.
   const debouncedRangeKey = useDebounce(
     computedRange ? `${computedRange.startIso}|${computedRange.endIso}` : null,
@@ -393,11 +437,43 @@ export function NewBookingModal(props: {
     placeholderData: (prev) => prev,
   })
 
+  const {
+    data: rosterRulesRes,
+    isFetching: rosterRulesFetching,
+    isError: rosterRulesError,
+  } = useQuery({
+    queryKey: ["roster_rules", "by_date", rosterDateKey],
+    queryFn: () => fetchRosterRulesForDate({ dateYyyyMmDd: rosterDateKey! }),
+    enabled: open && !!rosterDateKey && isValidTimeRange,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  })
+
   const unavailable = React.useMemo(() => {
     const unavailableAircraftIds = new Set(overlaps?.unavailable_aircraft_ids ?? [])
     const unavailableInstructorIds = new Set(overlaps?.unavailable_instructor_ids ?? [])
     return { unavailableAircraftIds, unavailableInstructorIds }
   }, [overlaps?.unavailable_aircraft_ids, overlaps?.unavailable_instructor_ids])
+
+  const rosteredInstructorIds = React.useMemo(() => {
+    if (!isValidTimeRange) return new Set<string>()
+    const rules = rosterRulesRes?.roster_rules ?? []
+    const startMin = hhmmToMinutes(startTime)
+    const endMin = hhmmToMinutes(endTime)
+    if (!Number.isFinite(startMin) || !Number.isFinite(endMin)) return new Set<string>()
+
+    const eligible = new Set<string>()
+    for (const r of rules) {
+      // Rule must fully contain the booking interval.
+      const ruleStartMin = hhmmToMinutes(r.start_time)
+      const ruleEndMin = hhmmToMinutes(r.end_time)
+      if (!Number.isFinite(ruleStartMin) || !Number.isFinite(ruleEndMin)) continue
+      if (ruleStartMin <= startMin && ruleEndMin >= endMin) {
+        eligible.add(r.instructor_id)
+      }
+    }
+    return eligible
+  }, [isValidTimeRange, rosterRulesRes?.roster_rules, startTime, endTime])
 
   const availableAircraft = React.useMemo(() => {
     const all = options?.aircraft ?? []
@@ -407,9 +483,18 @@ export function NewBookingModal(props: {
 
   const availableInstructors = React.useMemo(() => {
     const all = options?.instructors ?? []
-    if (!isValidTimeRange) return all
-    return all.filter((i) => !unavailable.unavailableInstructorIds.has(i.id))
-  }, [options?.instructors, isValidTimeRange, unavailable.unavailableInstructorIds])
+    // Instructor availability is roster-driven: if we can't compute the time interval,
+    // don't show the rostered list yet (prevents showing instructors who aren't on shift).
+    if (!isValidTimeRange) return []
+    return all.filter(
+      (i) => rosteredInstructorIds.has(i.id) && !unavailable.unavailableInstructorIds.has(i.id)
+    )
+  }, [
+    options?.instructors,
+    isValidTimeRange,
+    rosteredInstructorIds,
+    unavailable.unavailableInstructorIds,
+  ])
 
   // If a previously selected resource becomes unavailable after changing the time range, clear it proactively.
   React.useEffect(() => {
@@ -423,11 +508,21 @@ export function NewBookingModal(props: {
     }
 
     const selectedInstructorId = form.getValues("instructorId")
-    if (selectedInstructorId && unavailable.unavailableInstructorIds.has(selectedInstructorId)) {
+    if (selectedInstructorId && !rosteredInstructorIds.has(selectedInstructorId)) {
+      form.setValue("instructorId", null, { shouldValidate: true, shouldDirty: true })
+      toast.message("Selected instructor is not rostered on for this time range.")
+    } else if (selectedInstructorId && unavailable.unavailableInstructorIds.has(selectedInstructorId)) {
       form.setValue("instructorId", null, { shouldValidate: true, shouldDirty: true })
       toast.message("Selected instructor is no longer available for this time range.")
     }
-  }, [open, isValidTimeRange, form, unavailable.unavailableAircraftIds, unavailable.unavailableInstructorIds])
+  }, [
+    open,
+    isValidTimeRange,
+    form,
+    rosteredInstructorIds,
+    unavailable.unavailableAircraftIds,
+    unavailable.unavailableInstructorIds,
+  ])
 
   // Keep flight_type_id consistent with the "Regular/Trial" toggle
   React.useEffect(() => {
@@ -534,6 +629,14 @@ export function NewBookingModal(props: {
       return
     }
 
+    // Flight type is required for staff when booking type is flight
+    // Members/students don't need to specify flight type
+    if (isStaff && values.bookingType === "flight" && !values.flightTypeId) {
+      form.setError("flightTypeId", { type: "manual", message: "Flight type is required" })
+      toast.error("Please select a flight type.")
+      return
+    }
+
     if (values.isRecurring && hasConflicts) {
       toast.error("Please resolve the resource conflicts before saving.")
       return
@@ -546,6 +649,10 @@ export function NewBookingModal(props: {
       let endpoint = "/api/bookings"
       let payload: Record<string, unknown>
 
+      // For members/students, always clear flight_type_id and lesson_id
+      const flightTypeIdForSubmit = isMemberOrStudent ? null : (values.flightTypeId || null)
+      const lessonIdForSubmit = isMemberOrStudent ? null : (values.lessonId || null)
+
       if (isRecurringMode) {
         endpoint = "/api/bookings/batch"
         payload = {
@@ -557,8 +664,8 @@ export function NewBookingModal(props: {
             purpose: values.purpose,
             remarks: values.remarks || null,
             instructor_id: shouldHideInstructor ? null : (values.instructorId || null),
-            flight_type_id: values.flightTypeId || null,
-            lesson_id: values.lessonId || null,
+            flight_type_id: flightTypeIdForSubmit,
+            lesson_id: lessonIdForSubmit,
             user_id: isStaff && values.member?.id ? values.member.id : undefined,
             status: isStaff && statusOverride ? statusOverride : undefined,
           }))
@@ -575,8 +682,8 @@ export function NewBookingModal(props: {
           purpose: values.purpose,
           remarks: values.remarks || null,
           instructor_id: shouldHideInstructor ? null : (values.instructorId || null),
-          flight_type_id: values.flightTypeId || null,
-          lesson_id: values.lessonId || null,
+          flight_type_id: flightTypeIdForSubmit,
+          lesson_id: lessonIdForSubmit,
         }
 
         if (isStaff && values.member?.id) {
@@ -630,11 +737,13 @@ export function NewBookingModal(props: {
   }
 
   const errors = form.formState.errors
-  const isCheckingAvailability = open && isValidTimeRange && overlapsFetching && !overlaps
+  const isCheckingAvailability =
+    open && isValidTimeRange && ((overlapsFetching && !overlaps) || rosterRulesFetching)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        showCloseButton={false}
         className={cn(
           "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden flex flex-col",
           "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[720px]",
@@ -665,31 +774,33 @@ export function NewBookingModal(props: {
             className="flex-1 overflow-y-auto px-6 pb-6"
           >
           <div className="space-y-6">
-            {/* Booking kind (Regular / Trial) */}
-            <section>
-              <div className="mb-3 flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                <span className="text-xs font-semibold tracking-tight text-slate-900">Booking Category</span>
-              </div>
-              <Tabs value={bookingMode} onValueChange={(v) => setBookingMode(v as "regular" | "trial")} className="w-full">
-                <TabsList className="grid h-9 w-full grid-cols-2 rounded-[12px] bg-slate-50 p-1 ring-1 ring-slate-100">
-                  <TabsTrigger 
-                    value="regular" 
-                    className="gap-2 rounded-[8px] text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-slate-200 py-1"
-                  >
-                    <User className="h-3.5 w-3.5" />
-                    Regular Booking
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="trial" 
-                    className="gap-2 rounded-[8px] text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-slate-200 py-1"
-                  >
-                    <Plane className="h-3.5 w-3.5" />
-                    Trial Flight
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </section>
+            {/* Booking kind (Regular / Trial) - Only show for staff */}
+            {!isMemberOrStudent && (
+              <section>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  <span className="text-xs font-semibold tracking-tight text-slate-900">Booking Category</span>
+                </div>
+                <Tabs value={bookingMode} onValueChange={(v) => setBookingMode(v as "regular" | "trial")} className="w-full">
+                  <TabsList className="grid h-9 w-full grid-cols-2 rounded-[12px] bg-slate-50 p-1 ring-1 ring-slate-100">
+                    <TabsTrigger 
+                      value="regular" 
+                      className="gap-2 rounded-[8px] text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-slate-200 py-1"
+                    >
+                      <User className="h-3.5 w-3.5" />
+                      Regular Booking
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="trial" 
+                      className="gap-2 rounded-[8px] text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-slate-200 py-1"
+                    >
+                      <Plane className="h-3.5 w-3.5" />
+                      Trial Flight
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </section>
+            )}
 
             {/* Recurring Toggle */}
             <section className="rounded-[24px] bg-slate-50/50 p-5 ring-1 ring-slate-100">
@@ -979,6 +1090,11 @@ export function NewBookingModal(props: {
                   Could not verify aircraft/instructor availability. You can still try to save; the database will prevent invalid overlaps.
                 </div>
               ) : null}
+              {rosterRulesError ? (
+                <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-[10px] font-medium text-amber-700">
+                  Could not verify instructor roster rules. Instructor availability may be incomplete.
+                </div>
+              ) : null}
 
               <div className="grid gap-5 sm:grid-cols-2">
                 {/* Member */}
@@ -1025,7 +1141,9 @@ export function NewBookingModal(props: {
                               ? "Loading..."
                               : isCheckingAvailability
                                 ? "Checking availability..."
-                              : "No instructor"
+                              : !isValidTimeRange
+                                ? "Select times to see rostered instructors"
+                                : "No instructor"
                         } />
                       </div>
                     </SelectTrigger>
@@ -1110,68 +1228,72 @@ export function NewBookingModal(props: {
                   {errors.bookingType ? <p className="text-[10px] text-destructive mt-1">{errors.bookingType.message}</p> : null}
                 </div>
 
-                {/* Flight type */}
-                <div>
-                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                    FLIGHT TYPE {bookingType === "flight" ? <span className="text-destructive">*</span> : null}
-                  </label>
-                  <Select
-                    disabled={optionsLoading || !options || bookingType !== "flight"}
-                    value={form.watch("flightTypeId") || "none"}
-                    onValueChange={(id) => form.setValue("flightTypeId", id === "none" ? null : id, { shouldValidate: true })}
-                  >
-                    <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
-                      <div className="flex items-center gap-2 truncate">
-                        <Plane className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        <SelectValue placeholder={
-                          bookingType !== "flight"
-                            ? "N/A"
-                            : optionsLoading
-                              ? "Loading..."
-                              : "Select flight type"
-                        } />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
-                      <SelectItem value="none" className="rounded-lg py-2 text-xs">
-                        None
-                      </SelectItem>
-                      {filteredFlightTypes.map((ft) => (
-                        <SelectItem key={ft.id} value={ft.id} className="rounded-lg py-2 text-xs">
-                          {ft.name}
+                {/* Flight type - Only show for staff */}
+                {!isMemberOrStudent && (
+                  <div>
+                    <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      FLIGHT TYPE {bookingType === "flight" ? <span className="text-destructive">*</span> : null}
+                    </label>
+                    <Select
+                      disabled={optionsLoading || !options || bookingType !== "flight"}
+                      value={form.watch("flightTypeId") || "none"}
+                      onValueChange={(id) => form.setValue("flightTypeId", id === "none" ? null : id, { shouldValidate: true })}
+                    >
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                        <div className="flex items-center gap-2 truncate">
+                          <Plane className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <SelectValue placeholder={
+                            bookingType !== "flight"
+                              ? "N/A"
+                              : optionsLoading
+                                ? "Loading..."
+                                : "Select flight type"
+                          } />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
+                        <SelectItem value="none" className="rounded-lg py-2 text-xs">
+                          None
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.flightTypeId ? (
-                    <p className="text-[10px] text-destructive mt-1">{errors.flightTypeId.message as string}</p>
-                  ) : null}
-                </div>
+                        {filteredFlightTypes.map((ft) => (
+                          <SelectItem key={ft.id} value={ft.id} className="rounded-lg py-2 text-xs">
+                            {ft.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.flightTypeId ? (
+                      <p className="text-[10px] text-destructive mt-1">{errors.flightTypeId.message as string}</p>
+                    ) : null}
+                  </div>
+                )}
 
-                {/* Lesson */}
-                <div>
-                  <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                    LESSON
-                  </label>
-                  <LocalCombobox
-                    disabled={optionsLoading || !options || bookingType !== "flight"}
-                    valueId={form.watch("lessonId") || null}
-                    onChange={(id) => form.setValue("lessonId", id, { shouldValidate: true })}
-                    placeholder={
-                      bookingType !== "flight"
-                        ? "N/A"
-                        : optionsLoading
-                          ? "Loading..."
-                          : "Select lesson"
-                    }
-                    items={options?.lessons ?? []}
-                    icon={<NotebookPen className="h-3.5 w-3.5 shrink-0" />}
-                    itemLabel={(l) => l.name}
-                  />
-                  {errors.lessonId ? (
-                    <p className="text-[10px] text-destructive mt-1">{errors.lessonId.message as string}</p>
-                  ) : null}
-                </div>
+                {/* Lesson - Only show for staff */}
+                {!isMemberOrStudent && (
+                  <div>
+                    <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      LESSON
+                    </label>
+                    <LocalCombobox
+                      disabled={optionsLoading || !options || bookingType !== "flight"}
+                      valueId={form.watch("lessonId") || null}
+                      onChange={(id) => form.setValue("lessonId", id, { shouldValidate: true })}
+                      placeholder={
+                        bookingType !== "flight"
+                          ? "N/A"
+                          : optionsLoading
+                            ? "Loading..."
+                            : "Select lesson"
+                      }
+                      items={options?.lessons ?? []}
+                      icon={<NotebookPen className="h-3.5 w-3.5 shrink-0" />}
+                      itemLabel={(l) => l.name}
+                    />
+                    {errors.lessonId ? (
+                      <p className="text-[10px] text-destructive mt-1">{errors.lessonId.message as string}</p>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </section>
 

@@ -82,7 +82,7 @@ export function BookingHeader({
         <div className="flex items-center justify-between mb-4 sm:mb-6">
           <Link
             href={backHref}
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-all cursor-pointer active:scale-95"
           >
             <IconArrowLeft className="h-4 w-4" />
             {backLabel}

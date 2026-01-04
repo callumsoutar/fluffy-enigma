@@ -303,6 +303,40 @@ export async function POST(request: NextRequest) {
     if (instructorRow.is_actively_instructing === false) {
       return NextResponse.json({ error: 'Instructor is not actively instructing' }, { status: 400 })
     }
+
+    // Ensure instructor is rostered on for the proposed time range
+    // (UI filters this, but we must enforce it server-side to prevent stale selections / direct API calls)
+    const start = new Date(data.start_time)
+    const end = new Date(data.end_time)
+    const yyyy = start.getFullYear()
+    const mm = String(start.getMonth() + 1).padStart(2, '0')
+    const dd = String(start.getDate()).padStart(2, '0')
+    const bookingDate = `${yyyy}-${mm}-${dd}`
+    const dow = start.getDay()
+    const startHHmm = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`
+    const endHHmm = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`
+
+    const { data: rosterRule, error: rosterErr } = await supabase
+      .from('roster_rules')
+      .select('id')
+      .eq('instructor_id', data.instructor_id)
+      .eq('day_of_week', dow)
+      .eq('is_active', true)
+      .is('voided_at', null)
+      .lte('effective_from', bookingDate)
+      .or(`effective_until.gte.${bookingDate},effective_until.is.null`)
+      .lte('start_time', startHHmm)
+      .gte('end_time', endHHmm)
+      .limit(1)
+      .maybeSingle()
+
+    if (rosterErr) {
+      console.error('Error checking instructor roster rules:', rosterErr)
+      return NextResponse.json({ error: 'Failed to verify instructor roster rules' }, { status: 500 })
+    }
+    if (!rosterRule) {
+      return NextResponse.json({ error: 'Instructor is not rostered on for this time range' }, { status: 400 })
+    }
   }
 
   // Create booking

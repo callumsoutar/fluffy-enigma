@@ -6,8 +6,6 @@ import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { SpeedInsights } from "@vercel/speed-insights/next"
 
-<SpeedInsights />
-
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -38,6 +36,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <Toaster />
+          <SpeedInsights />
         </AuthProvider>
         </QueryProvider>
       </body>

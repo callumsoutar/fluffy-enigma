@@ -418,7 +418,8 @@ export default function BookingDetailPage() {
     const [hours, minutes] = time.split(":")
     const combined = new Date(date)
     combined.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0)
-    return combined.toISOString().slice(0, 16)
+    // IMPORTANT: keep timezone info (Z) so server validation (isoInstantSchema) passes.
+    return combined.toISOString()
   }
 
   // Local state for date/time pickers
@@ -452,8 +453,8 @@ export default function BookingDetailPage() {
     setEndTime(end.time)
     
       reset({
-        start_time: booking.start_time ? new Date(booking.start_time).toISOString().slice(0, 16) : "",
-        end_time: booking.end_time ? new Date(booking.end_time).toISOString().slice(0, 16) : "",
+        start_time: booking.start_time ? new Date(booking.start_time).toISOString() : "",
+        end_time: booking.end_time ? new Date(booking.end_time).toISOString() : "",
         aircraft_id: booking.aircraft_id || "",
         user_id: booking.user_id || null,
         instructor_id: booking.instructor_id || null,
@@ -526,8 +527,8 @@ export default function BookingDetailPage() {
       setEndDate(end.date)
       setEndTime(end.time)
       reset({
-        start_time: result.booking.start_time ? new Date(result.booking.start_time).toISOString().slice(0, 16) : "",
-        end_time: result.booking.end_time ? new Date(result.booking.end_time).toISOString().slice(0, 16) : "",
+        start_time: result.booking.start_time ? new Date(result.booking.start_time).toISOString() : "",
+        end_time: result.booking.end_time ? new Date(result.booking.end_time).toISOString() : "",
         aircraft_id: result.booking.aircraft_id || "",
         user_id: result.booking.user_id || null,
         instructor_id: result.booking.instructor_id || null,
@@ -600,8 +601,8 @@ export default function BookingDetailPage() {
       setEndTime(end.time)
       
       reset({
-        start_time: booking.start_time ? new Date(booking.start_time).toISOString().slice(0, 16) : '',
-        end_time: booking.end_time ? new Date(booking.end_time).toISOString().slice(0, 16) : '',
+        start_time: booking.start_time ? new Date(booking.start_time).toISOString() : '',
+        end_time: booking.end_time ? new Date(booking.end_time).toISOString() : '',
         aircraft_id: booking.aircraft_id || '',
         user_id: booking.user_id || null,
         instructor_id: booking.instructor_id || null,

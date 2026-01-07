@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { userHasAnyRole } from '@/lib/auth/roles'
 import type { MaintenanceVisit } from '@/lib/types/maintenance_visits'
+import { getSchoolConfigServer } from '@/lib/utils/school-config'
+import { addDaysYyyyMmDd, getZonedYyyyMmDdAndHHmm } from '@/lib/utils/timezone'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -147,6 +149,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
+  const { timeZone } = await getSchoolConfigServer()
 
   // Accept new scheduling fields
   const {
@@ -206,9 +209,9 @@ export async function POST(req: NextRequest) {
       // User provided override
       newDueDate = body.next_due_date
     } else if (intervalType === 'CALENDAR' || intervalType === 'BOTH') {
-      // Calculate from visit date
-      const baseDate = new Date(visit.visit_date)
-      newDueDate = new Date(baseDate.getTime() + intervalDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      // Calculate from visit date as a *school-local calendar* operation (DST-safe).
+      const baseLocalKey = getZonedYyyyMmDdAndHHmm(new Date(visit.visit_date), timeZone).yyyyMmDd
+      newDueDate = addDaysYyyyMmDd(baseLocalKey, intervalDays)
     }
     
     // Update the component
@@ -247,6 +250,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json()
+  const { timeZone } = await getSchoolConfigServer()
   const { id, booking_id, scheduled_for, scheduled_end, scheduled_by, ...updateFields } = body
   
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 })
@@ -304,8 +308,8 @@ export async function PATCH(req: NextRequest) {
         newDueDate = body.next_due_date
       } else if (body.visit_date && (intervalType === 'CALENDAR' || intervalType === 'BOTH')) {
         // Only recalculate if visit_date actually changed
-        const baseDate = new Date(visit.visit_date)
-        newDueDate = new Date(baseDate.getTime() + intervalDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        const baseLocalKey = getZonedYyyyMmDdAndHHmm(new Date(visit.visit_date), timeZone).yyyyMmDd
+        newDueDate = addDaysYyyyMmDd(baseLocalKey, intervalDays)
       }
 
       // Update the component

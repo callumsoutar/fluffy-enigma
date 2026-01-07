@@ -4,6 +4,7 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
 import { requireOperationsAccess } from "@/lib/api/require-operations-access"
 import type { RosterRule } from "@/lib/types/roster"
+import { dayOfWeekFromYyyyMmDd } from "@/lib/utils/timezone"
 
 const rosterRuleSelect = `
   id,
@@ -104,9 +105,9 @@ export async function GET(request: NextRequest) {
   if (parsedParams.data.date) {
     const date = parsedParams.data.date
     // Use the date to determine day of week and filter by effective range
-    // We parse manually to avoid timezone shifts
-    const [year, month, day] = date.split("-").map(Number)
-    const dow = new Date(year, month - 1, day).getDay()
+    // Date-only strings must never be parsed via `new Date(...)` (implicit timezone).
+    // Day-of-week for a calendar date is absolute; compute it timezone-agnostically.
+    const dow = dayOfWeekFromYyyyMmDd(date)
 
     query.eq("day_of_week", dow)
     query.lte("effective_from", date)

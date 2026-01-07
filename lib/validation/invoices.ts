@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isoInstantSchema } from "./iso-instant"
 
 /**
  * Validation schemas for invoice API routes
@@ -7,48 +8,10 @@ import { z } from 'zod'
 // UUID validation helper
 const uuidSchema = z.string().uuid('Invalid UUID format')
 
-// Date validation (accepts ISO datetime string or YYYY-MM-DD format)
-// Transforms short format to full ISO format for database compatibility
-const dateSchema = z.string()
-  .refine(
-    (val) => {
-      // Reject empty strings (they should be undefined/omitted instead)
-      if (val === '') return false
-      // Accept full ISO datetime: 2024-01-01T12:00:00Z or 2024-01-01T12:00:00+00:00
-      if (z.string().datetime().safeParse(val).success) {
-        return true
-      }
-      // Accept date-only format: 2024-01-01 (YYYY-MM-DD)
-      const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/
-      if (dateOnlyRegex.test(val)) {
-        return true
-      }
-      // Accept short datetime format: 2024-01-01T12:00 (YYYY-MM-DDTHH:mm)
-      const shortFormatRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
-      if (shortFormatRegex.test(val)) {
-        return true
-      }
-      return false
-    },
-    { message: 'Invalid date format. Expected ISO datetime (e.g., 2024-01-01T12:00:00Z), date (e.g., 2024-01-01), or short format (e.g., 2024-01-01T12:00)' }
-  )
-  .transform((val) => {
-    // If it's already a full ISO datetime, return as-is
-    if (z.string().datetime().safeParse(val).success) {
-      return val
-    }
-    // If it's date-only format (YYYY-MM-DD), append T00:00:00Z
-    const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/
-    if (dateOnlyRegex.test(val)) {
-      return `${val}T00:00:00Z`
-    }
-    // If it's short format (YYYY-MM-DDTHH:mm), append :00 for seconds and Z for UTC
-    const shortFormatRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
-    if (shortFormatRegex.test(val)) {
-      return `${val}:00Z`
-    }
-    return val
-  })
+// Canonical instant string: must include explicit timezone/offset.
+// Invoice timestamps are stored as UTC instants; date-only inputs are intentionally NOT accepted
+// to avoid ambiguous timezone interpretation.
+const dateSchema = isoInstantSchema
 
 // Invoice status enum
 export const invoiceStatusSchema = z.enum([

@@ -38,6 +38,9 @@ import { cn } from "@/lib/utils"
 import { useDebounce } from "@/hooks/use-debounce"
 import type { BookingType, BookingWithRelations } from "@/lib/types/bookings"
 import type { RosterRule } from "@/lib/types/roster"
+import { buildRosteredInstructorIdsForInterval } from "@/lib/roster/availability"
+import { useSchoolConfig } from "@/lib/hooks/use-school-config"
+import { zonedDateTimeToUtc } from "@/lib/utils/timezone"
 
 type BookingOptionsResponse = {
   aircraft: { id: string; registration: string; type: string; model: string | null; manufacturer: string | null }[]
@@ -60,10 +63,11 @@ const BOOKING_TYPE_OPTIONS: { value: BookingType; label: string }[] = [
   { value: "other", label: "Other" },
 ]
 
-function combineLocalDateAndTimeToIso(date: Date, timeHHmm: string) {
-  const [h, m] = timeHHmm.split(":").map(Number)
-  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate(), h, m, 0, 0)
-  return local.toISOString()
+function combineSchoolDateAndTimeToIso(params: { date: Date; timeHHmm: string; timeZone: string }) {
+  // IMPORTANT: user-selected times represent *school-local wall clock*, not browser-local.
+  // Convert (YYYY-MM-DD + HH:mm in school TZ) -> UTC ISO (DST-safe).
+  const yyyyMmDd = toYyyyMmDd(params.date)
+  return zonedDateTimeToUtc({ dateYyyyMmDd: yyyyMmDd, timeHHmm: params.timeHHmm, timeZone: params.timeZone }).toISOString()
 }
 
 function addMinutesToHHmm(timeHHmm: string, minutesToAdd: number) {
@@ -247,15 +251,6 @@ function toYyyyMmDd(date: Date) {
   return `${y}-${m}-${d}`
 }
 
-function hhmmToMinutes(val: string) {
-  // Accept "HH:MM" or "HH:MM:SS"
-  const [hStr, mStr] = val.split(":")
-  const h = Number(hStr)
-  const m = Number(mStr)
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return NaN
-  return h * 60 + m
-}
-
 async function fetchRosterRulesForDate(params: { dateYyyyMmDd: string }): Promise<RosterRulesResponse> {
   const sp = new URLSearchParams()
   sp.set("date", params.dateYyyyMmDd)
@@ -286,6 +281,7 @@ export function NewBookingModal(props: {
   const { open, onOpenChange, prefill, excludeBookingId, onCreated } = props
   const queryClient = useQueryClient()
   const { user, role, hasAnyRole } = useAuth()
+  const { data: schoolConfig } = useSchoolConfig()
 
   const isStaff = hasAnyRole(["owner", "admin", "instructor"])
   const isMemberOrStudent = role === "member" || role === "student"
@@ -396,11 +392,12 @@ export function NewBookingModal(props: {
 
   const computedRange = React.useMemo(() => {
     if (!isValidTimeRange) return null
+    const timeZone = schoolConfig?.timeZone ?? "Pacific/Auckland"
     return {
-      startIso: combineLocalDateAndTimeToIso(selectedDate, startTime),
-      endIso: combineLocalDateAndTimeToIso(selectedDate, endTime),
+      startIso: combineSchoolDateAndTimeToIso({ date: selectedDate, timeHHmm: startTime, timeZone }),
+      endIso: combineSchoolDateAndTimeToIso({ date: selectedDate, timeHHmm: endTime, timeZone }),
     }
-  }, [isValidTimeRange, selectedDate, startTime, endTime])
+  }, [isValidTimeRange, selectedDate, startTime, endTime, schoolConfig?.timeZone])
 
   const rosterDateKey = React.useMemo(() => {
     if (!selectedDate) return null
@@ -458,21 +455,7 @@ export function NewBookingModal(props: {
   const rosteredInstructorIds = React.useMemo(() => {
     if (!isValidTimeRange) return new Set<string>()
     const rules = rosterRulesRes?.roster_rules ?? []
-    const startMin = hhmmToMinutes(startTime)
-    const endMin = hhmmToMinutes(endTime)
-    if (!Number.isFinite(startMin) || !Number.isFinite(endMin)) return new Set<string>()
-
-    const eligible = new Set<string>()
-    for (const r of rules) {
-      // Rule must fully contain the booking interval.
-      const ruleStartMin = hhmmToMinutes(r.start_time)
-      const ruleEndMin = hhmmToMinutes(r.end_time)
-      if (!Number.isFinite(ruleStartMin) || !Number.isFinite(ruleEndMin)) continue
-      if (ruleStartMin <= startMin && ruleEndMin >= endMin) {
-        eligible.add(r.instructor_id)
-      }
-    }
-    return eligible
+    return buildRosteredInstructorIdsForInterval({ rules, startHHmm: startTime, endHHmm: endTime })
   }, [isValidTimeRange, rosterRulesRes?.roster_rules, startTime, endTime])
 
   const availableAircraft = React.useMemo(() => {
@@ -508,7 +491,10 @@ export function NewBookingModal(props: {
     }
 
     const selectedInstructorId = form.getValues("instructorId")
-    if (selectedInstructorId && !rosteredInstructorIds.has(selectedInstructorId)) {
+    // Important: do NOT treat "rules still loading" as "not rostered".
+    // Otherwise, opening the modal from the scheduler (with a prefilled instructor)
+    // can incorrectly clear the instructor before roster rules arrive.
+    if (selectedInstructorId && rosterRulesRes && !rosteredInstructorIds.has(selectedInstructorId)) {
       form.setValue("instructorId", null, { shouldValidate: true, shouldDirty: true })
       toast.message("Selected instructor is not rostered on for this time range.")
     } else if (selectedInstructorId && unavailable.unavailableInstructorIds.has(selectedInstructorId)) {
@@ -519,6 +505,7 @@ export function NewBookingModal(props: {
     open,
     isValidTimeRange,
     form,
+    rosterRulesRes,
     rosteredInstructorIds,
     unavailable.unavailableAircraftIds,
     unavailable.unavailableInstructorIds,
@@ -548,6 +535,7 @@ export function NewBookingModal(props: {
 
   const occurrences = React.useMemo(() => {
     if (!isRecurring || !selectedDate || !repeatUntil || recurringDays.length === 0) return []
+    const timeZone = schoolConfig?.timeZone ?? "Pacific/Auckland"
     
     const list: { date: Date; startIso: string; endIso: string }[] = []
     let current = addDays(selectedDate, 0) // Start from the initial booking date
@@ -556,14 +544,14 @@ export function NewBookingModal(props: {
       if (recurringDays.includes(current.getDay())) {
         list.push({
           date: new Date(current),
-          startIso: combineLocalDateAndTimeToIso(current, startTime),
-          endIso: combineLocalDateAndTimeToIso(current, endTime),
+          startIso: combineSchoolDateAndTimeToIso({ date: current, timeHHmm: startTime, timeZone }),
+          endIso: combineSchoolDateAndTimeToIso({ date: current, timeHHmm: endTime, timeZone }),
         })
       }
       current = addDays(current, 1)
     }
     return list
-  }, [isRecurring, selectedDate, repeatUntil, recurringDays, startTime, endTime])
+  }, [isRecurring, selectedDate, repeatUntil, recurringDays, startTime, endTime, schoolConfig?.timeZone])
 
   const [occurrenceConflicts, setOccurrenceConflicts] = React.useState<Record<string, { aircraft: boolean; instructor: boolean }>>({})
   const [checkingOccurrences, setCheckingOccurrences] = React.useState(false)
@@ -671,8 +659,9 @@ export function NewBookingModal(props: {
           }))
         }
       } else {
-        const startIso = combineLocalDateAndTimeToIso(values.date, values.startTime)
-        const endIso = combineLocalDateAndTimeToIso(values.date, values.endTime)
+        const timeZone = schoolConfig?.timeZone ?? "Pacific/Auckland"
+        const startIso = combineSchoolDateAndTimeToIso({ date: values.date, timeHHmm: values.startTime, timeZone })
+        const endIso = combineSchoolDateAndTimeToIso({ date: values.date, timeHHmm: values.endTime, timeZone })
         
         const singlePayload: Record<string, unknown> = {
           aircraft_id: values.aircraftId,

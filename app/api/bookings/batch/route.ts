@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { userHasAnyRole } from '@/lib/auth/roles'
 import { bookingCreateSchema } from '@/lib/validation/bookings'
+import { dayOfWeekFromYyyyMmDd, getZonedYyyyMmDdAndHHmm } from '@/lib/utils/timezone'
+import { getSchoolConfigServer } from '@/lib/utils/school-config'
 import type { BookingWithRelations } from '@/lib/types/bookings'
 import { z } from 'zod'
 
@@ -57,13 +59,21 @@ export async function POST(request: NextRequest) {
     if (data.instructor_id) {
       const start = new Date(data.start_time)
       const end = new Date(data.end_time)
-      const yyyy = start.getFullYear()
-      const mm = String(start.getMonth() + 1).padStart(2, '0')
-      const dd = String(start.getDate()).padStart(2, '0')
-      const bookingDate = `${yyyy}-${mm}-${dd}`
-      const dow = start.getDay()
-      const startHHmm = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`
-      const endHHmm = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`
+      const { timeZone: tz } = await getSchoolConfigServer()
+      const startLocal = getZonedYyyyMmDdAndHHmm(start, tz)
+      const endLocal = getZonedYyyyMmDdAndHHmm(end, tz)
+
+      if (startLocal.yyyyMmDd !== endLocal.yyyyMmDd) {
+        return NextResponse.json(
+          { error: 'Instructor roster rules cannot be validated for bookings spanning midnight (local time)' },
+          { status: 400 }
+        )
+      }
+
+      const bookingDate = startLocal.yyyyMmDd
+      const dow = dayOfWeekFromYyyyMmDd(bookingDate)
+      const startHHmm = startLocal.hhmm
+      const endHHmm = endLocal.hhmm
 
       const { data: rosterRule, error: rosterErr } = await supabase
         .from('roster_rules')

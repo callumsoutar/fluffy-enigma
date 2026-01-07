@@ -47,6 +47,8 @@ import {
 } from "@/components/ui/table"
 import { NewBookingModal } from "@/components/bookings/new-booking-modal"
 import type { BookingWithRelations, BookingStatus, BookingType } from "@/lib/types/bookings"
+import { useSchoolConfig } from "@/lib/hooks/use-school-config"
+import { getZonedYyyyMmDdAndHHmm, zonedDateTimeToUtc } from "@/lib/utils/timezone"
 
 interface BookingsTableProps {
   bookings: BookingWithRelations[]
@@ -382,28 +384,30 @@ function BookingCard({ booking }: { booking: BookingWithRelations }) {
 }
 
 // Date header component
-function DateHeader({ date }: { date: string }) {
-  const dateObj = new Date(date)
+function DateHeader({ date, timeZone }: { date: string; timeZone: string }) {
+  // `date` is a YYYY-MM-DD key representing a school-local calendar date.
+  // Convert to a stable instant (school-local midnight) for formatting.
+  const dateObj = zonedDateTimeToUtc({ dateYyyyMmDd: date, timeHHmm: "00:00", timeZone })
   return (
     <div className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur-sm px-4 py-2.5 text-sm font-semibold text-slate-600 border-b border-slate-200">
-      {dateObj.toLocaleDateString("en-US", {
+      {new Intl.DateTimeFormat("en-NZ", {
+        timeZone,
         weekday: "short",
         month: "short",
         day: "numeric",
         year: "numeric"
-      })}
+      }).format(dateObj)}
     </div>
   )
 }
 
 // Group bookings by date
-function groupBookingsByDate(bookings: BookingWithRelations[]) {
+function groupBookingsByDate(bookings: BookingWithRelations[], timeZone: string) {
   const groups = new Map<string, BookingWithRelations[]>()
   
   bookings.forEach((booking) => {
-    const date = new Date(booking.start_time)
-    // Get date string in YYYY-MM-DD format for grouping
-    const dateKey = date.toISOString().split('T')[0]
+    // Group by *school-local* calendar date, not UTC date.
+    const dateKey = getZonedYyyyMmDdAndHHmm(new Date(booking.start_time), timeZone).yyyyMmDd
     
     if (!groups.has(dateKey)) {
       groups.set(dateKey, [])
@@ -430,6 +434,8 @@ export function BookingsTable({
   tabCounts
 }: BookingsTableProps) {
   const isMobile = useIsMobile()
+  const { data: schoolConfig } = useSchoolConfig()
+  const timeZone = schoolConfig?.timeZone ?? "Pacific/Auckland"
   const [mounted, setMounted] = React.useState(false)
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -618,13 +624,13 @@ export function BookingsTable({
               )
               
               // Group by date
-              const groupedBookings = groupBookingsByDate(paginatedBookings)
+              const groupedBookings = groupBookingsByDate(paginatedBookings, timeZone)
               
               return (
                 <div>
                   {groupedBookings.map(({ date, bookings }) => (
                     <div key={date}>
-                      <DateHeader date={date} />
+                      <DateHeader date={date} timeZone={timeZone} />
                       <div>
                         {bookings.map((booking) => (
                           <BookingCard key={booking.id} booking={booking} />

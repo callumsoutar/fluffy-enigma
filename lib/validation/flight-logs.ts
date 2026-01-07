@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isoInstantSchema } from "./iso-instant"
 
 /**
  * Validation schemas for flight log API routes
@@ -7,38 +8,9 @@ import { z } from 'zod'
 // UUID validation helper
 const uuidSchema = z.string().uuid('Invalid UUID format')
 
-// Date validation (accepts ISO datetime string or YYYY-MM-DDTHH:mm format)
-const dateSchema = z.string()
-  .refine(
-    (val) => {
-      if (val === '') return false
-      // Accept full ISO datetime: 2024-01-01T12:00:00Z or 2024-01-01T12:00:00+00:00
-      if (z.string().datetime().safeParse(val).success) {
-        return true
-      }
-      // Accept short format: 2024-01-01T12:00 (YYYY-MM-DDTHH:mm)
-      const shortFormatRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
-      if (shortFormatRegex.test(val)) {
-        return true
-      }
-      return false
-    },
-    { message: 'Invalid date format. Expected ISO datetime (e.g., 2024-01-01T12:00:00Z) or short format (e.g., 2024-01-01T12:00)' }
-  )
-  .transform((val) => {
-    // If it's already a full ISO datetime, return as-is
-    if (z.string().datetime().safeParse(val).success) {
-      return val
-    }
-    // If it's short format (YYYY-MM-DDTHH:mm), append :00 for seconds and Z for UTC
-    const shortFormatRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
-    if (shortFormatRegex.test(val)) {
-      return `${val}:00Z`
-    }
-    return val
-  })
-  .optional()
-  .nullable()
+// Canonical instant string: must include explicit timezone/offset.
+// This prevents silent server-local/browser-local interpretation and avoids DST bugs.
+const dateSchema = isoInstantSchema.optional().nullable()
 
 // Numeric validation for meter readings and times
 const numericSchema = z.coerce.number().positive().optional().nullable()

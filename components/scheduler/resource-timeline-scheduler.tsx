@@ -48,10 +48,16 @@ import type {
 import type { AircraftResponse, AircraftWithType } from "@/lib/types/aircraft"
 import type { MemberWithRelations, MembersResponse } from "@/lib/types/members"
 import type { RosterRule } from "@/lib/types/roster"
+import {
+  buildInstructorAvailabilityMap,
+  isMinuteWithinWindow,
+  parseTimeToMinutes,
+} from "@/lib/roster/availability"
+import { zonedDayRangeUtcIso } from "@/lib/utils/timezone"
 import { NewBookingModal, type NewBookingPrefill } from "@/components/bookings/new-booking-modal"
 import { CancelBookingModal } from "@/components/bookings/cancel-booking-modal"
 import { useAuth } from "@/contexts/auth-context"
-import { useSettingsManager } from "@/hooks/use-settings"
+import { useSchoolConfig } from "@/lib/hooks/use-school-config"
 
 type Resource =
   | { kind: "instructor"; data: InstructorResource }
@@ -81,39 +87,9 @@ const LEFT_COL_WIDTH = "w-[160px] sm:w-[240px] lg:w-[280px]"
 
 type MinutesWindow = { startMin: number; endMin: number }
 
-function parseTimeToMinutes(time: string) {
-  // Accepts "HH:MM" or "HH:MM:SS"
-  const [hhRaw, mmRaw] = time.split(":")
-  const hh = Number(hhRaw)
-  const mm = Number(mmRaw)
-  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
-  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
-  return hh * 60 + mm
-}
-
-function buildInstructorAvailabilityMap(rules: RosterRule[]) {
-  const map = new Map<string, MinutesWindow[]>()
-
-  for (const r of rules) {
-    // Defensive: API should already filter inactive/voided, but keep it safe.
-    if (!r.is_active || r.voided_at) continue
-
-    const startMin = parseTimeToMinutes(r.start_time)
-    const endMin = parseTimeToMinutes(r.end_time)
-    if (startMin === null || endMin === null) continue
-    if (endMin <= startMin) continue
-
-    const existing = map.get(r.instructor_id) ?? []
-    existing.push({ startMin, endMin })
-    map.set(r.instructor_id, existing)
-  }
-
-  return map
-}
-
 function isMinutesWithinAnyWindow(mins: number, windows: MinutesWindow[]) {
   // start inclusive, end exclusive (17:00 slot is unavailable if end is 17:00)
-  return windows.some((w) => mins >= w.startMin && mins < w.endMin)
+  return windows.some((w) => isMinuteWithinWindow(mins, w))
 }
 
 function startOfDay(d: Date) {
@@ -208,14 +184,10 @@ function parseSupabaseUtcTimestamp(ts: string) {
   return new Date(hasTimezone ? ts : `${ts}Z`)
 }
 
-function getSelectedDayRangeUtc(selectedDateLocal: Date) {
-  // selectedDateLocal is local midnight. `.toISOString()` converts that instant to UTC,
-  // which is exactly what we want for querying UTC timestamps in the DB.
-  const startLocal = new Date(selectedDateLocal)
-  startLocal.setHours(0, 0, 0, 0)
-  const endLocal = new Date(startLocal)
-  endLocal.setDate(endLocal.getDate() + 1)
-  return { startUtcIso: startLocal.toISOString(), endUtcIso: endLocal.toISOString() }
+function getSelectedDayRangeUtc(params: { dateKeyYyyyMmDd: string; timeZone: string }) {
+  // Canonical strategy: a "day" is a school-local calendar day in an explicit timezone.
+  // We convert that local day into the corresponding UTC interval [start, end) in a DST-safe way.
+  return zonedDayRangeUtcIso({ dateYyyyMmDd: params.dateKeyYyyyMmDd, timeZone: params.timeZone })
 }
 
 async function fetchBookingsForRange(range: { startUtcIso: string; endUtcIso: string }) {
@@ -323,15 +295,14 @@ export function ResourceTimelineScheduler() {
     setSelectedDate(startOfDay(new Date()))
   }, [])
 
-  // Fetch business hours settings
-  const { getSettingValue, settings } = useSettingsManager("general")
+  const { data: schoolConfig } = useSchoolConfig()
 
   // Parse business hours and create timeline config
   const config: TimelineConfig = React.useMemo(() => {
-    const openTime = getSettingValue<string>("business_open_time", "09:00:00")
-    const closeTime = getSettingValue<string>("business_close_time", "17:00:00")
-    const is24Hours = getSettingValue<boolean>("business_is_24_hours", false)
-    const isClosed = getSettingValue<boolean>("business_is_closed", false)
+    const openTime = schoolConfig?.business_open_time ?? "09:00:00"
+    const closeTime = schoolConfig?.business_close_time ?? "17:00:00"
+    const is24Hours = schoolConfig?.business_is_24_hours ?? false
+    const isClosed = schoolConfig?.business_is_closed ?? false
 
     // If closed, show a minimal range (still show something)
     if (isClosed) {
@@ -372,8 +343,7 @@ export function ResourceTimelineScheduler() {
       endHour,
       intervalMinutes: 30,
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings])
+  }, [schoolConfig?.business_open_time, schoolConfig?.business_close_time, schoolConfig?.business_is_24_hours, schoolConfig?.business_is_closed])
 
   const { slots, start: timelineStart, end: timelineEnd } = React.useMemo(
     () => selectedDate ? buildTimeSlots(selectedDate, config) : { slots: [], start: new Date(), end: new Date() },
@@ -393,8 +363,12 @@ export function ResourceTimelineScheduler() {
   }, [config.intervalMinutes])
   const timelineMinWidth = slotCount > 0 ? slotCount * slotMinWidthPx : undefined
 
-  const dayRange = React.useMemo(() => selectedDate ? getSelectedDayRangeUtc(selectedDate) : { startUtcIso: '', endUtcIso: '' }, [selectedDate])
   const dateKey = React.useMemo(() => selectedDate ? formatDate(selectedDate, "yyyy-MM-dd") : '', [selectedDate])
+  const timeZone = schoolConfig?.timeZone ?? "Pacific/Auckland"
+  const dayRange = React.useMemo(
+    () => (dateKey ? getSelectedDayRangeUtc({ dateKeyYyyyMmDd: dateKey, timeZone }) : { startUtcIso: "", endUtcIso: "" }),
+    [dateKey, timeZone]
+  )
 
   const { data: aircraft = [], isLoading: isLoadingAircraft } = useQuery({
     queryKey: ["scheduler", "aircraft"],

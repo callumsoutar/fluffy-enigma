@@ -19,6 +19,8 @@ import { format } from "date-fns"
 import { CalendarIcon, Plus, Info, Repeat, Settings, FileText, Tag, Clock, Calendar } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useSchoolConfig } from "@/lib/hooks/use-school-config"
+import { getZonedYyyyMmDdAndHHmm } from "@/lib/utils/timezone"
 
 interface ComponentNewModalProps {
   open: boolean
@@ -43,6 +45,8 @@ const COMPONENT_TYPE_OPTIONS: ComponentType[] = [
 const INTERVAL_TYPE_OPTIONS: IntervalType[] = ["HOURS", "CALENDAR", "BOTH"]
 
 const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChange, onSave }) => {
+  const { data: schoolConfig } = useSchoolConfig()
+  const timeZone = schoolConfig?.timeZone ?? "Pacific/Auckland"
   // All fields (no prefill)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -117,9 +121,10 @@ const ComponentNewModal: React.FC<ComponentNewModalProps> = ({ open, onOpenChang
       interval_type: intervalType,
       interval_hours: intervalHours,
       interval_days: intervalDays,
-      current_due_date: currentDueDate ? currentDueDate.toISOString().split('T')[0] : null,
+      // Date-only fields must be school-local (not UTC date extracted from an ISO).
+      current_due_date: currentDueDate ? getZonedYyyyMmDdAndHHmm(currentDueDate, timeZone).yyyyMmDd : null,
       current_due_hours: currentDueHours,
-      last_completed_date: lastCompletedDate ? lastCompletedDate.toISOString().split('T')[0] : null,
+      last_completed_date: lastCompletedDate ? getZonedYyyyMmDdAndHHmm(lastCompletedDate, timeZone).yyyyMmDd : null,
       last_completed_hours: lastCompletedHours,
       status: status as ComponentStatus,
       priority,

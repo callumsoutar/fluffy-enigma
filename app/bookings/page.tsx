@@ -11,6 +11,7 @@ import {
 import { BookingsTable } from "@/components/bookings/bookings-table"
 import type { BookingWithRelations } from "@/lib/types/bookings"
 import type { BookingsFilter, BookingStatus, BookingType } from "@/lib/types/bookings"
+import { zonedDayRangeUtcIso, zonedTodayYyyyMmDd } from "@/lib/utils/timezone"
 
 // Fetch bookings from API
 async function fetchBookings(filters?: BookingsFilter): Promise<BookingWithRelations[]> {
@@ -51,14 +52,13 @@ async function fetchBookings(filters?: BookingsFilter): Promise<BookingWithRelat
 
 // Get today's date range (start and end of day)
 function getTodayRange() {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const tomorrow = new Date(today)
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  return {
-    start: today.toISOString(),
-    end: tomorrow.toISOString(),
-  }
+  // Canonical strategy: the app operates in the school timezone (NZ).
+  // We compute day boundaries explicitly in that timezone so DST transitions are safe and
+  // results do not depend on the browser's configured timezone.
+  const timeZone = "Pacific/Auckland"
+  const todayKey = zonedTodayYyyyMmDd(timeZone)
+  const { startUtcIso, endUtcIso } = zonedDayRangeUtcIso({ dateYyyyMmDd: todayKey, timeZone })
+  return { start: startUtcIso, end: endUtcIso }
 }
 
 export default function BookingsPage() {

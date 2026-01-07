@@ -6,6 +6,8 @@ import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
+import { useSchoolConfig } from "@/lib/hooks/use-school-config"
+import { zonedTodayYyyyMmDd } from "@/lib/utils/timezone"
 import { format } from "date-fns"
 import { GraduationCap, Target, Plus, BookOpen, Plane, FileText, CheckCircle2, User, ChevronDown, ChevronUp, MessageSquare } from "lucide-react"
 
@@ -341,6 +343,9 @@ function EnrollmentCard({ enrollment, instructors, aircraftTypes, onUpdate }: En
 }
 
 export function MemberTrainingTab({ memberId }: { memberId: string }) {
+  const { data: schoolConfig } = useSchoolConfig()
+  const timeZone = schoolConfig?.timeZone ?? "Pacific/Auckland"
+  const todayKey = React.useMemo(() => zonedTodayYyyyMmDd(timeZone), [timeZone])
   const queryClient = useQueryClient()
   const [enrollOpen, setEnrollOpen] = React.useState(false)
   const [logExamOpen, setLogExamOpen] = React.useState(false)
@@ -528,7 +533,8 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
       notes: null,
       primary_instructor_id: null,
       aircraft_type: null,
-      enrolled_at: new Date().toISOString().split('T')[0]
+      // Date-only field: must be school-local, not UTC date.
+      enrolled_at: todayKey
     },
   })
 
@@ -538,7 +544,8 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
       exam_id: "",
       result: "PASS",
       score: null,
-      exam_date: new Date().toISOString().split('T')[0],
+      // Date-only field: must be school-local, not UTC date.
+      exam_date: todayKey,
       notes: null,
     },
   })
@@ -562,10 +569,10 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
       notes: null,
       primary_instructor_id: null,
       aircraft_type: null,
-      enrolled_at: new Date().toISOString().split('T')[0]
+      enrolled_at: todayKey
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enrollOpen])
+  }, [enrollOpen, todayKey])
 
   React.useEffect(() => {
     if (!logExamOpen) return
@@ -573,11 +580,11 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
       exam_id: "",
       result: "PASS",
       score: null,
-      exam_date: new Date().toISOString().split('T')[0],
+      exam_date: todayKey,
       notes: null,
     })
     setSelectedSyllabusId("all")
-  }, [logExamOpen, logExamForm])
+  }, [logExamOpen, logExamForm, todayKey])
 
   const enrollMutation = useMutation({
     mutationFn: async (values: EnrollFormValues) => {

@@ -16,21 +16,13 @@ import {
   getBookingLayout,
   withTime,
 } from "@/components/scheduler/scheduler-utils"
+import { parseTimeToMinutes } from "@/lib/roster/availability"
 import { RosterShiftModal } from "@/components/rosters/roster-shift-modal"
 import type { InstructorWithUser } from "@/lib/types/instructors"
 import type { RosterRule } from "@/lib/types/roster"
 import { useSettingsManager } from "@/hooks/use-settings"
 import type { TimelineConfig } from "@/components/scheduler/scheduler-utils"
-
-function parseTimeToMinutes(time: string) {
-  // Accepts "HH:MM" or "HH:MM:SS"
-  const [hhRaw, mmRaw] = time.split(":")
-  const hh = Number(hhRaw)
-  const mm = Number(mmRaw)
-  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
-  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
-  return hh * 60 + mm
-}
+import { dayOfWeekFromYyyyMmDd } from "@/lib/utils/timezone"
 
 const ROW_HEIGHT = 44
 const LEFT_COL_WIDTH = "w-[160px] sm:w-[220px]"
@@ -161,6 +153,7 @@ export function RosterScheduler() {
   const timelineMinWidth = slotCount > 0 ? slotCount * slotMinWidthPx : undefined
 
   const dayKey = format(selectedDate, "yyyy-MM-dd")
+  const dayOfWeek = React.useMemo(() => dayOfWeekFromYyyyMmDd(dayKey), [dayKey])
   const rosterQueryKey = React.useMemo(() => ["roster-rules", dayKey], [dayKey])
 
   const {
@@ -179,7 +172,7 @@ export function RosterScheduler() {
     isError: rosterError,
   } = useQuery({
     queryKey: rosterQueryKey,
-    queryFn: () => fetchRosterRulesForDay(selectedDate.getDay()),
+    queryFn: () => fetchRosterRulesForDay(dayOfWeek),
     enabled: instructors.length > 0,
     staleTime: 30_000,
   })
@@ -203,34 +196,23 @@ export function RosterScheduler() {
   const dayLabel = format(selectedDate, "EEEE, dd MMM yyyy")
 
   const visibleShifts = React.useMemo(() => {
-    const normalizedDate = new Date(selectedDate)
-    normalizedDate.setHours(0, 0, 0, 0)
-
     return rosterRules.filter((rule) => {
       if (!rule.is_active || rule.voided_at) {
         return false
       }
 
-      if (rule.day_of_week !== selectedDate.getDay()) {
+      if (rule.day_of_week !== dayOfWeek) {
         return false
       }
 
-      const effectiveFrom = new Date(`${rule.effective_from}T00:00:00`)
-      const effectiveUntil = rule.effective_until
-        ? new Date(`${rule.effective_until}T23:59:59`)
-        : null
-
-      if (effectiveFrom > normalizedDate) {
-        return false
-      }
-
-      if (effectiveUntil && effectiveUntil < normalizedDate) {
-        return false
-      }
+      // Roster effective_from/effective_until are DATE-ONLY fields (school-local calendar dates).
+      // Never parse these via `new Date(...)` (it introduces implicit timezone shifts).
+      if (rule.effective_from && rule.effective_from > dayKey) return false
+      if (rule.effective_until && rule.effective_until < dayKey) return false
 
       return true
     })
-  }, [rosterRules, selectedDate])
+  }, [rosterRules, dayKey, dayOfWeek])
 
   const shiftsByInstructor = React.useMemo(() => {
     const map: Record<string, RosterRule[]> = {}
@@ -288,11 +270,11 @@ export function RosterScheduler() {
         startTime: formatTimeLabel(selectedSlotTime),
         endTime: formatTimeLabel(endTime),
         date: dayKey,
-        dayOfWeek: selectedDate.getDay(),
+        dayOfWeek,
         isRecurring: true,
       })
     },
-    [dayKey, openDraft, slotCount, slots, selectedDate, timelineEnd, timelineStart, TIMELINE_CONFIG.intervalMinutes]
+    [dayKey, dayOfWeek, openDraft, slotCount, slots, timelineEnd, timelineStart, TIMELINE_CONFIG.intervalMinutes]
   )
 
   const handleModalClose = React.useCallback(() => {

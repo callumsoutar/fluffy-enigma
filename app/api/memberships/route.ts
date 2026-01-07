@@ -10,6 +10,8 @@ import {
 import { DEFAULT_MEMBERSHIP_YEAR_CONFIG } from '@/lib/utils/membership-defaults'
 import type { MembershipWithRelations } from '@/lib/types/memberships'
 import type { MembershipYearConfig } from '@/lib/types/settings'
+import { getSchoolConfigServer } from '@/lib/utils/school-config'
+import { getZonedYyyyMmDdAndHHmm } from '@/lib/utils/timezone'
 
 const createMembershipSchema = z.object({
   action: z.literal("create"),
@@ -198,6 +200,8 @@ export async function POST(request: NextRequest) {
   }
 
   const action = body.action
+  // Canonical strategy: date-only fields must be computed in the *school timezone* (DST-safe).
+  const { timeZone } = await getSchoolConfigServer()
 
   if (action === "renew") {
     const validationResult = renewMembershipSchema.safeParse(body)
@@ -273,7 +277,7 @@ export async function POST(request: NextRequest) {
       user_id: currentMembership.user_id,
       membership_type_id: membershipTypeId,
       start_date: startDate.toISOString(),
-      expiry_date: expiryDate.toISOString().split('T')[0], // Date only
+      expiry_date: getZonedYyyyMmDdAndHHmm(expiryDate, timeZone).yyyyMmDd, // Date only (school-local)
       purchased_date: startDate.toISOString(),
       auto_renew: auto_renew ?? currentMembership.auto_renew,
       grace_period_days: currentMembership.grace_period_days || 30,
@@ -358,7 +362,7 @@ export async function POST(request: NextRequest) {
       user_id,
       membership_type_id,
       start_date: startDate.toISOString(),
-      expiry_date: expiryDate.toISOString().split('T')[0], // Date only
+      expiry_date: getZonedYyyyMmDdAndHHmm(expiryDate, timeZone).yyyyMmDd, // Date only (school-local)
       purchased_date: new Date().toISOString(),
       auto_renew: auto_renew || false,
       grace_period_days: 30, // Default grace period

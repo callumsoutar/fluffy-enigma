@@ -19,6 +19,8 @@ import { format } from "date-fns"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
+import { useSchoolConfig } from "@/lib/hooks/use-school-config"
+import { getZonedYyyyMmDdAndHHmm } from "@/lib/utils/timezone"
 import type { AircraftComponent } from "@/lib/types/aircraft_components"
 import type { VisitType } from "@/lib/types/maintenance_visits"
 
@@ -46,6 +48,8 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
   onSuccess,
 }) => {
   const { user } = useAuth()
+  const { data: schoolConfig } = useSchoolConfig()
+  const timeZone = schoolConfig?.timeZone ?? "Pacific/Auckland"
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -190,9 +194,10 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
       date_out_of_maintenance: dateOutOfMaintenance ? dateOutOfMaintenance.toISOString() : null,
       performed_by: user.id,
       component_due_hours: componentDueHours ? parseFloat(componentDueHours) : null,
-      component_due_date: componentDueDate ? componentDueDate.toISOString().split('T')[0] : null,
+      // Date-only fields must be school-local (not UTC date extracted from an ISO).
+      component_due_date: componentDueDate ? getZonedYyyyMmDdAndHHmm(componentDueDate, timeZone).yyyyMmDd : null,
       next_due_hours: nextDueHours ? parseFloat(nextDueHours) : null,
-      next_due_date: nextDueDate ? nextDueDate.toISOString().split('T')[0] : null,
+      next_due_date: nextDueDate ? getZonedYyyyMmDdAndHHmm(nextDueDate, timeZone).yyyyMmDd : null,
     }
     
     try {

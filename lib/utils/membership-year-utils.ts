@@ -96,7 +96,7 @@ export function calculateRenewalExpiry(
   // Ensure we have a Date object (handle string dates from database)
   const expiryDate =
     typeof currentExpiryDate === "string"
-      ? new Date(currentExpiryDate + "T00:00:00") // Add time to avoid timezone issues
+      ? new Date(`${currentExpiryDate}T00:00:00Z`) // Date-only → interpret at UTC midnight (avoid implicit local TZ)
       : currentExpiryDate
 
   // For a renewal, we want the next membership year after the current expiry

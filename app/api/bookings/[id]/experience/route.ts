@@ -17,6 +17,8 @@ async function ensureLessonProgressId(opts: {
     .from('lesson_progress')
     .select('id')
     .eq('booking_id', bookingId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (error) throw error

@@ -17,6 +17,10 @@ export interface AircraftType {
  */
 export interface Aircraft {
   id: string
+  /**
+   * Display order for scheduler (lower renders higher).
+   */
+  order: number
   registration: string
   type: string
   model: string | null

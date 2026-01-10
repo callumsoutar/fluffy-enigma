@@ -143,6 +143,8 @@ export async function POST(
         .from('lesson_progress')
         .select('id')
         .eq('booking_id', bookingId)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       const progressData = {

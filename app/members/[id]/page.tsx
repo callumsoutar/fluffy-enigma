@@ -366,32 +366,34 @@ export default function MemberDetailPage() {
                         {initials}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h1 className="text-2xl font-bold text-gray-900">{fullName}</h1>
-                        <Badge
-                          className={`rounded-md px-2 py-1 text-xs font-medium ${
-                            isActive 
-                              ? "bg-green-100 text-green-700 border-0" 
-                              : "bg-red-100 text-red-700 border-0"
-                          }`}
-                        >
-                          {isActive ? "Active" : "Inactive"}
-                        </Badge>
-                        <Badge
-                          className={`rounded-md px-2 py-1 text-xs font-medium ${
-                            member.is_auth_user 
-                              ? "bg-blue-100 text-blue-700 border-0" 
-                              : "bg-orange-100 text-orange-700 border-0"
-                          }`}
-                        >
-                          {member.is_auth_user ? "Portal Access" : "No Portal Access"}
-                        </Badge>
-                        {memberRole && (
-                          <Badge className="rounded-md px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border-0">
-                            {memberRole}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                        <h1 className="text-2xl font-bold text-gray-900 break-words">{fullName}</h1>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            className={`rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ${
+                              isActive 
+                                ? "bg-green-100 text-green-700 border-0" 
+                                : "bg-red-100 text-red-700 border-0"
+                            }`}
+                          >
+                            {isActive ? "Active" : "Inactive"}
                           </Badge>
-                        )}
+                          <Badge
+                            className={`rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ${
+                              member.is_auth_user 
+                                ? "bg-blue-100 text-blue-700 border-0" 
+                                : "bg-orange-100 text-orange-700 border-0"
+                            }`}
+                          >
+                            {member.is_auth_user ? "Portal Access" : "No Portal Access"}
+                          </Badge>
+                          {memberRole && (
+                            <Badge className="rounded-md px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border-0 whitespace-nowrap">
+                              {memberRole}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                         {member.email && (

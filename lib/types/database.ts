@@ -560,6 +560,56 @@ export interface Database {
           updated_at?: string
         }
       }
+      flight_experience: {
+        Row: {
+          id: string
+          lesson_progress_id: string | null
+          booking_id: string | null
+          user_id: string
+          instructor_id: string | null
+          experience_type_id: string
+          value: number
+          unit: Database["public"]["Enums"]["experience_unit"]
+          occurred_at: string
+          notes: string | null
+          conditions: string | null
+          created_at: string | null
+          updated_at: string | null
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          lesson_progress_id?: string | null
+          booking_id?: string | null
+          user_id: string
+          instructor_id?: string | null
+          experience_type_id: string
+          value: number
+          unit?: Database["public"]["Enums"]["experience_unit"]
+          occurred_at: string
+          notes?: string | null
+          conditions?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          lesson_progress_id?: string | null
+          booking_id?: string | null
+          user_id?: string
+          instructor_id?: string | null
+          experience_type_id?: string
+          value?: number
+          unit?: Database["public"]["Enums"]["experience_unit"]
+          occurred_at?: string
+          notes?: string | null
+          conditions?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          created_by?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -570,6 +620,7 @@ export interface Database {
     Enums: {
       gender_enum: "male" | "female"
       exam_result: "PASS" | "FAIL"
+      experience_unit: "hours" | "count" | "landings"
     }
   }
 }
@@ -625,3 +676,7 @@ export type StudentSyllabusEnrollmentInsert =
   Database["public"]["Tables"]["student_syllabus_enrollment"]["Insert"]
 export type StudentSyllabusEnrollmentUpdate =
   Database["public"]["Tables"]["student_syllabus_enrollment"]["Update"]
+
+export type FlightExperience = Database["public"]["Tables"]["flight_experience"]["Row"]
+export type FlightExperienceInsert = Database["public"]["Tables"]["flight_experience"]["Insert"]
+export type FlightExperienceUpdate = Database["public"]["Tables"]["flight_experience"]["Update"]

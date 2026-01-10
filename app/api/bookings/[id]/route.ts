@@ -437,6 +437,8 @@ export async function PATCH(
       .from('lesson_progress')
       .select('id')
       .eq('booking_id', bookingId)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
 
     if (lpFetchError) {

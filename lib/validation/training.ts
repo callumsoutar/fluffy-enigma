@@ -23,4 +23,22 @@ export const logExamResultSchema = z.object({
   notes: z.string().trim().max(2000).optional().nullable(),
 })
 
+export const logFlightExperienceSchema = z.object({
+  experience_type_id: z.string().uuid('Invalid experience type'),
+  value: z.number().positive('Value must be greater than 0'),
+  unit: z.enum(['hours', 'count', 'landings']),
+  occurred_at: z.string(),
+  notes: z.string().max(2000).optional().nullable(),
+  conditions: z.string().max(2000).optional().nullable(),
+  instructor_id: z.string().uuid('Invalid instructor ID').optional().nullable(),
+}).superRefine((data, ctx) => {
+  if ((data.unit === 'count' || data.unit === 'landings') && !Number.isInteger(data.value)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Counts/landings must be a whole number',
+      path: ['value'],
+    })
+  }
+})
+
 

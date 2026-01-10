@@ -4,11 +4,14 @@ import * as React from "react"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { Loader2, MessageSquare, AlertCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import DebriefPreviewSheet from "../debrief/debrief-preview-sheet"
 
 interface FlightTrainingComment {
   id: string
   date: string
   instructor_comments: string | null
+  booking_id: string
   booking: {
     aircraft: {
       registration: string
@@ -42,6 +45,13 @@ async function fetchComments(memberId: string, { pageParam = 0 }): Promise<Fligh
 
 export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTableProps) {
   const loadMoreRef = React.useRef<HTMLDivElement>(null)
+  const [previewBookingId, setPreviewBookingId] = React.useState<string | null>(null)
+  const [isPreviewOpen, setIsPreviewOpen] = React.useState(false)
+
+  const handleOpenPreview = (bookingId: string) => {
+    setPreviewBookingId(bookingId)
+    setIsPreviewOpen(true)
+  }
 
   const {
     data,
@@ -95,6 +105,20 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
     } catch {
       return "-"
     }
+  }
+
+  // Sanitize HTML to allow only safe tags (p, br, strong, em, ul, ol, li, etc.)
+  const sanitizeHTML = (html: string | null): string => {
+    if (!html) return "-"
+    // Remove script tags and their content
+    let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    // Remove iframe tags
+    sanitized = sanitized.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
+    // Remove object and embed tags
+    sanitized = sanitized.replace(/<(object|embed)\b[^<]*(?:(?!<\/(object|embed)>)<[^<]*)*<\/(object|embed)>/gi, "")
+    // Remove on* event handlers from remaining tags
+    sanitized = sanitized.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, "")
+    return sanitized
   }
 
   if (isLoading) {
@@ -159,6 +183,7 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
               <th className="px-6 py-3 text-left font-semibold text-xs text-slate-500 w-[140px]">Aircraft</th>
               <th className="px-6 py-3 text-left font-semibold text-xs text-slate-500 w-[200px]">Instructor</th>
               <th className="px-6 py-3 text-left font-semibold text-xs text-slate-500">Comments</th>
+              <th className="px-6 py-3 text-right font-semibold text-xs text-slate-500 w-[100px]">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -174,9 +199,22 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
                   {comment.instructor?.user?.first_name} {comment.instructor?.user?.last_name}
                 </td>
                 <td className="px-6 py-4 align-middle">
-                  <p className="text-slate-600 leading-normal">
-                    {comment.instructor_comments || "-"}
-                  </p>
+                  <div 
+                    className="text-slate-600 leading-normal line-clamp-2"
+                    dangerouslySetInnerHTML={{ 
+                      __html: sanitizeHTML(comment.instructor_comments) 
+                    }}
+                  />
+                </td>
+                <td className="px-6 py-4 align-middle text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-primary hover:text-primary hover:bg-primary/10"
+                    onClick={() => handleOpenPreview(comment.booking_id)}
+                  >
+                    View Report
+                  </Button>
                 </td>
               </tr>
             ))}
@@ -204,9 +242,23 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
 
             <div>
               <div className="text-[10px] text-slate-500 mb-1">Comments</div>
-              <p className="text-sm text-slate-600 leading-normal">
-                {comment.instructor_comments || "-"}
-              </p>
+              <div 
+                className="text-sm text-slate-600 leading-normal line-clamp-3"
+                dangerouslySetInnerHTML={{ 
+                  __html: sanitizeHTML(comment.instructor_comments) 
+                }}
+              />
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full h-9 text-xs font-semibold"
+                onClick={() => handleOpenPreview(comment.booking_id)}
+              >
+                View Full Debrief Report
+              </Button>
             </div>
           </div>
         ))}
@@ -227,6 +279,12 @@ export function MemberFlightTrainingTable({ memberId }: MemberFlightTrainingTabl
           <p className="text-[10px] font-medium text-slate-300 uppercase tracking-widest">End of records</p>
         ) : null}
       </div>
+
+      <DebriefPreviewSheet
+        bookingId={previewBookingId}
+        isOpen={isPreviewOpen}
+        onOpenChange={setIsPreviewOpen}
+      />
     </div>
   )
 }

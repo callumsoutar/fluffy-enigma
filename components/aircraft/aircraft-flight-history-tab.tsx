@@ -233,10 +233,16 @@ export function AircraftFlightHistoryTab({ flights: allFlights }: AircraftFlight
                 Description
               </th>
               <th className="px-4 py-3 text-center font-semibold text-xs uppercase tracking-wide text-slate-600">
-                Hobbs
+                Hobbs Start
               </th>
               <th className="px-4 py-3 text-center font-semibold text-xs uppercase tracking-wide text-slate-600">
-                Tach
+                Hobbs End
+              </th>
+              <th className="px-4 py-3 text-center font-semibold text-xs uppercase tracking-wide text-slate-600">
+                Tach Start
+              </th>
+              <th className="px-4 py-3 text-center font-semibold text-xs uppercase tracking-wide text-slate-600">
+                Tach End
               </th>
               <th className="px-4 py-3 text-right font-semibold text-xs uppercase tracking-wide text-slate-600">
                 Flight Time
@@ -249,7 +255,7 @@ export function AircraftFlightHistoryTab({ flights: allFlights }: AircraftFlight
           <tbody className="divide-y divide-slate-100">
             {flights.length === 0 ? (
               <tr>
-                <td colSpan={8} className="h-24 text-center text-slate-500 font-medium">
+                <td colSpan={10} className="h-24 text-center text-slate-500 font-medium">
                   No completed flights found in this date range.
                 </td>
               </tr>
@@ -301,27 +307,25 @@ export function AircraftFlightHistoryTab({ flights: allFlights }: AircraftFlight
                           </span>
                         </td>
                     <td className="px-4 py-3.5 align-middle text-center">
-                      <div className="flex flex-col gap-0.5 text-xs font-mono">
-                        <span className="text-slate-600">
-                          {flight.hobbs_start != null ? Number(flight.hobbs_start).toFixed(1) : '-'}
-                        </span>
-                        <span className="text-slate-400">→</span>
-                        <span className="text-slate-900 font-semibold">
-                          {flight.hobbs_end != null ? Number(flight.hobbs_end).toFixed(1) : '-'}
-                        </span>
-                      </div>
-                        </td>
+                      <span className="text-xs font-mono text-slate-900">
+                        {flight.hobbs_start != null ? Number(flight.hobbs_start).toFixed(1) : '-'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3.5 align-middle text-center">
-                      <div className="flex flex-col gap-0.5 text-xs font-mono">
-                        <span className="text-slate-600">
-                          {flight.tach_start != null ? Number(flight.tach_start).toFixed(1) : '-'}
-                        </span>
-                        <span className="text-slate-400">→</span>
-                        <span className="text-slate-900 font-semibold">
-                          {flight.tach_end != null ? Number(flight.tach_end).toFixed(1) : '-'}
-                        </span>
-                      </div>
-                        </td>
+                      <span className="text-xs font-mono text-slate-900">
+                        {flight.hobbs_end != null ? Number(flight.hobbs_end).toFixed(1) : '-'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 align-middle text-center">
+                      <span className="text-xs font-mono text-slate-900">
+                        {flight.tach_start != null ? Number(flight.tach_start).toFixed(1) : '-'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 align-middle text-center">
+                      <span className="text-xs font-mono text-slate-900">
+                        {flight.tach_end != null ? Number(flight.tach_end).toFixed(1) : '-'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3.5 align-middle text-right">
                       <span className="font-mono font-semibold text-slate-900">{getFlightHoursDisplay(flight)}h</span>
                         </td>
@@ -419,18 +423,34 @@ export function AircraftFlightHistoryTab({ flights: allFlights }: AircraftFlight
                   )}
                   <div className="space-y-1">
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Hobbs
+                      Hobbs Start
                     </div>
                     <div className="font-mono text-xs text-slate-700">
-                      {flight.hobbs_start != null ? Number(flight.hobbs_start).toFixed(1) : '-'} → {flight.hobbs_end != null ? Number(flight.hobbs_end).toFixed(1) : '-'}
+                      {flight.hobbs_start != null ? Number(flight.hobbs_start).toFixed(1) : '-'}
                     </div>
                   </div>
                   <div className="space-y-1">
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Tach
+                      Hobbs End
                     </div>
                     <div className="font-mono text-xs text-slate-700">
-                      {flight.tach_start != null ? Number(flight.tach_start).toFixed(1) : '-'} → {flight.tach_end != null ? Number(flight.tach_end).toFixed(1) : '-'}
+                      {flight.hobbs_end != null ? Number(flight.hobbs_end).toFixed(1) : '-'}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Tach Start
+                    </div>
+                    <div className="font-mono text-xs text-slate-700">
+                      {flight.tach_start != null ? Number(flight.tach_start).toFixed(1) : '-'}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Tach End
+                    </div>
+                    <div className="font-mono text-xs text-slate-700">
+                      {flight.tach_end != null ? Number(flight.tach_end).toFixed(1) : '-'}
                     </div>
                   </div>
                 </div>

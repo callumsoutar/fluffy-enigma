@@ -186,9 +186,9 @@ export default function InvoicesPage() {
                     </div>
                     <Button
                       onClick={() => router.push('/invoices/new')}
-                      className="gap-2"
+                      className="bg-slate-900 text-white font-semibold h-10 px-5 hover:bg-slate-800"
                     >
-                      <Plus className="h-4 w-4" />
+                      <Plus className="h-4 w-4 mr-2" />
                       New Invoice
                     </Button>
                   </div>

@@ -4,7 +4,7 @@ import * as React from "react"
 import { format } from "date-fns"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react"
+import { ChevronLeft, ChevronRight, CalendarDays, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -381,7 +381,13 @@ export function RosterScheduler() {
         </div>
 
         <div className="hidden items-center gap-2 sm:flex">
-          <Button onClick={quickCreate}>New roster entry</Button>
+          <Button
+            className="bg-slate-900 text-white font-semibold h-10 px-5 hover:bg-slate-800"
+            onClick={quickCreate}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New roster entry
+          </Button>
         </div>
       </div>
 

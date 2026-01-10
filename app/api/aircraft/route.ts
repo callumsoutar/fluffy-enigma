@@ -56,6 +56,9 @@ export async function GET(request: NextRequest) {
         updated_at
       )
     `)
+    // Return aircraft in scheduler display order by default.
+    // (Secondary sort keeps ordering stable if data ever has gaps/duplicates.)
+    .order('order', { ascending: true })
     .order('registration', { ascending: true })
 
   // Apply filters

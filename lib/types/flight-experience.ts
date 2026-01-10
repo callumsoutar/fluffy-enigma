@@ -2,10 +2,10 @@ export type ExperienceUnit = 'hours' | 'count' | 'landings'
 
 export interface FlightExperienceEntry {
   id: string
-  booking_id: string
-  lesson_progress_id: string
+  booking_id: string | null
+  lesson_progress_id: string | null
   user_id: string
-  instructor_id: string
+  instructor_id: string | null
   experience_type_id: string
   value: number
   unit: ExperienceUnit

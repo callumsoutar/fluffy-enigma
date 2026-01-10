@@ -35,6 +35,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import EditMaintenanceHistoryModal from "./EditMaintenanceHistoryModal"
 
 interface MaintenanceHistoryTabProps {
   aircraftId: string
@@ -471,38 +472,13 @@ export function AircraftMaintenanceHistoryTab({ aircraftId }: MaintenanceHistory
         </div>
       </div>
 
-      {/* Edit Modal - Placeholder for now */}
-      {editModalOpen && selectedVisitId && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[20px] shadow-2xl p-6 sm:p-8 max-w-2xl w-full mx-4 border border-slate-100">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-12 w-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                <IconTool className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">Edit Maintenance Visit</h3>
-                <p className="text-sm text-slate-500 italic leading-relaxed">
-                  Update the details of this recorded maintenance event.
-                </p>
-              </div>
-            </div>
-            
-            <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-xl mb-6">
-              <IconAlertTriangle className="h-8 w-8 text-amber-500 mb-2 opacity-50" />
-              <p className="text-sm font-bold text-slate-400">Edit functionality pending implementation</p>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={handleEditClose} className="rounded-xl h-11 px-6 font-bold border-slate-200">
-                Cancel
-              </Button>
-              <Button onClick={handleEditClose} className="bg-slate-900 text-white font-bold rounded-xl h-11 px-8 hover:bg-slate-800">
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Edit Modal */}
+      <EditMaintenanceHistoryModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        maintenanceVisitId={selectedVisitId}
+        onSuccess={handleEditClose}
+      />
     </div>
   )
 }

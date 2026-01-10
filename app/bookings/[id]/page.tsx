@@ -645,29 +645,182 @@ export default function BookingDetailPage() {
           <div className="flex flex-1 flex-col bg-muted/30">
             {/* Mobile Skeleton */}
             {isMobile ? (
-              <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
-                <div className="px-4 py-4 space-y-4">
-                  {/* Back Button Skeleton */}
-                  <Skeleton className="h-4 w-16 mb-3" />
+              <div className="flex flex-col bg-background min-h-screen">
+                {/* Header Section Skeleton */}
+                <div className="bg-background border-b border-border/40">
+                  <div className="px-6 pt-8 pb-8">
+                    {/* Back Button & Status Badge */}
+                    <div className="flex items-center justify-between mb-6">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                    </div>
+                    
+                    {/* Booking Number & Aircraft */}
+                    <div className="space-y-3 mb-6">
+                      <Skeleton className="h-8 w-48" />
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-5 w-32" />
+                      </div>
+                    </div>
+
+                    {/* Schedule Section */}
+                    <div className="mt-6 pt-4 border-t border-border/20 space-y-2">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-6 w-40" />
+                      <Skeleton className="h-8 w-56" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Details Section Skeleton */}
+                <div className="px-4 mt-6 space-y-6 pb-6">
+                  <Skeleton className="h-4 w-36 px-2" />
                   
-                  {/* Header Skeleton */}
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <Skeleton className="h-7 w-48" />
-                    <Skeleton className="h-6 w-20 rounded-full" />
+                  {/* Aircraft & Flight Type Card Skeleton */}
+                  <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                    <div className="p-5 flex justify-between items-start">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-5 w-5 rounded" />
+                          <Skeleton className="h-4 w-16" />
+                        </div>
+                      </div>
+                      <div className="text-right space-y-2">
+                        <Skeleton className="h-8 w-24 ml-auto" />
+                        <Skeleton className="h-3 w-32 ml-auto" />
+                      </div>
+                    </div>
+                    <div className="h-[1px] bg-border mx-5" />
+                    <div className="p-5 flex justify-between items-end">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-5 w-5 rounded" />
+                          <Skeleton className="h-4 w-20" />
+                        </div>
+                      </div>
+                      <Skeleton className="h-5 w-28" />
+                    </div>
                   </div>
 
-                  {/* Info Cards Skeleton */}
-                  <div className="space-y-2.5 mb-4">
-                    <Skeleton className="h-12 w-full rounded-lg" />
-                    <Skeleton className="h-12 w-full rounded-lg" />
-                    <Skeleton className="h-12 w-full rounded-lg" />
+                  {/* Participants Card Skeleton */}
+                  <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+                    <div className="flex justify-between items-start mb-6">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-5 w-5 rounded" />
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-9 w-9 rounded-full" />
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-3 w-20" />
+                            <Skeleton className="h-4 w-32" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="pt-3 border-t border-border/50">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <Skeleton className="h-9 w-9 rounded-full" />
+                            <div className="space-y-1.5">
+                              <Skeleton className="h-3 w-20" />
+                              <Skeleton className="h-4 w-32" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Flight Type Skeleton */}
-                  <Skeleton className="h-12 w-full rounded-lg mb-4" />
-                  
-                  {/* Training Section Skeleton */}
-                  <Skeleton className="h-16 w-full rounded-lg" />
+                  {/* Reservation Details Card Skeleton */}
+                  <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="h-5 w-48" />
+                      </div>
+                      <Skeleton className="h-5 w-5 rounded" />
+                    </div>
+                  </div>
+
+                  {/* Form Section Skeleton */}
+                  <div className="pt-6 space-y-6">
+                    {/* Participants Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-1.5 px-1">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                      <div className="space-y-2.5">
+                        <div className="p-3.5 bg-white dark:bg-gray-900 rounded-xl border border-border/60 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3.5">
+                              <Skeleton className="h-9 w-9 rounded-full" />
+                              <div className="space-y-1.5">
+                                <Skeleton className="h-3 w-20" />
+                                <Skeleton className="h-4 w-32" />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Skeleton className="h-8.5 w-8.5 rounded-lg" />
+                              <Skeleton className="h-8.5 w-8.5 rounded-lg" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-3.5 bg-white dark:bg-gray-900 rounded-xl border border-border/60 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3.5">
+                              <Skeleton className="h-9 w-9 rounded-full" />
+                              <div className="space-y-1.5">
+                                <Skeleton className="h-3 w-20" />
+                                <Skeleton className="h-4 w-32" />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Skeleton className="h-8.5 w-8.5 rounded-lg" />
+                              <Skeleton className="h-8.5 w-8.5 rounded-lg" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Scheduled Times Card Skeleton */}
+                    <div className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                      <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-4 w-4 rounded" />
+                          <Skeleton className="h-5 w-32" />
+                        </div>
+                      </div>
+                      <div className="p-4 space-y-4">
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-20" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-20" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional Form Fields Skeleton */}
+                    <div className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl">
+                      <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+                        <Skeleton className="h-5 w-40" />
+                      </div>
+                      <div className="p-4 space-y-4">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="space-y-2">
+                            <Skeleton className="h-4 w-24" />
+                            <Skeleton className="h-10 w-full rounded-md" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1653,13 +1806,31 @@ export default function BookingDetailPage() {
                           >
                             <DropdownMenuItem 
                               onClick={() => {
-                                // TODO: Implement print checkout sheet functionality
-                                toast.info("Print checkout sheet functionality to be implemented")
+                                if (!booking?.id) {
+                                  toast.error("Booking ID not available")
+                                  return
+                                }
+                                // Open print page in new window
+                                window.open(`/bookings/${booking.id}/print`, "_blank")
                               }}
                               className="rounded-lg px-4 py-3 cursor-pointer focus:bg-muted/50 transition-colors my-0.5"
                             >
                               <IconFileText className="h-4 w-4 mr-3 text-gray-700 dark:text-gray-300 flex-shrink-0" />
                               <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Print Checkout Sheet</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                if (!booking?.id) {
+                                  toast.error("Booking ID not available")
+                                  return
+                                }
+                                // Open debrief page in new window
+                                window.open(`/bookings/${booking.id}/debrief`, "_blank")
+                              }}
+                              className="rounded-lg px-4 py-3 cursor-pointer focus:bg-muted/50 transition-colors my-0.5"
+                            >
+                              <IconMessage className="h-4 w-4 mr-3 text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">View Debrief Report</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => {
@@ -1786,8 +1957,12 @@ export default function BookingDetailPage() {
                       >
                         <DropdownMenuItem 
                           onClick={() => {
-                            // TODO: Implement print checkout sheet functionality
-                            toast.info("Print checkout sheet functionality to be implemented")
+                            if (!booking?.id) {
+                              toast.error("Booking ID not available")
+                              return
+                            }
+                            // Open print page in new window
+                            window.open(`/bookings/${booking.id}/print`, "_blank")
                           }}
                           className="rounded-lg px-4 py-3 cursor-pointer focus:bg-muted/50 transition-colors my-0.5"
                         >

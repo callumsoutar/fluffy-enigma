@@ -52,6 +52,7 @@ export async function GET(
       id,
       date,
       instructor_comments,
+      booking_id,
       booking:bookings!lesson_progress_booking_id_fkey(
         aircraft:aircraft!bookings_aircraft_id_fkey(registration)
       ),

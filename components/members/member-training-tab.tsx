@@ -9,7 +9,7 @@ import { toast } from "sonner"
 import { useSchoolConfig } from "@/lib/hooks/use-school-config"
 import { zonedTodayYyyyMmDd } from "@/lib/utils/timezone"
 import { format } from "date-fns"
-import { GraduationCap, Target, Plus, BookOpen, Plane, FileText, CheckCircle2, User, ChevronDown, ChevronUp, MessageSquare } from "lucide-react"
+import { GraduationCap, Target, Plus, BookOpen, Plane, FileText, CheckCircle2, User, ChevronDown, ChevronUp, MessageSquare, Activity } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -707,6 +707,7 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
                 
                 {[
                   { id: "flight", label: "Flight Training", icon: Plane },
+                  { id: "flight-experience", label: "Flight Experience", icon: Activity },
                   { id: "syllabus", label: "Syllabus", icon: BookOpen },
                   { id: "exams", label: "Exams", icon: FileText },
                 ].map((tab) => {
@@ -731,13 +732,14 @@ export function MemberTrainingTab({ memberId }: { memberId: string }) {
 
         <div className="pt-6">
           <Tabs.Content value="flight" className="space-y-8 outline-none">
-            <div className="space-y-8">
-              <MemberFlightTrainingTable memberId={memberId} />
-              
-              <div className="pt-2 border-t border-slate-100">
-                <MemberFlightExperienceTable experience={training?.flightExperience ?? []} />
-              </div>
-            </div>
+            <MemberFlightTrainingTable memberId={memberId} />
+          </Tabs.Content>
+
+          <Tabs.Content value="flight-experience" className="space-y-8 outline-none">
+            <MemberFlightExperienceTable 
+              memberId={memberId}
+              experience={training?.flightExperience ?? []} 
+            />
           </Tabs.Content>
 
           <Tabs.Content value="syllabus" className="space-y-6 outline-none">

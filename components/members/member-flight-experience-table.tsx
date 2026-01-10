@@ -2,7 +2,9 @@
 
 import * as React from "react"
 import { format } from "date-fns"
-import { Clock, ChevronDown, ChevronRight } from "lucide-react"
+import { Clock, ChevronDown, ChevronRight, Plus } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { AddFlightExperienceModal } from "./AddFlightExperienceModal"
 
 interface FlightExperience {
   id: string
@@ -29,11 +31,13 @@ interface FlightExperience {
 }
 
 interface MemberFlightExperienceTableProps {
+  memberId: string
   experience: FlightExperience[]
 }
 
-export function MemberFlightExperienceTable({ experience }: MemberFlightExperienceTableProps) {
+export function MemberFlightExperienceTable({ memberId, experience }: MemberFlightExperienceTableProps) {
   const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({})
+  const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
 
   const toggleGroup = (groupName: string) => {
     setExpandedGroups(prev => ({
@@ -78,14 +82,34 @@ export function MemberFlightExperienceTable({ experience }: MemberFlightExperien
 
   if (experience.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-200 p-12 text-center bg-slate-50/30">
-        <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-          <Clock className="w-6 h-6 text-slate-300" />
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-sm font-semibold text-slate-900">Flight Experience Log</h3>
+          <Button 
+            onClick={() => setIsAddModalOpen(true)}
+            size="sm"
+            className="h-8 rounded-lg bg-slate-900 text-[11px] font-bold text-white shadow-sm hover:bg-slate-800"
+          >
+            <Plus className="mr-1.5 h-3 w-3" />
+            Add Experience
+          </Button>
         </div>
-        <h3 className="text-sm font-semibold text-slate-900">No flight experience records</h3>
-        <p className="text-xs text-slate-500 mt-2 max-w-[280px] mx-auto">
-          Flight experience logged during lessons or manual entries will appear here.
-        </p>
+
+        <div className="rounded-lg border border-dashed border-slate-200 p-12 text-center bg-slate-50/30">
+          <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+            <Clock className="w-6 h-6 text-slate-300" />
+          </div>
+          <h3 className="text-sm font-semibold text-slate-900">No flight experience records</h3>
+          <p className="text-xs text-slate-500 mt-2 max-w-[280px] mx-auto">
+            Flight experience logged during lessons or manual entries will appear here.
+          </p>
+        </div>
+
+        <AddFlightExperienceModal 
+          memberId={memberId}
+          open={isAddModalOpen}
+          onOpenChange={setIsAddModalOpen}
+        />
       </div>
     )
   }
@@ -94,9 +118,19 @@ export function MemberFlightExperienceTable({ experience }: MemberFlightExperien
     <div className="space-y-6">
       <div className="flex items-center justify-between px-1">
         <h3 className="text-sm font-semibold text-slate-900">Flight Experience Log</h3>
-        <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-          {experience.length} Records
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+            {experience.length} Records
+          </span>
+          <Button 
+            onClick={() => setIsAddModalOpen(true)}
+            size="sm"
+            className="h-8 rounded-lg bg-slate-900 text-[11px] font-bold text-white shadow-sm hover:bg-slate-800"
+          >
+            <Plus className="mr-1.5 h-3 w-3" />
+            Add Experience
+          </Button>
+        </div>
       </div>
 
       {Object.values(groupedExperience).map((group) => {
@@ -205,6 +239,12 @@ export function MemberFlightExperienceTable({ experience }: MemberFlightExperien
           </div>
         )
       })}
+
+      <AddFlightExperienceModal 
+        memberId={memberId}
+        open={isAddModalOpen}
+        onOpenChange={setIsAddModalOpen}
+      />
     </div>
   )
 }

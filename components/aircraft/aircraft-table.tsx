@@ -10,6 +10,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table"
+import { useQueryClient } from "@tanstack/react-query"
 import { IconSearch, IconChevronRight, IconClock, IconTag, IconPlus } from "@tabler/icons-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
@@ -20,6 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import type { AircraftWithType } from "@/lib/types/aircraft"
 import { AddAircraftModal } from "@/components/aircraft/AddAircraftModal"
+import { ReorderAircraftModal } from "@/components/aircraft/ReorderAircraftModal"
 import { cn } from "@/lib/utils"
 
 interface AircraftTableProps {
@@ -53,8 +55,10 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
   const [search, setSearch] = React.useState("")
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [addOpen, setAddOpen] = React.useState(false)
+  const [reorderOpen, setReorderOpen] = React.useState(false)
   const router = useRouter()
   const { role } = useAuth()
+  const queryClient = useQueryClient()
 
   // Filter by search
   const filteredAircraft = React.useMemo(() => {
@@ -170,6 +174,17 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
   return (
     <div className="flex flex-col gap-6">
       <AddAircraftModal open={addOpen} onOpenChange={setAddOpen} />
+      <ReorderAircraftModal
+        open={reorderOpen}
+        onOpenChange={setReorderOpen}
+        aircraft={aircraft}
+        onSaved={async () => {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["aircraft"] }),
+            queryClient.invalidateQueries({ queryKey: ["scheduler", "aircraft"] }),
+          ])
+        }}
+      />
 
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -188,6 +203,15 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
               className="pl-9 w-full sm:w-64 h-10 border-slate-200 bg-white focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:border-slate-300"
             />
           </div>
+          {canAddAircraft && (
+            <Button
+              variant="outline"
+              className="h-10 px-5 w-full sm:w-auto border-slate-200 text-slate-700 hover:bg-slate-50"
+              onClick={() => setReorderOpen(true)}
+            >
+              Reorder
+            </Button>
+          )}
           {canAddAircraft && (
             <Button
               className="bg-slate-900 text-white font-semibold h-10 px-5 hover:bg-slate-800 w-full sm:w-auto"

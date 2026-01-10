@@ -25,6 +25,7 @@ import { useSettingsManager } from "@/hooks/use-settings";
 import { toast } from "sonner";
 import { AircraftTypesConfig } from "./AircraftTypesConfig";
 import { BusinessHoursConfig } from "./business-hours-config";
+import { Dropzone } from "@/components/ui/dropzone";
 
 const generalTabs = [
   { id: "school-info", label: "School Information", icon: IconBuilding },
@@ -61,6 +62,7 @@ export function GeneralTab() {
     updateSettingValue,
     isLoading,
     isUpdating,
+    refetch,
   } = useSettingsManager("general");
 
   // Local state for form values
@@ -70,6 +72,7 @@ export function GeneralTab() {
     registration_number: "",
     description: "",
     website_url: "",
+    logo_url: "",
     // Contact Information
     contact_email: "",
     contact_phone: "",
@@ -81,6 +84,9 @@ export function GeneralTab() {
     currency: "",
   });
 
+  // Logo upload state
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
   // Initialize form data when settings load
   React.useEffect(() => {
     if (settings && settings.length > 0) {
@@ -89,6 +95,7 @@ export function GeneralTab() {
         registration_number: getSettingValue("registration_number", ""),
         description: getSettingValue("description", ""),
         website_url: getSettingValue("website_url", ""),
+        logo_url: getSettingValue("logo_url", ""),
         contact_email: getSettingValue("contact_email", ""),
         contact_phone: getSettingValue("contact_phone", ""),
         address: getSettingValue("address", ""),
@@ -122,6 +129,72 @@ export function GeneralTab() {
     } catch (error) {
       console.error("Error saving settings:", error);
       toast.error("Failed to save settings");
+    }
+  };
+
+  const handleLogoUpload = async (file: File | null) => {
+    if (!file) {
+      // Handle logo removal
+      try {
+        setIsUploadingLogo(true);
+        const response = await fetch("/api/settings/logo", {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to delete logo");
+        }
+
+        // Update local state
+        setFormData((prev) => ({ ...prev, logo_url: "" }));
+        toast.success("Logo removed successfully");
+        
+        // Refresh settings if refetch is available
+        if (refetch) {
+          await refetch();
+        }
+      } catch (error) {
+        console.error("Error deleting logo:", error);
+        toast.error("Failed to delete logo");
+      } finally {
+        setIsUploadingLogo(false);
+      }
+      return;
+    }
+
+    try {
+      setIsUploadingLogo(true);
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/settings/logo", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to upload logo");
+      }
+
+      const data = await response.json();
+      
+      // Update local state
+      setFormData((prev) => ({ ...prev, logo_url: data.url }));
+      toast.success("Logo uploaded successfully");
+      
+      // Refresh settings to get updated logo_url if refetch is available
+      if (refetch) {
+        await refetch();
+      }
+    } catch (error) {
+      console.error("Error uploading logo:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to upload logo"
+      );
+    } finally {
+      setIsUploadingLogo(false);
     }
   };
 
@@ -255,6 +328,25 @@ export function GeneralTab() {
                     handleInputChange("website_url", e.target.value)
                   }
                 />
+              </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="company_logo"
+                  className="text-xs font-bold uppercase tracking-wider text-slate-500"
+                >
+                  Company Logo
+                </Label>
+                <Dropzone
+                  onFileSelect={handleLogoUpload}
+                  accept="image/*"
+                  maxSize={5 * 1024 * 1024}
+                  currentFile={formData.logo_url}
+                  disabled={isUploadingLogo || isUpdating}
+                  label="Drop logo here or click to upload"
+                />
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Upload your company logo (PNG, JPG, GIF, or WEBP, max 5MB)
+                </p>
               </div>
               <div className="flex justify-end pt-4">
                 <Button

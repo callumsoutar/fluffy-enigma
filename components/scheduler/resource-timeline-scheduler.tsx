@@ -417,14 +417,28 @@ export function ResourceTimelineScheduler() {
   }, [members, rosterRules])
 
   const aircraftResources: AircraftResource[] = React.useMemo(() => {
-    return aircraft
+    const ordered = aircraft
+      // Preserve existing scheduler behavior: only show on-line aircraft.
       .filter((a) => a.on_line)
-      .map((a: AircraftWithType) => ({
-        id: a.id,
-        registration: a.registration,
-        type: a.type,
-      }))
-      .sort((a, b) => a.registration.localeCompare(b.registration))
+      .slice()
+      .sort((a, b) => {
+        // Primary: aircraft.order (ascending). Null/undefined orders sort last.
+        const ao = typeof a.order === "number" ? a.order : Number.POSITIVE_INFINITY
+        const bo = typeof b.order === "number" ? b.order : Number.POSITIVE_INFINITY
+        if (ao !== bo) return ao - bo
+
+        // Secondary: on_line TRUE first (stable even if filter changes in future)
+        if (a.on_line !== b.on_line) return a.on_line ? -1 : 1
+
+        // Final fallback: registration ASC for stable ordering
+        return a.registration.localeCompare(b.registration)
+      })
+
+    return ordered.map((a: AircraftWithType) => ({
+      id: a.id,
+      registration: a.registration,
+      type: a.type,
+    }))
   }, [aircraft])
 
   const bookings = React.useMemo(() => {
@@ -590,6 +604,7 @@ export function ResourceTimelineScheduler() {
         {/* Desktop only: New booking button */}
         <div className="hidden sm:flex items-center gap-2">
           <Button
+            className="bg-slate-900 text-white font-semibold h-10 px-5 hover:bg-slate-800"
             onClick={() => {
               if (selectedDate) {
                 setNewBookingPrefill({ date: selectedDate, startTime: "09:00" })

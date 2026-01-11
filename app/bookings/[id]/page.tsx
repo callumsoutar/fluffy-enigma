@@ -377,7 +377,8 @@ export default function BookingDetailPage() {
   })
 
   // Use isDirty directly from form state instead of manual tracking
-  const hasChanges = isDirty
+  const [isFormReady, setIsFormReady] = React.useState(false)
+  const hasChanges = isFormReady && isDirty
 
   const bookingQuery = useQuery({
     queryKey: ["booking", bookingId],
@@ -433,19 +434,15 @@ export default function BookingDetailPage() {
   const [memberSearchOpen, setMemberSearchOpen] = React.useState(false)
   const [cancelModalOpen, setCancelModalOpen] = React.useState(false)
 
-  // Track if form has been initialized to prevent marking as dirty on initial load
-  const isInitializedRef = React.useRef(false)
-
   // Populate form when booking loads/changes (query-cached)
-  // Wait for both booking AND options to be available to prevent form dirty state on initial load
   React.useEffect(() => {
-    if (!booking || !options) return
+    if (!booking) return
+    // If the user has unsaved edits, don't clobber the form due to background query updates.
+    if (isFormReady && isDirty) return
+    setIsFormReady(false)
     
     const start = parseDateTime(booking.start_time)
     const end = parseDateTime(booking.end_time)
-    
-    // Reset initialization flag before updating state
-    isInitializedRef.current = false
     
     setStartDate(start.date)
     setStartTime(start.time)
@@ -464,39 +461,8 @@ export default function BookingDetailPage() {
         purpose: booking.purpose || "",
         remarks: booking.remarks || null,
       })
-    
-    // Mark as initialized after a tick to let all effects settle
-    setTimeout(() => {
-      isInitializedRef.current = true
-    }, 0)
-  }, [booking, options, reset])
-
-  // Auto-set end date to start date if end date is not set
-  React.useEffect(() => {
-    if (startDate && !endDate) {
-      setEndDate(startDate)
-    }
-  }, [startDate, endDate])
-
-  // Update form values when date/time changes
-  // Only mark as dirty if this is a user change (after initialization)
-  React.useEffect(() => {
-    if (startDate && startTime) {
-      const isoString = combineDateTime(startDate, startTime)
-      setValue("start_time", isoString, { shouldDirty: isInitializedRef.current })
-    } else if (!startDate || !startTime) {
-      setValue("start_time", "", { shouldDirty: isInitializedRef.current })
-    }
-  }, [startDate, startTime, setValue])
-
-  React.useEffect(() => {
-    if (endDate && endTime) {
-      const isoString = combineDateTime(endDate, endTime)
-      setValue("end_time", isoString, { shouldDirty: isInitializedRef.current })
-    } else if (!endDate || !endTime) {
-      setValue("end_time", "", { shouldDirty: isInitializedRef.current })
-    }
-  }, [endDate, endTime, setValue])
+    setIsFormReady(true)
+  }, [booking, reset, isFormReady, isDirty])
 
   // Clear aircraft when booking type is changed to "groundwork"
   // Note: This is handled directly in the onValueChange handler for better UX,
@@ -504,11 +470,12 @@ export default function BookingDetailPage() {
   const bookingType = watch("booking_type")
   const aircraftId = watch("aircraft_id")
   React.useEffect(() => {
-    if (!isInitializedRef.current) return // Don't clear on initial load
+    if (!isFormReady) return // Don't clear during initial hydration/reset
     if (bookingType === "groundwork" && aircraftId) {
-      setValue("aircraft_id", "", { shouldDirty: true })
+      // Safeguard for programmatic changes: keep the form consistent without creating "fake" user edits.
+      setValue("aircraft_id", "", { shouldDirty: false, shouldValidate: true })
     }
-  }, [bookingType, aircraftId, setValue])
+  }, [isFormReady, bookingType, aircraftId, setValue])
 
   const updateMutation = useMutation({
     mutationFn: (data: BookingFormData) =>
@@ -537,7 +504,8 @@ export default function BookingDetailPage() {
         booking_type: result.booking.booking_type,
         purpose: result.booking.purpose || "",
         remarks: result.booking.remarks || null,
-      }, { keepValues: true })
+      })
+      setIsFormReady(true)
       toast.success("Booking updated successfully")
       await queryClient.invalidateQueries({ queryKey: ["bookingAudit", bookingId] })
     },
@@ -592,9 +560,7 @@ export default function BookingDetailPage() {
       const start = parseDateTime(booking.start_time)
       const end = parseDateTime(booking.end_time)
       
-      // Reset initialization flag before updating state
-      isInitializedRef.current = false
-      
+      setIsFormReady(false)
       setStartDate(start.date)
       setStartTime(start.time)
       setEndDate(end.date)
@@ -612,11 +578,7 @@ export default function BookingDetailPage() {
         purpose: booking.purpose || '',
         remarks: booking.remarks || null,
       })
-      
-      // Mark as initialized after a tick to let all effects settle
-      setTimeout(() => {
-        isInitializedRef.current = true
-      }, 0)
+      setIsFormReady(true)
       
       toast.info('Changes reverted')
     }
@@ -631,7 +593,11 @@ export default function BookingDetailPage() {
   const isLoading = bookingQuery.isLoading || optionsQuery.isLoading || auditQuery.isLoading
   const isError = bookingQuery.isError
 
-  if (isLoading) {
+  // When default values are async, avoid rendering the form before `reset()` runs.
+  // This prevents controlled Selects from briefly mounting with `undefined` values (mobile Safari especially).
+  const isHydratingForm = !!booking && !isFormReady
+
+  if (isLoading || isHydratingForm) {
     return (
       <SidebarProvider
         style={{
@@ -1325,6 +1291,14 @@ export default function BookingDetailPage() {
                                         if (date && !endDate) {
                                           setEndDate(date)
                                         }
+                                        // Keep form field in sync (user action => dirty)
+                                        const nextStartIso = date && startTime ? combineDateTime(date, startTime) : ""
+                                        setValue("start_time", nextStartIso, { shouldDirty: true, shouldValidate: true })
+
+                                        // If we auto-set endDate and already have an end time, keep end_time consistent too.
+                                        if (date && !endDate && endTime) {
+                                          setValue("end_time", combineDateTime(date, endTime), { shouldDirty: true, shouldValidate: true })
+                                        }
                                       }}
                                     />
                                   </PopoverContent>
@@ -1333,7 +1307,12 @@ export default function BookingDetailPage() {
                               <div className="w-28">
                                 <Select
                                   value={startTime || "none"}
-                                  onValueChange={(value) => setStartTime(value === "none" ? "" : value)}
+                                  onValueChange={(value) => {
+                                    const next = value === "none" ? "" : value
+                                    setStartTime(next)
+                                    const nextStartIso = startDate && next ? combineDateTime(startDate, next) : ""
+                                    setValue("start_time", nextStartIso, { shouldDirty: true, shouldValidate: true })
+                                  }}
                                   disabled={isReadOnly}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
@@ -1385,6 +1364,9 @@ export default function BookingDetailPage() {
                                       onSelect={(date) => {
                                         setEndDate(date)
                                         setOpenEndDate(false)
+                                        const dateForEnd = date ?? undefined
+                                        const nextEndIso = dateForEnd && endTime ? combineDateTime(dateForEnd, endTime) : ""
+                                        setValue("end_time", nextEndIso, { shouldDirty: true, shouldValidate: true })
                                       }}
                                       disabled={startDate ? { before: startDate } : undefined}
                                     />
@@ -1394,7 +1376,14 @@ export default function BookingDetailPage() {
                               <div className="w-28">
                                 <Select
                                   value={endTime || "none"}
-                                  onValueChange={(value) => setEndTime(value === "none" ? "" : value)}
+                                  onValueChange={(value) => {
+                                    const next = value === "none" ? "" : value
+                                    setEndTime(next)
+                                    const dateForEnd = endDate ?? startDate
+                                    if (!endDate && dateForEnd) setEndDate(dateForEnd)
+                                    const nextEndIso = dateForEnd && next ? combineDateTime(dateForEnd, next) : ""
+                                    setValue("end_time", nextEndIso, { shouldDirty: true, shouldValidate: true })
+                                  }}
                                   disabled={isReadOnly}
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
@@ -2060,6 +2049,11 @@ export default function BookingDetailPage() {
                                             if (date && !endDate) {
                                               setEndDate(date)
                                             }
+                                            const nextStartIso = date && startTime ? combineDateTime(date, startTime) : ""
+                                            setValue("start_time", nextStartIso, { shouldDirty: true, shouldValidate: true })
+                                            if (date && !endDate && endTime) {
+                                              setValue("end_time", combineDateTime(date, endTime), { shouldDirty: true, shouldValidate: true })
+                                            }
                                           }}
                                         />
                                       </PopoverContent>
@@ -2068,7 +2062,12 @@ export default function BookingDetailPage() {
                                   <div className="w-32">
                                     <Select
                                       value={startTime || "none"}
-                                      onValueChange={(value) => setStartTime(value === "none" ? "" : value)}
+                                      onValueChange={(value) => {
+                                        const next = value === "none" ? "" : value
+                                        setStartTime(next)
+                                        const nextStartIso = startDate && next ? combineDateTime(startDate, next) : ""
+                                        setValue("start_time", nextStartIso, { shouldDirty: true, shouldValidate: true })
+                                      }}
                                       disabled={isReadOnly}
                                     >
                                       <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">
@@ -2123,6 +2122,8 @@ export default function BookingDetailPage() {
                                           onSelect={(date) => {
                                             setEndDate(date)
                                             setOpenEndDate(false)
+                                            const nextEndIso = date && endTime ? combineDateTime(date, endTime) : ""
+                                            setValue("end_time", nextEndIso, { shouldDirty: true, shouldValidate: true })
                                           }}
                                           disabled={startDate ? { before: startDate } : undefined}
                                         />
@@ -2132,7 +2133,14 @@ export default function BookingDetailPage() {
                                   <div className="w-32">
                                     <Select
                                       value={endTime || "none"}
-                                      onValueChange={(value) => setEndTime(value === "none" ? "" : value)}
+                                      onValueChange={(value) => {
+                                        const next = value === "none" ? "" : value
+                                        setEndTime(next)
+                                        const dateForEnd = endDate ?? startDate
+                                        if (!endDate && dateForEnd) setEndDate(dateForEnd)
+                                        const nextEndIso = dateForEnd && next ? combineDateTime(dateForEnd, next) : ""
+                                        setValue("end_time", nextEndIso, { shouldDirty: true, shouldValidate: true })
+                                      }}
                                       disabled={isReadOnly}
                                     >
                                       <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 h-10">

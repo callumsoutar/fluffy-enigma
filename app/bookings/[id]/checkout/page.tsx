@@ -341,27 +341,22 @@ export default function BookingCheckoutPage() {
   }
 
   // Helper function to combine Date and time string into ISO datetime string
-  // Returns format: YYYY-MM-DDTHH:mm (short format that validation accepts) or null
-  const combineDateTime = (date: Date | undefined, time: string): string | null => {
-    if (!date || !time || time.trim() === "") return null
+  // Returns a canonical ISO-8601 instant string with timezone offset (via `toISOString()`), or undefined.
+  const combineDateTime = (date: Date | undefined, time: string): string | undefined => {
+    if (!date || !time || time.trim() === "") return undefined
     const [hours, minutes] = time.split(":")
-    if (!hours || !minutes || hours.trim() === "" || minutes.trim() === "") return null
+    if (!hours || !minutes || hours.trim() === "" || minutes.trim() === "") return undefined
     
     // Validate hours and minutes are numbers
     const hourNum = parseInt(hours, 10)
     const minuteNum = parseInt(minutes, 10)
-    if (isNaN(hourNum) || isNaN(minuteNum)) return null
-    if (hourNum < 0 || hourNum > 23 || minuteNum < 0 || minuteNum > 59) return null
-    
-    // Create date in local timezone, then format as YYYY-MM-DDTHH:mm
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const day = String(date.getDate()).padStart(2, "0")
-    const hour = String(hourNum).padStart(2, "0")
-    const minute = String(minuteNum).padStart(2, "0")
-    
-    // Return short format: YYYY-MM-DDTHH:mm (validation will transform to full ISO)
-    return `${year}-${month}-${day}T${hour}:${minute}`
+    if (isNaN(hourNum) || isNaN(minuteNum)) return undefined
+    if (hourNum < 0 || hourNum > 23 || minuteNum < 0 || minuteNum > 59) return undefined
+
+    // Interpret the picked date+time in the user's local timezone, then store as a UTC instant.
+    const local = new Date(date)
+    local.setHours(hourNum, minuteNum, 0, 0)
+    return local.toISOString()
   }
 
   // Local state for date/time pickers
@@ -374,48 +369,24 @@ export default function BookingCheckoutPage() {
   const [openActualStartDate, setOpenActualStartDate] = React.useState(false)
   const [openActualEndDate, setOpenActualEndDate] = React.useState(false)
   const [openEtaDate, setOpenEtaDate] = React.useState(false)
-  const [isInitialized, setIsInitialized] = React.useState(false)
   const [isCheckingOut, setIsCheckingOut] = React.useState(false)
   
-  // Use a ref to track if we're currently initializing (prevents effects from running during init)
-  const isInitializingRef = React.useRef(false)
-
-  // One-time sync flags: first sync should NOT mark the form dirty.
-  const didSyncActualStartRef = React.useRef(false)
-  const didSyncActualEndRef = React.useRef(false)
-  const didSyncEtaRef = React.useRef(false)
-
-  // Some date defaults are applied programmatically (not user intent) — suppress dirty once.
-  const suppressNextActualEndDirtyRef = React.useRef(false)
+  // When default values are async, avoid showing "dirty" UI before `reset()` runs.
+  const [isFormReady, setIsFormReady] = React.useState(false)
 
   // Match booking detail page behavior: banner strictly follows RHF dirty state.
-  const hasChanges = isDirty
+  const hasChanges = isFormReady && isDirty
   
 
 
-  // Track initialization key to reload form when booking changes
-  const lastInitializedKey = React.useRef<string | null>(null)
-  
   // Populate form when booking loads
   React.useEffect(() => {
     if (!booking) return
-    
-    // Create a unique key for this booking
-    const initializationKey = bookingId
-    
-    // Check if we've already initialized for this booking
-    if (lastInitializedKey.current === initializationKey) {
-      return // Already initialized for this booking
-    }
-    
-    // Mark that we're initializing - do this FIRST before any state changes
-    isInitializingRef.current = true
-    lastInitializedKey.current = initializationKey
-    // Reset one-time sync flags for this initialization cycle
-    didSyncActualStartRef.current = false
-    didSyncActualEndRef.current = false
-    didSyncEtaRef.current = false
-    suppressNextActualEndDirtyRef.current = false
+
+    // Never overwrite unsaved edits on background refetches.
+    if (isDirty) return
+
+    setIsFormReady(false)
     
     // Calculate date/time values first (use booking fields directly)
     const actualStart = parseDateTime(booking.start_time)
@@ -452,102 +423,17 @@ export default function BookingCheckoutPage() {
     // Reset form to establish defaults (this clears dirty state)
     // IMPORTANT: do NOT keepDefaultValues, otherwise RHF compares against stale defaults and marks dirty.
     reset(initialValues, { keepDirty: false })
-    
-    // Set date/time state AFTER reset - use a microtask to ensure reset completes first
-    Promise.resolve().then(() => {
-      setActualStartDate(actualStart.date)
-      setActualStartTime(actualStart.time)
-      setActualEndDate(actualEnd.date)
-      setActualEndTime(actualEnd.time)
-      setEtaDate(eta.date)
-      setEtaTime(eta.time)
-      
-      // Mark as initialized
-      setIsInitialized(true)
-      
-      // Clear initialization flag after effects have had a chance to run
-      // Use a longer delay to ensure all effects complete
-      setTimeout(() => {
-        isInitializingRef.current = false
-      }, 200)
-    })
-  }, [booking, bookingId, reset])
 
-  // Auto-set end date to start date if end date is not set (only after initialization)
-  // Don't run during initialization or undo operations
-  React.useEffect(() => {
-    if (isInitializingRef.current) return // Don't auto-set during initialization or undo
-    if (!isInitialized) return // Wait for initialization
-    if (!actualStartDate) return // Need a start date
-    if (actualEndDate) return // Already has an end date
-    if (booking?.end_time) return // Don't override if booking already has end_time
-    
-    // Only auto-set if we don't have booking.end_time to use
-    if (booking?.end_time) return // Use booking.end_time instead
+    // Keep local pickers in sync with the saved booking values (display-only).
+    setActualStartDate(actualStart.date)
+    setActualStartTime(actualStart.time)
+    setActualEndDate(actualEnd.date)
+    setActualEndTime(actualEnd.time)
+    setEtaDate(eta.date)
+    setEtaTime(eta.time)
 
-    // This is a programmatic default, not a user edit
-    suppressNextActualEndDirtyRef.current = true
-    setActualEndDate(actualStartDate)
-  }, [isInitialized, actualStartDate, actualEndDate, booking?.end_time])
-
-  // Update form values when date/time changes (only after initialization to avoid marking as dirty during initial load)
-  React.useEffect(() => {
-    // Skip if initializing or not initialized
-    if (!isInitialized || isInitializingRef.current) return
-    
-    // Get current form value to compare
-    const currentValue = watch("start_time")
-    const combined = combineDateTime(actualStartDate, actualStartTime)
-    const newValue = combined ?? undefined // Use undefined instead of null for optional fields
-    
-    // Only update if value actually changed (prevents marking as dirty when value matches default)
-    if (currentValue !== newValue) {
-      const shouldDirty = didSyncActualStartRef.current
-      setValue("start_time", newValue, { shouldDirty, shouldTouch: shouldDirty })
-    }
-
-    // After the first eligible run, future changes should be considered user edits.
-    didSyncActualStartRef.current = true
-  }, [actualStartDate, actualStartTime, setValue, isInitialized, watch])
-
-  React.useEffect(() => {
-    // Skip if initializing or not initialized
-    if (!isInitialized || isInitializingRef.current) return
-    
-    // Get current form value to compare
-    const currentValue = watch("end_time")
-    const combined = combineDateTime(actualEndDate, actualEndTime)
-    const newValue = combined ?? undefined // Use undefined instead of null for optional fields
-    
-    // Only update if value actually changed (prevents marking as dirty when value matches default)
-    if (currentValue !== newValue) {
-      const shouldDirty =
-        didSyncActualEndRef.current && !suppressNextActualEndDirtyRef.current
-      setValue("end_time", newValue, { shouldDirty, shouldTouch: shouldDirty })
-    }
-
-    // Clear one-time suppression (if it was set)
-    suppressNextActualEndDirtyRef.current = false
-    didSyncActualEndRef.current = true
-  }, [actualEndDate, actualEndTime, setValue, isInitialized, watch])
-
-  React.useEffect(() => {
-    // Skip if initializing or not initialized
-    if (!isInitialized || isInitializingRef.current) return
-    
-    // Get current form value to compare
-    const currentValue = watch("eta")
-    const combined = combineDateTime(etaDate, etaTime)
-    const newValue = combined || null // Ensure null instead of empty string
-    
-    // Only update if value actually changed (prevents marking as dirty when value matches default)
-    if (currentValue !== newValue) {
-      const shouldDirty = didSyncEtaRef.current
-      setValue("eta", newValue, { shouldDirty, shouldTouch: shouldDirty })
-    }
-
-    didSyncEtaRef.current = true
-  }, [etaDate, etaTime, setValue, isInitialized, watch])
+    setIsFormReady(true)
+  }, [booking, bookingId, reset, isDirty])
 
   const checkoutMutation = useMutation({
     mutationFn: async (data: FlightLogFormData) => {
@@ -674,13 +560,61 @@ export default function BookingCheckoutPage() {
       
       return bookingResult
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       // Simulate a delay for the loading screen (minimum 2 seconds for UX)
       await new Promise(resolve => setTimeout(resolve, 2000))
       
       await queryClient.invalidateQueries({ queryKey: ["booking", bookingId] })
       await queryClient.invalidateQueries({ queryKey: ["bookings"] })
       toast.success("Flight checked out successfully!")
+
+      // Immediately align RHF defaults to what we just saved so the sticky bar does not appear
+      // until the user makes another edit.
+      if (result?.booking) {
+        const savedBooking = result.booking
+
+        setIsFormReady(false)
+
+        const actualStart = parseDateTime(savedBooking.start_time)
+        const actualEnd = savedBooking.end_time
+          ? parseDateTime(savedBooking.end_time)
+          : { date: undefined, time: "" }
+        const eta = savedBooking.eta
+          ? parseDateTime(savedBooking.eta)
+          : parseDateTime(savedBooking.end_time)
+
+        reset(
+          {
+            checked_out_aircraft_id:
+              savedBooking.checked_out_aircraft_id || savedBooking.aircraft_id || null,
+            checked_out_instructor_id:
+              savedBooking.checked_out_instructor_id || savedBooking.instructor_id || null,
+            start_time: normalizeDateString(savedBooking.start_time || null) ?? undefined,
+            end_time: normalizeDateString(savedBooking.end_time || null) ?? undefined,
+            eta: normalizeDateString(savedBooking.eta || savedBooking.end_time || null),
+            fuel_on_board: savedBooking.fuel_on_board || null,
+            passengers: savedBooking.passengers || null,
+            route: savedBooking.route || null,
+            briefing_completed: savedBooking.briefing_completed ?? false,
+            authorization_completed: savedBooking.authorization_completed ?? false,
+            flight_remarks: savedBooking.flight_remarks || null,
+            flight_type_id: savedBooking.flight_type_id || null,
+            lesson_id: savedBooking.lesson_id || null,
+            remarks: savedBooking.remarks || null,
+            purpose: savedBooking.purpose || "",
+          },
+          { keepDirty: false }
+        )
+
+        setActualStartDate(actualStart.date)
+        setActualStartTime(actualStart.time)
+        setActualEndDate(actualEnd.date)
+        setActualEndTime(actualEnd.time)
+        setEtaDate(eta.date)
+        setEtaTime(eta.time)
+
+        setIsFormReady(true)
+      }
       
       // Refresh the page to reset form state and show updated booking
       router.refresh()
@@ -709,9 +643,7 @@ export default function BookingCheckoutPage() {
 
   const handleUndo = () => {
     if (!booking) return
-    
-    // Mark that we're resetting (to prevent effects from marking as dirty)
-    isInitializingRef.current = true
+    setIsFormReady(false)
     
     // Use the same logic as initialization to determine what the "original" values should be
     const actualStart = parseDateTime(booking.start_time)
@@ -755,12 +687,8 @@ export default function BookingCheckoutPage() {
     
     // IMPORTANT: do NOT keepDefaultValues, otherwise RHF compares against stale defaults and marks dirty.
     reset(originalValues, { keepDirty: false })
-    
-    // Clear the initialization flag after a brief delay
-    setTimeout(() => {
-      isInitializingRef.current = false
-    }, 100)
-    
+
+    setIsFormReady(true)
     toast.info('Changes reverted')
   }
 
@@ -993,10 +921,43 @@ export default function BookingCheckoutPage() {
                                                 selected={actualStartDate}
                                                 captionLayout="dropdown"
                                                 onSelect={(date) => {
-                                                  setActualStartDate(date)
+                                                  const nextDate = date ?? undefined
+                                                  setActualStartDate(nextDate)
                                                   setOpenActualStartDate(false)
-                                                  if (date && !actualEndDate) {
-                                                    setActualEndDate(date)
+
+                                                  // Only write to RHF when we have a complete datetime (date + time),
+                                                  // or when explicitly clearing the date.
+                                                  if (!nextDate) {
+                                                    setValue("start_time", undefined, {
+                                                      shouldDirty: true,
+                                                      shouldTouch: true,
+                                                      shouldValidate: true,
+                                                    })
+                                                  } else if (actualStartTime) {
+                                                    const nextIso = combineDateTime(nextDate, actualStartTime)
+                                                    if (nextIso) {
+                                                      setValue("start_time", nextIso, {
+                                                        shouldDirty: true,
+                                                        shouldTouch: true,
+                                                        shouldValidate: true,
+                                                      })
+                                                    }
+                                                  }
+
+                                                  // UX: if the user is setting the start date and there's no end date yet,
+                                                  // default the end date to match (user action => can be dirty).
+                                                  if (nextDate && !actualEndDate) {
+                                                    setActualEndDate(nextDate)
+                                                    if (actualEndTime) {
+                                                      const nextEndIso = combineDateTime(nextDate, actualEndTime)
+                                                      if (nextEndIso) {
+                                                        setValue("end_time", nextEndIso, {
+                                                          shouldDirty: true,
+                                                          shouldTouch: true,
+                                                          shouldValidate: true,
+                                                        })
+                                                      }
+                                                    }
                                                   }
                                                 }}
                                               />
@@ -1006,7 +967,28 @@ export default function BookingCheckoutPage() {
                                         <div className="w-32">
                                           <Select
                                             value={actualStartTime || "none"}
-                                            onValueChange={(value) => setActualStartTime(value === "none" ? "" : value)}
+                                            onValueChange={(value) => {
+                                              const nextTime = value === "none" ? "" : value
+                                              setActualStartTime(nextTime)
+
+                                              if (!nextTime) {
+                                                setValue("start_time", undefined, {
+                                                  shouldDirty: true,
+                                                  shouldTouch: true,
+                                                  shouldValidate: true,
+                                                })
+                                                return
+                                              }
+
+                                              if (!actualStartDate) return
+                                              const nextIso = combineDateTime(actualStartDate, nextTime)
+                                              if (!nextIso) return
+                                              setValue("start_time", nextIso, {
+                                                shouldDirty: true,
+                                                shouldTouch: true,
+                                                shouldValidate: true,
+                                              })
+                                            }}
                                           >
                                             <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                                               <SelectValue placeholder="Time">
@@ -1055,8 +1037,27 @@ export default function BookingCheckoutPage() {
                                                 selected={actualEndDate}
                                                 captionLayout="dropdown"
                                                 onSelect={(date) => {
-                                                  setActualEndDate(date)
+                                                  const nextDate = date ?? undefined
+                                                  setActualEndDate(nextDate)
                                                   setOpenActualEndDate(false)
+
+                                                  if (!nextDate) {
+                                                    setValue("end_time", undefined, {
+                                                      shouldDirty: true,
+                                                      shouldTouch: true,
+                                                      shouldValidate: true,
+                                                    })
+                                                    return
+                                                  }
+
+                                                  if (!actualEndTime) return
+                                                  const nextIso = combineDateTime(nextDate, actualEndTime)
+                                                  if (!nextIso) return
+                                                  setValue("end_time", nextIso, {
+                                                    shouldDirty: true,
+                                                    shouldTouch: true,
+                                                    shouldValidate: true,
+                                                  })
                                                 }}
                                                 disabled={actualStartDate ? { before: actualStartDate } : undefined}
                                               />
@@ -1066,7 +1067,28 @@ export default function BookingCheckoutPage() {
                                         <div className="w-32">
                                           <Select
                                             value={actualEndTime || "none"}
-                                            onValueChange={(value) => setActualEndTime(value === "none" ? "" : value)}
+                                            onValueChange={(value) => {
+                                              const nextTime = value === "none" ? "" : value
+                                              setActualEndTime(nextTime)
+
+                                              if (!nextTime) {
+                                                setValue("end_time", undefined, {
+                                                  shouldDirty: true,
+                                                  shouldTouch: true,
+                                                  shouldValidate: true,
+                                                })
+                                                return
+                                              }
+
+                                              if (!actualEndDate) return
+                                              const nextIso = combineDateTime(actualEndDate, nextTime)
+                                              if (!nextIso) return
+                                              setValue("end_time", nextIso, {
+                                                shouldDirty: true,
+                                                shouldTouch: true,
+                                                shouldValidate: true,
+                                              })
+                                            }}
                                           >
                                             <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                                               <SelectValue placeholder="Time">
@@ -1409,8 +1431,27 @@ export default function BookingCheckoutPage() {
                                             selected={etaDate}
                                             captionLayout="dropdown"
                                             onSelect={(date) => {
-                                              setEtaDate(date)
+                                              const nextDate = date ?? undefined
+                                              setEtaDate(nextDate)
                                               setOpenEtaDate(false)
+
+                                              if (!nextDate) {
+                                                setValue("eta", null, {
+                                                  shouldDirty: true,
+                                                  shouldTouch: true,
+                                                  shouldValidate: true,
+                                                })
+                                                return
+                                              }
+
+                                              if (!etaTime) return
+                                              const nextIso = combineDateTime(nextDate, etaTime)
+                                              if (!nextIso) return
+                                              setValue("eta", nextIso, {
+                                                shouldDirty: true,
+                                                shouldTouch: true,
+                                                shouldValidate: true,
+                                              })
                                             }}
                                           />
                                         </PopoverContent>
@@ -1419,7 +1460,28 @@ export default function BookingCheckoutPage() {
                                     <div className="w-32">
                                       <Select
                                         value={etaTime || "none"}
-                                        onValueChange={(value) => setEtaTime(value === "none" ? "" : value)}
+                                        onValueChange={(value) => {
+                                          const nextTime = value === "none" ? "" : value
+                                          setEtaTime(nextTime)
+
+                                          if (!nextTime) {
+                                            setValue("eta", null, {
+                                              shouldDirty: true,
+                                              shouldTouch: true,
+                                              shouldValidate: true,
+                                            })
+                                            return
+                                          }
+
+                                          if (!etaDate) return
+                                          const nextIso = combineDateTime(etaDate, nextTime)
+                                          if (!nextIso) return
+                                          setValue("eta", nextIso, {
+                                            shouldDirty: true,
+                                            shouldTouch: true,
+                                            shouldValidate: true,
+                                          })
+                                        }}
                                       >
                                         <SelectTrigger className="w-full h-10 border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                                           <SelectValue placeholder="Time">

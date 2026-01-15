@@ -18,3 +18,41 @@ export function formatTimeForDisplay(time: string): string {
   const displayHour = hour % 12 || 12
   return `${displayHour}:${minutes} ${ampm}`
 }
+
+/**
+ * Get initials from first name, last name, and email
+ */
+export function getUserInitials(firstName?: string | null, lastName?: string | null, email?: string | null): string {
+  if (firstName && lastName) {
+    return `${firstName[0]}${lastName[0]}`.toUpperCase()
+  }
+  if (firstName && firstName.length > 0) {
+    return firstName.substring(0, Math.min(firstName.length, 2)).toUpperCase()
+  }
+  if (lastName && lastName.length > 0) {
+    return lastName.substring(0, Math.min(lastName.length, 2)).toUpperCase()
+  }
+  if (email && email.length > 0) {
+    return email.substring(0, Math.min(email.length, 2)).toUpperCase()
+  }
+  return "??"
+}
+
+/**
+ * Get initials from a full name and email
+ */
+export function getInitialsFromName(name?: string | null, email?: string | null): string {
+  if (name) {
+    const parts = name.trim().split(/\s+/)
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    }
+    if (name.length > 0) {
+      return name.substring(0, Math.min(name.length, 2)).toUpperCase()
+    }
+  }
+  if (email && email.length > 0) {
+    return email.substring(0, Math.min(email.length, 2)).toUpperCase()
+  }
+  return "??"
+}

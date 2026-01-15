@@ -122,8 +122,15 @@ export const bookingCreateSchema = z.object({
 // Numeric validation for meter readings and times
 // Note: durations like dual_time/solo_time can be 0.0, so we allow non-negative numbers.
 const numericSchema = z.preprocess(
-  (val) => val === '' || val === null ? null : val,
-  z.coerce.number().min(0).optional().nullable()
+  (val) => {
+    if (val === '' || val === null || (typeof val === 'number' && isNaN(val))) return null
+    if (typeof val === 'string') {
+      const parsed = parseFloat(val)
+      return isNaN(parsed) ? val : parsed
+    }
+    return val
+  },
+  z.number().min(0).optional().nullable()
 )
 
 const billingBasisSchema = z.preprocess(
@@ -172,8 +179,15 @@ export const bookingUpdateSchema = z.object({
   billing_basis: billingBasisSchema,
   billing_hours: numericSchema,
   fuel_on_board: z.preprocess(
-    (val) => val === '' || val === null ? null : val,
-    z.coerce.number().int().min(0).optional().nullable()
+    (val) => {
+      if (val === '' || val === null || (typeof val === 'number' && isNaN(val))) return null
+      if (typeof val === 'string') {
+        const parsed = parseFloat(val)
+        return isNaN(parsed) ? val : parsed
+      }
+      return val
+    },
+    z.number().int().min(0).optional().nullable()
   ),
   passengers: z.string().max(500).optional().nullable(),
   route: z.string().max(500).optional().nullable(),

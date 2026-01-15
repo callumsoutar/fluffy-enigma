@@ -42,19 +42,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+import { cn, getUserInitials } from "@/lib/utils"
 import type { TrainingOverviewResponse, TrainingOverviewRow, TrainingOverviewView } from "@/lib/types/training-overview"
-
-function getUserInitials(
-  firstName: string | null,
-  lastName: string | null,
-  email: string
-): string {
-  if (firstName && lastName) return `${firstName[0]}${lastName[0]}`.toUpperCase()
-  if (firstName) return firstName.substring(0, 2).toUpperCase()
-  if (lastName) return lastName.substring(0, 2).toUpperCase()
-  return email.substring(0, 2).toUpperCase()
-}
 
 function safeFormatDate(value: string | null | undefined) {
   if (!value) return "-"

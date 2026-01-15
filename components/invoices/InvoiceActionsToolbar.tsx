@@ -38,7 +38,6 @@ export default function InvoiceActionsToolbar({
   saveLoading = false,
   approveLoading = false,
   showApprove = false,
-  bookingId,
 }: InvoiceActionsToolbarProps) {
   const router = useRouter()
   const displayInvoiceNumber =
@@ -86,37 +85,38 @@ export default function InvoiceActionsToolbar({
         <div className="h-8 w-px bg-border shrink-0 hidden sm:block" />
 
         {displayInvoiceNumber && (
-          <div className="flex flex-col min-w-0">
-            <span className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground leading-none mb-1">
-              Invoice
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-base sm:text-xl tracking-tight truncate leading-none">
-                {displayInvoiceNumber}
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground leading-none mb-1">
+                Invoice
               </span>
-              {status && (
-                <Badge
-                  variant={getStatusBadgeVariant(status)}
-                  className="px-1.5 py-0 h-4.5 text-[9px] font-bold uppercase tracking-wider rounded sm:hidden shrink-0"
-                >
-                  {getStatusLabel(status)}
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-base sm:text-xl tracking-tight truncate leading-none">
+                  {displayInvoiceNumber}
+                </span>
+                {status && (
+                  <Badge
+                    variant={getStatusBadgeVariant(status)}
+                    className="px-1.5 py-0 h-4.5 text-[9px] font-bold uppercase tracking-wider rounded sm:hidden shrink-0"
+                  >
+                    {getStatusLabel(status)}
+                  </Badge>
+                )}
+              </div>
             </div>
+            {status && (
+              <Badge
+                variant={getStatusBadgeVariant(status)}
+                className="hidden sm:inline-flex px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md shrink-0"
+              >
+                {getStatusLabel(status)}
+              </Badge>
+            )}
           </div>
         )}
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar justify-end">
-        {status && (
-          <Badge
-            variant={getStatusBadgeVariant(status)}
-            className="hidden sm:inline-flex px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md shrink-0"
-          >
-            {getStatusLabel(status)}
-          </Badge>
-        )}
-
         <div className="flex items-center gap-2 shrink-0">
           {rightSlot}
 
@@ -201,18 +201,6 @@ export default function InvoiceActionsToolbar({
                 </Button>
               )}
             </>
-          )}
-
-          {bookingId && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 sm:h-9 whitespace-nowrap"
-              onClick={() => router.push(`/bookings/${bookingId}`)}
-            >
-              View Booking
-            </Button>
           )}
         </div>
       </div>

@@ -97,7 +97,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
                 <AvatarImage src={imageUrl} alt={registration} />
               ) : null}
               <AvatarFallback className="bg-slate-100 text-slate-600 text-xs font-semibold">
-                {registration.substring(0, 2).toUpperCase()}
+                {registration ? registration.substring(0, 2).toUpperCase() : "??"}
               </AvatarFallback>
             </Avatar>
             <div className="flex flex-col">

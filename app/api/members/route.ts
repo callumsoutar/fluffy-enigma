@@ -246,20 +246,22 @@ export async function GET(request: NextRequest) {
   // Filter by person_type
   if (filters.person_type && filters.person_type !== 'all') {
     filteredMembers = filteredMembers.filter((user) => {
-      const hasActiveMembership = user.membership?.is_active
+      // Check for valid membership: has membership record with non-expired expiry_date
+      const hasValidMembership = user.membership && 
+        new Date(user.membership.expiry_date) >= new Date()
       const hasInstructorRecord = !!user.instructor
       const roleName = user.role?.role
       const isStaff = roleName === 'owner' || roleName === 'admin'
 
       switch (filters.person_type) {
         case 'member':
-          return hasActiveMembership
+          return hasValidMembership
         case 'instructor':
           return hasInstructorRecord
         case 'staff':
           return isStaff
         case 'contact':
-          return !hasActiveMembership && !hasInstructorRecord && !isStaff
+          return !hasValidMembership && !hasInstructorRecord && !isStaff
         default:
           return true
       }

@@ -86,7 +86,7 @@ export async function middleware(request: NextRequest) {
       
       // Page routes redirect
       const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
+      url.pathname = '/'
       url.searchParams.set('error', 'unauthorized')
       return NextResponse.redirect(url)
     }

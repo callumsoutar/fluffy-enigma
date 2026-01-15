@@ -979,12 +979,32 @@ export default function InvoiceDetailPage() {
                   isReadOnly ? (
                     <InvoiceViewActions
                       invoiceId={invoice.id}
-                      invoiceNumber={invoice.invoice_number}
                       billToEmail={invoice.user?.email || selectedMember?.email || null}
                       status={invoice.status}
-                      balanceDue={invoice.balance_due ?? null}
-                      totalAmount={invoice.total_amount ?? total}
-                      totalPaid={invoice.total_paid ?? 0}
+                      settings={invoiceSettings}
+                      bookingId={invoice.booking_id}
+                      invoice={{
+                        invoiceNumber: invoice.invoice_number || `#${invoice.id.slice(0, 8)}`,
+                        issueDate: invoice.issue_date,
+                        dueDate: invoice.due_date,
+                        taxRate: invoice.tax_rate ?? organizationTaxRate,
+                        subtotal: invoice.subtotal ?? subtotal,
+                        taxTotal: invoice.tax_total ?? totalTax,
+                        totalAmount: invoice.total_amount ?? total,
+                        totalPaid: invoice.total_paid ?? 0,
+                        balanceDue:
+                          invoice.balance_due ??
+                          Math.max(0, (invoice.total_amount ?? total) - (invoice.total_paid ?? 0)),
+                        billToName,
+                      }}
+                      items={items.map((i) => ({
+                        id: i.id,
+                        description: i.description,
+                        quantity: i.quantity,
+                        unit_price: i.unit_price,
+                        rate_inclusive: i.rate_inclusive,
+                        line_total: i.line_total,
+                      }))}
                     />
                   ) : null
                 }

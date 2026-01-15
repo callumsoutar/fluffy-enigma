@@ -8,21 +8,7 @@ import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { IconPlaneDeparture } from "@tabler/icons-react"
 import { useAuth } from "@/contexts/auth-context"
-import { cn } from "@/lib/utils"
-
-function getUserInitials(name: string, email: string): string {
-  if (name && name.trim()) {
-    const parts = name.trim().split(/\s+/)
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    }
-    return name.substring(0, 2).toUpperCase()
-  }
-  if (email) {
-    return email.substring(0, 2).toUpperCase()
-  }
-  return "U"
-}
+import { cn, getInitialsFromName } from "@/lib/utils"
 
 export function SiteHeader() {
   const isMobile = useIsMobile()
@@ -38,7 +24,7 @@ export function SiteHeader() {
   
   const userEmail = user?.email || ""
   const userAvatar = user?.user_metadata?.avatar_url || ""
-  const userInitials = getUserInitials(userName, userEmail)
+  const userInitials = getInitialsFromName(userName, userEmail)
   
   return (
     <header className={cn(

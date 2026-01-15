@@ -72,7 +72,7 @@ export async function RoleGuard({
     if (fallback) {
       return <>{fallback}</>
     }
-    redirect('/dashboard?error=unauthorized')
+    redirect('/?error=unauthorized')
   }
 
   return <>{children}</>

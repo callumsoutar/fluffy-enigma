@@ -2,10 +2,10 @@
 
 /**
  * Person type classification
- * Members: Users with active memberships
+ * Members: Users with valid (non-expired) memberships
  * Instructors: Users with instructor records
  * Staff: Users with admin/owner roles (or could be separate staff table)
- * Contacts: Users without active memberships or instructor records
+ * Contacts: Users without valid memberships or instructor records
  */
 export type PersonType = 'member' | 'instructor' | 'staff' | 'contact' | 'all'
 

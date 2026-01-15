@@ -23,6 +23,7 @@ import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { getInitialsFromName } from "@/lib/utils"
 import {
   Sidebar,
   SidebarContent,
@@ -32,17 +33,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-
-function getUserInitials(name: string, email: string): string {
-  if (name) {
-    const parts = name.trim().split(" ")
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    }
-    return name.substring(0, 2).toUpperCase()
-  }
-  return email.substring(0, 2).toUpperCase()
-}
 
 // Navigation configuration with role-based access
 import type { Icon } from "@tabler/icons-react"
@@ -65,7 +55,7 @@ const navigationConfig: NavSection[] = [
       items: [
         {
           title: "Dashboard",
-        url: "/dashboard",
+        url: "/",
           icon: IconHome,
         roles: ['owner', 'admin', 'instructor', 'member', 'student'],
         },
@@ -243,7 +233,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       user.email?.split("@")[0] ||
       "User"
     const email = user.email || ""
-    const initials = getUserInitials(name, email)
+    const initials = getInitialsFromName(name, email)
 
     return {
       name,

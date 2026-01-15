@@ -23,7 +23,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { cn } from "@/lib/utils"
+import { cn, getUserInitials } from "@/lib/utils"
 import type { InstructorWithUser } from "@/lib/types/instructors"
 import type { InstructorCategory } from "@/lib/types/instructor-categories"
 import { CalendarIcon } from "lucide-react"
@@ -175,23 +175,6 @@ async function fetchInstructorCategories(): Promise<InstructorCategory[]> {
       name: String(category.name ?? ""),
     }))
     .filter((category) => Boolean(category.id) && Boolean(category.name))
-}
-
-function getUserInitials(
-  firstName: string | null,
-  lastName: string | null,
-  email: string
-): string {
-  if (firstName && lastName) {
-    return `${firstName[0]}${lastName[0]}`.toUpperCase()
-  }
-  if (firstName) {
-    return firstName.substring(0, 2).toUpperCase()
-  }
-  if (lastName) {
-    return lastName.substring(0, 2).toUpperCase()
-  }
-  return email.substring(0, 2).toUpperCase()
 }
 
 function buildDetailsFormValues(instructor: InstructorWithUser): DetailsFormValues {

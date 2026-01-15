@@ -286,7 +286,7 @@ export function MemberMemberships({ memberId }: MemberMembershipsProps) {
                 <Button
                   variant="outline"
                   onClick={() =>
-                    window.open(`/dashboard/invoices/edit/${currentMembership.invoice_id}`, "_blank")
+                    window.open(`/invoices/${currentMembership.invoice_id}`, "_blank")
                   }
                   size="sm"
                   className="w-full sm:w-auto"

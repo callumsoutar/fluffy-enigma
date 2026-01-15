@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, Mail, PlusCircle, Printer } from "lucide-react"
+import { ChevronDown, Mail, PlusCircle, Printer, Download, Loader2, Calendar } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,36 +10,91 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import RecordPaymentModal from "@/components/invoices/RecordPaymentModal"
+import { pdf } from "@react-pdf/renderer"
+import InvoiceReportPDF from "./InvoiceReportPDF"
+import type { InvoiceDocumentData, InvoiceDocumentItem, InvoicingSettings } from "./InvoiceDocumentView"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export type InvoiceViewActionsProps = {
   invoiceId: string
-  invoiceNumber?: string | null
-  billToEmail?: string | null
+  invoice: InvoiceDocumentData
+  items: InvoiceDocumentItem[]
+  settings: InvoicingSettings
   status?: string | null
-  balanceDue?: number | null
-  totalAmount?: number | null
-  totalPaid?: number | null
+  billToEmail?: string | null
+  bookingId?: string | null
 }
 
 export default function InvoiceViewActions({
   invoiceId,
-  invoiceNumber,
-  billToEmail,
+  invoice,
+  items,
+  settings,
   status,
-  balanceDue,
-  totalAmount,
-  totalPaid,
+  billToEmail,
+  bookingId,
 }: InvoiceViewActionsProps) {
+  const router = useRouter()
   const [paymentOpen, setPaymentOpen] = React.useState(false)
+  const [isDownloading, setIsDownloading] = React.useState(false)
+  const [isPrinting, setIsPrinting] = React.useState(false)
 
   const canEmail = !!billToEmail
   const isPaid = status === "paid"
+
+  const handleDownloadPDF = async () => {
+    setIsDownloading(true)
+    try {
+      const doc = <InvoiceReportPDF invoice={invoice} items={items} settings={settings} />
+      const blob = await pdf(doc).toBlob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `Invoice-${invoice.invoiceNumber || invoiceId.slice(0, 8)}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      toast.success("Invoice PDF downloaded")
+    } catch (error) {
+      console.error("Error downloading PDF:", error)
+      toast.error("Failed to download PDF")
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  const handlePrint = async () => {
+    setIsPrinting(true)
+    try {
+      const doc = <InvoiceReportPDF invoice={invoice} items={items} settings={settings} />
+      const blob = await pdf(doc).toBlob()
+      const url = URL.createObjectURL(blob)
+      const printWindow = window.open(url, "_blank")
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print()
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        }
+      } else {
+        toast.error("Pop-up blocked. Please allow pop-ups to print.")
+      }
+    } catch (error) {
+      console.error("Error printing PDF:", error)
+      toast.error("Failed to generate print view")
+    } finally {
+      setIsPrinting(false)
+    }
+  }
+
   const emailInvoice = () => {
     if (!billToEmail) return
-    const subject = encodeURIComponent(`Invoice ${invoiceNumber || ""}`.trim())
+    const subject = encodeURIComponent(`Invoice ${invoice.invoiceNumber || ""}`.trim())
     const body = encodeURIComponent(
-      `Hi,\n\nPlease find your invoice ${invoiceNumber || ""}.\n\nBalance due: $${
-        typeof balanceDue === "number" ? balanceDue.toFixed(2) : "0.00"
+      `Hi,\n\nPlease find your invoice ${invoice.invoiceNumber || ""}.\n\nBalance due: $${
+        typeof invoice.balanceDue === "number" ? invoice.balanceDue.toFixed(2) : "0.00"
       }\n\nThanks,\n`
     )
     window.location.href = `mailto:${billToEmail}?subject=${subject}&body=${body}`
@@ -47,58 +102,99 @@ export default function InvoiceViewActions({
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button 
-            type="button" 
-            variant="outline" 
+      <div className="flex items-center gap-2">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 sm:h-9 sm:w-9"
+                onClick={emailInvoice}
+                disabled={!canEmail}
+              >
+                <Mail className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{canEmail ? "Email Invoice" : "No email address provided"}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 sm:h-9 sm:w-9"
+                onClick={handleDownloadPDF}
+                disabled={isDownloading}
+              >
+                {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Download PDF</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {!isPaid && (
+          <Button
+            type="button"
             size="sm"
-            className="h-8 sm:h-9 gap-1.5 print:hidden"
+            className="h-8 sm:h-9 gap-1.5"
+            onClick={() => setPaymentOpen(true)}
           >
-            Options
-            <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            <PlusCircle className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Add Payment</span>
+            <span className="sm:hidden">Pay</span>
           </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem onSelect={() => window.print()}>
-            <Printer className="h-4 w-4" />
-            Print / Save PDF
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={(e) => {
-              if (!canEmail) {
-                e.preventDefault()
-                return
-              }
-              emailInvoice()
-            }}
-            disabled={!canEmail}
-          >
-            <Mail className="h-4 w-4" />
-            Send Email
-          </DropdownMenuItem>
-          {!isPaid && (
-            <DropdownMenuItem
-              onSelect={() => {
-                void invoiceId
-                setPaymentOpen(true)
-              }}
+        )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              className="h-8 sm:h-9 gap-1.5"
             >
-              <PlusCircle className="h-4 w-4" />
-              Record Payment
+              Options
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handlePrint(); }} disabled={isPrinting}>
+              {isPrinting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Printer className="h-4 w-4 mr-2" />}
+              Print PDF
             </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+            
+            {bookingId && (
+              <DropdownMenuItem onSelect={() => router.push(`/bookings/${bookingId}`)}>
+                <Calendar className="h-4 w-4 mr-2" />
+                View Booking
+              </DropdownMenuItem>
+            )}
+            
+            {isPaid && (
+              <DropdownMenuItem onSelect={() => setPaymentOpen(true)}>
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Record Payment
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       <RecordPaymentModal
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
         invoiceId={invoiceId}
-        invoiceNumber={invoiceNumber}
-        totalAmount={totalAmount ?? null}
-        totalPaid={totalPaid ?? null}
-        balanceDue={balanceDue ?? null}
+        invoiceNumber={invoice.invoiceNumber}
+        totalAmount={invoice.totalAmount ?? null}
+        totalPaid={invoice.totalPaid ?? null}
+        balanceDue={invoice.balanceDue ?? null}
       />
     </>
   )

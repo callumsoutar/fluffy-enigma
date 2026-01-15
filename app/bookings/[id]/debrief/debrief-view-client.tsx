@@ -6,6 +6,7 @@ import {
   ChevronLeft, 
   Download, 
   Loader2,
+  Mail,
 } from "lucide-react";
 import React, { useState } from "react";
 import { toast } from "sonner";
@@ -65,6 +66,25 @@ export default function DebriefViewClient({
     } finally {
       setIsPrinting(false);
     }
+  };
+
+  const handleEmail = () => {
+    const studentEmail = booking.student?.email;
+    if (!studentEmail) {
+      toast.error('Student email not found');
+      return;
+    }
+
+    const instructorName = lessonProgress?.instructor?.user
+      ? `${lessonProgress.instructor.user.first_name || ''} ${lessonProgress.instructor.user.last_name || ''}`.trim() || lessonProgress.instructor.user.email
+      : booking.instructor?.first_name 
+        ? `${booking.instructor.first_name} ${booking.instructor.last_name || ''}`.trim()
+        : 'Instructor';
+
+    const subject = `Flight Debrief - ${booking.lesson?.name || 'Training Flight'}`;
+    const body = `Hi ${booking.student?.first_name || 'there'},\n\nPlease find your flight debrief report here: ${window.location.href}\n\nRegards,\n${instructorName}`;
+    
+    window.location.href = `mailto:${studentEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   const handleDownloadPDF = async () => {
@@ -137,6 +157,15 @@ export default function DebriefViewClient({
             >
               {isPrinting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
               Print
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="gap-2 shadow-sm h-9"
+              onClick={handleEmail}
+            >
+              <Mail className="h-3.5 w-3.5" />
+              Email
             </Button>
           </div>
         </div>

@@ -119,21 +119,6 @@ const styles = StyleSheet.create({
   gridItem: {
     marginBottom: 25,
   },
-  focusBox: {
-    backgroundColor: '#eff6ff',
-    padding: 12,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderStyle: 'solid',
-    borderColor: '#dbeafe',
-  },
-  focusLabel: {
-    fontSize: 7,
-    fontWeight: 'bold',
-    color: '#2563eb',
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
   footer: {
     position: 'absolute',
     bottom: 40,
@@ -290,8 +275,8 @@ export default function DebriefReportPDF({
               <Text style={styles.sectionTitle}>Areas for Improvement</Text>
               <Text style={styles.content}>{lessonProgress?.areas_for_improvement || 'No areas for improvement recorded.'}</Text>
             </View>
-            <View style={styles.focusBox}>
-              <Text style={styles.focusLabel}>Focus for Next Lesson</Text>
+            <View style={styles.gridItem}>
+              <Text style={styles.sectionTitle}>Focus for Next Lesson</Text>
               <Text style={[styles.content, { fontWeight: 'bold' }]}>{lessonProgress?.focus_next_lesson || "Standard progress to next lesson."}</Text>
             </View>
           </View>

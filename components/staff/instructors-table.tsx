@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-table"
 import { useRouter } from "next/navigation"
 import { IconSearch, IconChevronRight, IconBriefcase, IconUserShare } from "@tabler/icons-react"
-import { cn } from "@/lib/utils"
+import { cn, getUserInitials } from "@/lib/utils"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,19 +22,6 @@ import type { InstructorWithUser } from "@/lib/types/instructors"
 
 interface InstructorsTableProps {
   instructors: InstructorWithUser[]
-}
-
-function getUserInitials(firstName: string | null, lastName: string | null, email: string): string {
-  if (firstName && lastName) {
-    return `${firstName[0]}${lastName[0]}`.toUpperCase()
-  }
-  if (firstName) {
-    return firstName.substring(0, 2).toUpperCase()
-  }
-  if (lastName) {
-    return lastName.substring(0, 2).toUpperCase()
-  }
-  return email.substring(0, 2).toUpperCase()
 }
 
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {

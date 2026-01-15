@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
 import { IconUsers, IconClock, IconPlane, IconTrendingUp, IconInfoCircle } from "@tabler/icons-react"
+import { Loader2 } from "lucide-react"
 
 import {
   Card,
@@ -10,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 interface DashboardStats {
@@ -72,7 +72,9 @@ function StatCard({ title, value, isLoading, icon, tooltip, subtitle }: StatCard
           </Tooltip>
         </div>
         {isLoading ? (
-          <Skeleton className="h-10 w-28" />
+          <div className="flex items-center h-10">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />
+          </div>
         ) : (
           <CardTitle className="text-3xl font-semibold tabular-nums @[250px]/card:text-4xl leading-none">
             {formatNumber(value ?? 0)}

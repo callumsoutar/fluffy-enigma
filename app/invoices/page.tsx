@@ -2,16 +2,12 @@
 
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
 import { InvoicesTable } from "@/components/invoices/invoices-table"
 import type { InvoiceWithRelations, InvoicesFilter, InvoiceStatus } from "@/lib/types/invoices"
 
@@ -44,7 +40,6 @@ async function fetchInvoices(filters?: InvoicesFilter): Promise<InvoiceWithRelat
 }
 
 export default function InvoicesPage() {
-  const router = useRouter()
   const [activeTab, setActiveTab] = React.useState("all")
   const [mounted, setMounted] = React.useState(false)
   const [filters, setFilters] = React.useState<InvoicesFilter>({})
@@ -104,7 +99,7 @@ export default function InvoicesPage() {
   })
 
   const tabCounts = React.useMemo(() => {
-    if (!mounted || isLoading) {
+    if (!mounted) {
       return { all: 0, draft: 0, pending: 0, paid: 0, overdue: 0 }
     }
 
@@ -115,13 +110,7 @@ export default function InvoicesPage() {
       paid: allInvoicesForCounts.filter((inv) => inv.status === "paid").length,
       overdue: allInvoicesForCounts.filter((inv) => inv.status === "overdue").length,
     }
-  }, [allInvoicesForCounts, isLoading, mounted])
-
-  // Filter invoices based on active tab
-  const filteredInvoices = React.useMemo(() => {
-    if (isLoading || !mounted) return []
-    return allInvoices
-  }, [allInvoices, isLoading, mounted])
+  }, [allInvoicesForCounts, mounted])
 
   // Handle filter changes from table component
   const handleFiltersChange = React.useCallback((tableFilters: {
@@ -138,27 +127,9 @@ export default function InvoicesPage() {
         delete newFilters.search
       }
       
-      // Handle status filter based on whether we're searching
-      if (tableFilters.search) {
-        // When searching, allow status filter to work independently of tabs
-        if (tableFilters.status) {
-          newFilters.status = tableFilters.status
-        } else {
-          delete newFilters.status
-        }
-      } else {
-        // When not searching, respect tab filters
-        if (!["draft", "pending", "paid", "overdue"].includes(activeTab) && tableFilters.status) {
-          newFilters.status = tableFilters.status
-        } else if (["draft", "pending", "paid", "overdue"].includes(activeTab)) {
-          // Clear status filter when in a tab that sets it
-          delete newFilters.status
-        }
-      }
-      
       return newFilters
     })
-  }, [activeTab])
+  }, [])
 
   return (
     <SidebarProvider
@@ -177,121 +148,23 @@ export default function InvoicesPage() {
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
               <div className="px-4 lg:px-6">
                 <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h1 className="text-2xl font-bold tracking-tight">Invoices</h1>
-                      <p className="text-muted-foreground">
-                        View and manage all invoices
-                      </p>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-muted-foreground">Loading invoices...</div>
                     </div>
-                    <Button
-                      onClick={() => router.push('/invoices/new')}
-                      className="bg-slate-900 text-white font-semibold h-10 px-5 hover:bg-slate-800"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      New Invoice
-                    </Button>
-                  </div>
-
-                  <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList>
-                      <TabsTrigger value="all">
-                        All ({tabCounts.all})
-                      </TabsTrigger>
-                      <TabsTrigger value="draft">
-                        Draft ({tabCounts.draft})
-                      </TabsTrigger>
-                      <TabsTrigger value="pending">
-                        Pending ({tabCounts.pending})
-                      </TabsTrigger>
-                      <TabsTrigger value="paid">
-                        Paid ({tabCounts.paid})
-                      </TabsTrigger>
-                      <TabsTrigger value="overdue">
-                        Overdue ({tabCounts.overdue})
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="all" className="mt-4">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Loading invoices...</div>
-                        </div>
-                      ) : isError ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Failed to load invoices.</div>
-                        </div>
-                      ) : (
-                        <InvoicesTable
-                          invoices={filteredInvoices}
-                          onFiltersChange={handleFiltersChange}
-                        />
-                      )}
-                    </TabsContent>
-                    <TabsContent value="draft" className="mt-4">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Loading invoices...</div>
-                        </div>
-                      ) : isError ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Failed to load invoices.</div>
-                        </div>
-                      ) : (
-                        <InvoicesTable
-                          invoices={filteredInvoices}
-                          onFiltersChange={handleFiltersChange}
-                        />
-                      )}
-                    </TabsContent>
-                    <TabsContent value="pending" className="mt-4">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Loading invoices...</div>
-                        </div>
-                      ) : isError ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Failed to load invoices.</div>
-                        </div>
-                      ) : (
-                        <InvoicesTable
-                          invoices={filteredInvoices}
-                          onFiltersChange={handleFiltersChange}
-                        />
-                      )}
-                    </TabsContent>
-                    <TabsContent value="paid" className="mt-4">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Loading invoices...</div>
-                        </div>
-                      ) : isError ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Failed to load invoices.</div>
-                        </div>
-                      ) : (
-                        <InvoicesTable
-                          invoices={filteredInvoices}
-                          onFiltersChange={handleFiltersChange}
-                        />
-                      )}
-                    </TabsContent>
-                    <TabsContent value="overdue" className="mt-4">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Loading invoices...</div>
-                        </div>
-                      ) : isError ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="text-muted-foreground">Failed to load invoices.</div>
-                        </div>
-                      ) : (
-                        <InvoicesTable
-                          invoices={filteredInvoices}
-                          onFiltersChange={handleFiltersChange}
-                        />
-                      )}
-                    </TabsContent>
-                  </Tabs>
+                  ) : isError ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-muted-foreground">Failed to load invoices.</div>
+                    </div>
+                  ) : (
+                    <InvoicesTable
+                      invoices={allInvoices}
+                      activeTab={activeTab}
+                      onTabChange={setActiveTab}
+                      tabCounts={tabCounts}
+                      onFiltersChange={handleFiltersChange}
+                    />
+                  )}
                 </div>
               </div>
             </div>

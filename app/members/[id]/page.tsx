@@ -34,6 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
@@ -49,6 +50,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { toast } from "sonner"
+import { getUserInitials } from "@/lib/utils"
 import type { MemberWithRelations } from "@/lib/types/members"
 import { MemberPilotDetails } from "@/components/members/member-pilot-details"
 import { MemberContactDetails } from "@/components/members/member-contact-details"
@@ -58,6 +60,7 @@ import { MemberFlightHistoryTab } from "@/components/members/member-flight-histo
 import { MemberTrainingTab } from "@/components/members/member-training-tab"
 import { MemberHistoryTab } from "@/components/members/member-history-tab"
 import { useAuth } from "@/contexts/auth-context"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { isValidRole, type UserRole } from "@/lib/types/roles"
 import { CreateInstructorProfileDialog } from "@/components/members/CreateInstructorProfileDialog"
 import { StickyFormActions } from "@/components/ui/sticky-form-actions"
@@ -76,19 +79,6 @@ async function fetchMember(id: string): Promise<MemberWithRelations> {
   }
   const data = await response.json()
   return data.member
-}
-
-function getUserInitials(firstName: string | null, lastName: string | null, email: string): string {
-  if (firstName && lastName) {
-    return `${firstName[0]}${lastName[0]}`.toUpperCase()
-  }
-  if (firstName) {
-    return firstName.substring(0, 2).toUpperCase()
-  }
-  if (lastName) {
-    return lastName.substring(0, 2).toUpperCase()
-  }
-  return email.substring(0, 2).toUpperCase()
 }
 
 function formatDate(dateString: string | null | undefined): string {
@@ -111,6 +101,7 @@ export default function MemberDetailPage() {
   const memberId = params.id as string
   const queryClient = useQueryClient()
   const { role: viewerRole } = useAuth()
+  const isMobile = useIsMobile()
   const isStaffViewer = viewerRole === "admin" || viewerRole === "owner"
   const [activeTab, setActiveTab] = React.useState("contact")
   const [underlineStyle, setUnderlineStyle] = React.useState({ left: 0, width: 0 })
@@ -259,7 +250,7 @@ export default function MemberDetailPage() {
 
   const firstName = member.first_name || ""
   const lastName = member.last_name || ""
-  const fullName = [firstName, lastName].filter(Boolean).join(" ") || member.email
+  const fullName = [firstName, lastName].filter(Boolean).join(" ") || member.email || "Unknown Member"
   const initials = getUserInitials(firstName, lastName, member.email)
   const isActive = member.is_active
   const membershipStartDate = member.membership?.start_date
@@ -429,27 +420,47 @@ export default function MemberDetailPage() {
                           New Invoice
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger>
-                            <IconUser className="h-4 w-4 mr-2" />
-                            Account
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuPortal>
-                            <DropdownMenuSubContent>
-                              <DropdownMenuItem 
-                                onClick={inviteUser} 
-                                disabled={isInviting || member.is_auth_user}
-                              >
-                                <IconUserPlus className="h-4 w-4 mr-2" />
-                                {member.is_auth_user ? "Already Invited" : "Invite User"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled={!member.is_auth_user}>
-                                <IconKey className="h-4 w-4 mr-2" />
-                                Reset Password
-                              </DropdownMenuItem>
-                            </DropdownMenuSubContent>
-                          </DropdownMenuPortal>
-                        </DropdownMenuSub>
+                        {isMobile ? (
+                          <>
+                            <DropdownMenuLabel className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                              <IconUser className="h-3.5 w-3.5" />
+                              Account
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem 
+                              onClick={inviteUser} 
+                              disabled={isInviting || member.is_auth_user}
+                            >
+                              <IconUserPlus className="h-4 w-4 mr-2" />
+                              {member.is_auth_user ? "Already Invited" : "Invite User"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem disabled={!member.is_auth_user}>
+                              <IconKey className="h-4 w-4 mr-2" />
+                              Reset Password
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <IconUser className="h-4 w-4 mr-2" />
+                              Account
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuPortal>
+                              <DropdownMenuSubContent>
+                                <DropdownMenuItem 
+                                  onClick={inviteUser} 
+                                  disabled={isInviting || member.is_auth_user}
+                                >
+                                  <IconUserPlus className="h-4 w-4 mr-2" />
+                                  {member.is_auth_user ? "Already Invited" : "Invite User"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={!member.is_auth_user}>
+                                  <IconKey className="h-4 w-4 mr-2" />
+                                  Reset Password
+                                </DropdownMenuItem>
+                              </DropdownMenuSubContent>
+                            </DropdownMenuPortal>
+                          </DropdownMenuSub>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <Button

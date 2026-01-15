@@ -13,7 +13,7 @@ import {
 import { IconUserPlus, IconSearch, IconChevronRight, IconShield, IconCircleCheck, IconCircleX } from "@tabler/icons-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { cn } from "@/lib/utils"
+import { cn, getUserInitials } from "@/lib/utils"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -35,21 +35,10 @@ interface MembersTableProps {
   }
 }
 
-function getUserInitials(firstName: string | null, lastName: string | null, email: string): string {
-  if (firstName && lastName) {
-    return `${firstName[0]}${lastName[0]}`.toUpperCase()
-  }
-  if (firstName) {
-    return firstName.substring(0, 2).toUpperCase()
-  }
-  if (lastName) {
-    return lastName.substring(0, 2).toUpperCase()
-  }
-  return email.substring(0, 2).toUpperCase()
-}
-
 function getPersonTypeLabel(member: MemberWithRelations): string {
-  const hasActiveMembership = member.membership?.is_active
+  // Check for valid membership: has membership record with non-expired expiry_date
+  const hasValidMembership = member.membership && 
+    new Date(member.membership.expiry_date) >= new Date()
   const hasInstructorRecord = !!member.instructor
   const roleName = member.role?.role
 
@@ -59,7 +48,7 @@ function getPersonTypeLabel(member: MemberWithRelations): string {
   if (hasInstructorRecord) {
     return 'Instructor'
   }
-  if (hasActiveMembership) {
+  if (hasValidMembership) {
     return 'Member'
   }
   return 'Contact'

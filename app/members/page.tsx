@@ -48,7 +48,9 @@ async function fetchMembers(filters?: MembersFilter): Promise<MemberWithRelation
 }
 
 function getPersonTypeLabel(member: MemberWithRelations): PersonType {
-  const hasActiveMembership = member.membership?.is_active
+  // Check for valid membership: has membership record with non-expired expiry_date
+  const hasValidMembership = member.membership && 
+    new Date(member.membership.expiry_date) >= new Date()
   const hasInstructorRecord = !!member.instructor
   const roleName = member.role?.role
 
@@ -58,7 +60,7 @@ function getPersonTypeLabel(member: MemberWithRelations): PersonType {
   if (hasInstructorRecord) {
     return 'instructor'
   }
-  if (hasActiveMembership) {
+  if (hasValidMembership) {
     return 'member'
   }
   return 'contact'

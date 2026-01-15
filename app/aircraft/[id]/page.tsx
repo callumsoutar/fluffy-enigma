@@ -294,7 +294,7 @@ export default function AircraftDetailPage() {
                         <AvatarImage src={imageUrl} alt={registration} />
                       ) : null}
                       <AvatarFallback className="bg-gray-100 text-gray-600 text-xl font-bold">
-                        {registration.substring(0, 2).toUpperCase()}
+                        {registration ? registration.substring(0, 2).toUpperCase() : "??"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">

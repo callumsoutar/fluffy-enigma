@@ -27,7 +27,7 @@ export default function LessonProgressComments({ comments }: LessonProgressComme
 
   return (
     <div 
-      className="prose prose-sm max-w-none text-gray-800 leading-relaxed"
+      className="max-w-none text-inherit leading-relaxed"
       dangerouslySetInnerHTML={{ __html: sanitizeHTML(comments) }}
     />
   )

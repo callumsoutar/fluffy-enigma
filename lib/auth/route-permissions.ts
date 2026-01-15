@@ -48,7 +48,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   { path: '/auth', allowedRoles: [] },
   
   // Dashboard - all authenticated users
-  { path: '/dashboard', allowedRoles: ['owner', 'admin', 'instructor', 'member', 'student'] },
+  { path: '/', allowedRoles: ['owner', 'admin', 'instructor', 'member', 'student'], exact: true },
   
   // Admin-only routes
   { path: '/admin', allowedRoles: ['owner', 'admin'] },

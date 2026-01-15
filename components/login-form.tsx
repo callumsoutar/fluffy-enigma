@@ -64,7 +64,7 @@ export function LoginForm({
       }
 
       toast.success("Successfully signed in!")
-      router.push("/dashboard")
+      router.push("/")
       router.refresh()
     } catch (error) {
       toast.error("An unexpected error occurred")

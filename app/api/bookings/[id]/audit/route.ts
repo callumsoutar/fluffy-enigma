@@ -93,8 +93,149 @@ export async function GET(
     )
   }
 
+  const auditLogsList = auditLogs || []
+
+  // Collect related IDs from column changes to resolve display names
+  const aircraftIds = new Set<string>()
+  const lessonIds = new Set<string>()
+  const instructorIds = new Set<string>()
+  const flightTypeIds = new Set<string>()
+
+  for (const log of auditLogsList) {
+    const changes = log.column_changes as Record<string, { old?: unknown; new?: unknown }> | null
+    if (!changes) continue
+
+    for (const [key, change] of Object.entries(changes)) {
+      if (key === 'aircraft_id' || key === 'checked_out_aircraft_id') {
+        if (typeof change?.old === 'string') aircraftIds.add(change.old)
+        if (typeof change?.new === 'string') aircraftIds.add(change.new)
+      }
+      if (key === 'lesson_id') {
+        if (typeof change?.old === 'string') lessonIds.add(change.old)
+        if (typeof change?.new === 'string') lessonIds.add(change.new)
+      }
+      if (key === 'instructor_id' || key === 'checked_out_instructor_id') {
+        if (typeof change?.old === 'string') instructorIds.add(change.old)
+        if (typeof change?.new === 'string') instructorIds.add(change.new)
+      }
+      if (key === 'flight_type_id') {
+        if (typeof change?.old === 'string') flightTypeIds.add(change.old)
+        if (typeof change?.new === 'string') flightTypeIds.add(change.new)
+      }
+    }
+  }
+
+  const [aircraftResult, lessonsResult, instructorsResult, flightTypesResult] = await Promise.all([
+    aircraftIds.size > 0
+      ? supabase
+          .from('aircraft')
+          .select('id, registration, type')
+          .in('id', Array.from(aircraftIds))
+      : Promise.resolve({ data: [] as { id: string; registration: string; type: string }[] }),
+    lessonIds.size > 0
+      ? supabase
+          .from('lessons')
+          .select('id, name')
+          .in('id', Array.from(lessonIds))
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    instructorIds.size > 0
+      ? supabase
+          .from('instructors')
+          .select('id, first_name, last_name')
+          .in('id', Array.from(instructorIds))
+      : Promise.resolve({ data: [] as { id: string; first_name: string | null; last_name: string | null }[] }),
+    flightTypeIds.size > 0
+      ? supabase
+          .from('flight_types')
+          .select('id, name')
+          .in('id', Array.from(flightTypeIds))
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  ])
+
+  const aircraftNameMap = (aircraftResult.data || []).reduce((acc, aircraft) => {
+    acc[aircraft.id] = `${aircraft.registration} (${aircraft.type})`
+    return acc
+  }, {} as Record<string, string>)
+
+  const lessonNameMap = (lessonsResult.data || []).reduce((acc, lesson) => {
+    acc[lesson.id] = lesson.name
+    return acc
+  }, {} as Record<string, string>)
+
+  const instructorNameMap = (instructorsResult.data || []).reduce((acc, instructor) => {
+    const name = [instructor.first_name, instructor.last_name].filter(Boolean).join(' ').trim()
+    acc[instructor.id] = name || 'Unknown Instructor'
+    return acc
+  }, {} as Record<string, string>)
+
+  const flightTypeNameMap = (flightTypesResult.data || []).reduce((acc, flightType) => {
+    acc[flightType.id] = flightType.name
+    return acc
+  }, {} as Record<string, string>)
+
+  const replaceIfMapped = (value: unknown, map: Record<string, string>) => {
+    if (typeof value === 'string' && map[value]) return map[value]
+    return value
+  }
+
+  const auditLogsWithNames = auditLogsList.map(log => {
+    const changes = log.column_changes as Record<string, { old?: unknown; new?: unknown }> | null
+    if (!changes) return log
+
+    const updatedChanges = Object.fromEntries(
+      Object.entries(changes).map(([key, change]) => {
+        if (key === 'aircraft_id' || key === 'checked_out_aircraft_id') {
+          return [
+            key,
+            {
+              ...change,
+              old: replaceIfMapped(change?.old, aircraftNameMap),
+              new: replaceIfMapped(change?.new, aircraftNameMap),
+            },
+          ]
+        }
+        if (key === 'lesson_id') {
+          return [
+            key,
+            {
+              ...change,
+              old: replaceIfMapped(change?.old, lessonNameMap),
+              new: replaceIfMapped(change?.new, lessonNameMap),
+            },
+          ]
+        }
+        if (key === 'instructor_id' || key === 'checked_out_instructor_id') {
+          return [
+            key,
+            {
+              ...change,
+              old: replaceIfMapped(change?.old, instructorNameMap),
+              new: replaceIfMapped(change?.new, instructorNameMap),
+            },
+          ]
+        }
+        if (key === 'flight_type_id') {
+          return [
+            key,
+            {
+              ...change,
+              old: replaceIfMapped(change?.old, flightTypeNameMap),
+              new: replaceIfMapped(change?.new, flightTypeNameMap),
+            },
+          ]
+        }
+        return [key, change]
+      })
+    )
+
+    return {
+      ...log,
+      column_changes: updatedChanges,
+    }
+  })
+
   // Fetch user details separately if user_id exists
-  const userIds = [...new Set((auditLogs || [])
+  const userIds = [...new Set(auditLogsWithNames
     .map(log => log.user_id)
     .filter((id): id is string => id !== null))]
   
@@ -115,7 +256,7 @@ export async function GET(
   }
 
   // Combine audit logs with user data
-  const auditLogsWithUsers = (auditLogs || []).map(log => ({
+  const auditLogsWithUsers = auditLogsWithNames.map(log => ({
     ...log,
     user: log.user_id ? usersMap[log.user_id] || null : null,
   }))

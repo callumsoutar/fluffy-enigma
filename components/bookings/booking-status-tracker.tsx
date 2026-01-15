@@ -39,14 +39,24 @@ export function BookingStatusTracker({
   completedStageIds = [],
   className,
 }: BookingStatusTrackerProps) {
+  const allStagesCompleted =
+    stages.length > 0 && stages.every((s) => completedStageIds.includes(s.id));
+  const firstIncompleteStageId = stages.find((s) => !completedStageIds.includes(s.id))?.id;
+  // Mobile/UX: if no active stage is provided, pick something sensible to expand.
+  // - If all are completed, expand the last stage to clearly show "done"
+  // - Otherwise, expand the first incomplete stage (fallback)
+  const effectiveActiveStageId =
+    activeStageId ?? (allStagesCompleted ? stages[stages.length - 1]?.id : firstIncompleteStageId);
+
   return (
     <div className={cn("flex w-full overflow-hidden rounded-xl border border-border bg-muted/30 p-1 shadow-sm", className)}>
       <div className="flex w-full items-center gap-1">
         {stages.map((stage, index) => {
           const isCompleted = completedStageIds.includes(stage.id);
-          const isActive = activeStageId === stage.id;
+          const isActive = effectiveActiveStageId === stage.id;
           const isLast = index === stages.length - 1;
           const isFirst = index === 0;
+          const isExpandedOnMobile = isActive;
 
           // Chevron clip-path logic
           const chevronWidth = 14;
@@ -62,9 +72,8 @@ export function BookingStatusTracker({
               className={cn(
                 "relative flex h-10 items-center justify-center transition-all duration-500 ease-in-out",
                 // Responsive width logic
-                isActive 
-                  ? "flex-1" 
-                  : "flex-none w-12 sm:flex-1",
+                isExpandedOnMobile ? "flex-1" : "flex-none w-12",
+                "sm:flex-1",
                 isCompleted 
                   ? "bg-[#6564db] text-white shadow-md" 
                   : isActive 
@@ -82,9 +91,7 @@ export function BookingStatusTracker({
               <div className={cn(
                 "flex items-center gap-2",
                 // Padding adjustments for small vs large stages
-                isActive 
-                  ? "px-4 sm:px-6" 
-                  : "px-0 sm:px-4",
+                isExpandedOnMobile ? "px-4 sm:px-6" : "px-0 sm:px-4",
                 !isFirst && isActive && "pl-6",
                 !isLast && isActive && "pr-6",
                 // On mobile, if not active, center the icon/number
@@ -106,6 +113,8 @@ export function BookingStatusTracker({
                 
                 <span className={cn(
                   "text-xs font-semibold tracking-wide uppercase sm:text-[11px] whitespace-nowrap",
+                  // Mobile: only show the label for the expanded stage.
+                  // Desktop: always show labels.
                   isActive ? "flex" : "hidden sm:flex",
                   isActive && "font-bold"
                 )}>

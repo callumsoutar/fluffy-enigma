@@ -470,7 +470,12 @@ export function ResourceTimelineScheduler() {
         })
         return
       }
-      router.push(`/bookings/${booking.id}`)
+      // Route directly to checkout if status is flying
+      if (booking.status === 'flying') {
+        router.push(`/bookings/${booking.id}/checkout`)
+      } else {
+        router.push(`/bookings/${booking.id}`)
+      }
     },
     [router]
   )
@@ -813,7 +818,14 @@ export function ResourceTimelineScheduler() {
             description: `${booking.aircraft?.registration || "Aircraft"} • ${formatDate(new Date(booking.start_time), "dd MMM")} ${formatTimeLabel(new Date(booking.start_time))}`,
             action: {
               label: "Open",
-              onClick: () => router.push(`/bookings/${booking.id}`),
+              onClick: () => {
+                // Route directly to checkout if status is flying
+                if (booking.status === 'flying' && booking.booking_type === 'flight') {
+                  router.push(`/bookings/${booking.id}/checkout`)
+                } else {
+                  router.push(`/bookings/${booking.id}`)
+                }
+              },
             },
           })
         }}

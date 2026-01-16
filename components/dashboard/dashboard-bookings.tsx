@@ -213,13 +213,18 @@ export function DashboardBookings() {
                     
                     return (
                       <TableRow 
-                        key={booking.id}
-                        className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0 cursor-pointer"
-                        onClick={(e) => {
-                          if ((e.target as HTMLElement).closest('button')) return
-                          router.push(`/bookings/${booking.id}`)
-                        }}
-                      >
+                            key={booking.id}
+                            className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0 cursor-pointer"
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest('button')) return
+                              // Route directly to checkout if status is flying
+                              if (booking.status === 'flying' && booking.booking_type === 'flight') {
+                                router.push(`/bookings/${booking.id}/checkout`)
+                              } else {
+                                router.push(`/bookings/${booking.id}`)
+                              }
+                            }}
+                          >
                         <TableCell className="py-3 px-6">
                           <div className="font-medium text-slate-900 text-sm">
                             {booking.aircraft?.registration || getBookingTypeLabel(booking.booking_type)}
@@ -368,7 +373,14 @@ export function DashboardBookings() {
                           <TableRow 
                             key={booking.id}
                             className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0 cursor-pointer"
-                            onClick={() => router.push(`/bookings/${booking.id}`)}
+                            onClick={() => {
+                              // Route directly to checkout if status is flying
+                              if (booking.status === 'flying' && booking.booking_type === 'flight') {
+                                router.push(`/bookings/${booking.id}/checkout`)
+                              } else {
+                                router.push(`/bookings/${booking.id}`)
+                              }
+                            }}
                           >
                             <TableCell className="py-3 px-6">
                               <div className="font-medium text-slate-900 text-sm">

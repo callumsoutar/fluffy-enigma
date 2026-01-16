@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -174,15 +174,11 @@ function deriveChargeBasisFromFlags(rate: ChargeRate | null | undefined): Charge
   return null
 }
 
-type BookingCheckinClientProps = {
-  bookingId: string
-}
-
-export default function BookingCheckinClient({
-  bookingId,
-}: BookingCheckinClientProps) {
+export default function BookingCheckinPage() {
+  const params = useParams()
   const router = useRouter()
   const { role } = useAuth()
+  const bookingId = params.id as string
   const isMobile = useIsMobile()
   const isAdminOrInstructor = role === 'owner' || role === 'admin' || role === 'instructor'
   const [isPerformanceNotesExpanded, setIsPerformanceNotesExpanded] = React.useState(false)
@@ -1276,6 +1272,34 @@ export default function BookingCheckinClient({
     )
   }
 
+  // Only allow check-in for flight bookings
+  if (booking.booking_type !== 'flight') {
+    return (
+      <SidebarProvider
+        style={{
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as React.CSSProperties}
+      >
+        <AppSidebar variant="inset" />
+        <SidebarInset>
+          <SiteHeader />
+          <div className="flex flex-1 flex-col items-center justify-center p-8">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold mb-2">Invalid Booking Type</h2>
+              <p className="text-muted-foreground mb-4">
+                Flight check-in is only available for flight bookings.
+              </p>
+              <Button asChild>
+                <Link href={`/bookings/${bookingId}`}>Back to Booking</Link>
+              </Button>
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    )
+  }
+
   const studentName = booking.student
     ? [booking.student.first_name, booking.student.last_name].filter(Boolean).join(" ") || booking.student.email
     : "—"
@@ -1350,8 +1374,8 @@ export default function BookingCheckinClient({
             <BookingHeader
               booking={booking}
               title="Flight Check-In"
-              backHref="/bookings"
-              backLabel="Back to Bookings"
+              backHref={`/bookings/${bookingId}`}
+              backLabel="Back to Booking"
               actions={headerActions}
               extra={!isApproved && (
                 <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 rounded-full text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5">

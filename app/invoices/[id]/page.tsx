@@ -621,6 +621,7 @@ export default function InvoiceDetailPage() {
             <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-2.5 sm:py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 border-b shadow-sm">
                 <InvoiceActionsToolbar
                   mode="new"
+                  member={selectedMember}
                   onSave={createInvoiceWithItems}
                   onApprove={approveInvoice}
                   saveDisabled={!selectedMember || draftItems.length === 0}
@@ -975,6 +976,7 @@ export default function InvoiceDetailPage() {
                 invoiceId={invoice.id}
                 invoiceNumber={invoice.invoice_number}
                 status={invoice.status}
+                member={selectedMember}
                 rightSlot={
                   isReadOnly ? (
                     <InvoiceViewActions

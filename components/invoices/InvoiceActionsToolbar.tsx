@@ -6,12 +6,15 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Save, CheckCircle2, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { InvoiceStatus } from "@/lib/types/invoices"
+import type { UserResult } from "./MemberSelect"
+import Link from "next/link"
 
 interface InvoiceActionsToolbarProps {
   mode: 'new' | 'edit' | 'view'
   invoiceId?: string
   invoiceNumber?: string | null
   status?: InvoiceStatus
+  member?: UserResult | null
   rightSlot?: React.ReactNode
   onSave?: () => void
   onApprove?: () => void
@@ -29,6 +32,7 @@ export default function InvoiceActionsToolbar({
   invoiceId: _invoiceId,
   invoiceNumber,
   status,
+  member,
   rightSlot,
   onSave,
   onApprove,
@@ -68,52 +72,56 @@ export default function InvoiceActionsToolbar({
 
   const isReadOnly = mode === 'view' || (status && status !== 'draft')
 
+  const displayName = member
+    ? [member.first_name, member.last_name].filter(Boolean).join(" ") || member.email
+    : ""
+
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3 sm:gap-4">
+      <div className="flex items-center gap-4 sm:gap-8 overflow-hidden">
         <Button
           type="button"
           variant="ghost"
           size="sm"
           onClick={() => router.back()}
-          className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-2 shrink-0"
+          className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3 sm:gap-2 shrink-0 text-slate-500 hover:text-slate-900"
         >
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
 
-        <div className="h-8 w-px bg-border shrink-0 hidden sm:block" />
-
-        {displayInvoiceNumber && (
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] sm:text-xs font-medium uppercase tracking-wider text-muted-foreground leading-none mb-1">
-                Invoice
+        <div className="flex items-center gap-4 sm:gap-6 min-w-0">
+          {displayInvoiceNumber && (
+            <div className="flex items-center gap-4 shrink-0">
+              <span className="font-bold text-base sm:text-xl tracking-tight text-slate-900 leading-none">
+                {displayInvoiceNumber}
               </span>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-base sm:text-xl tracking-tight truncate leading-none">
-                  {displayInvoiceNumber}
-                </span>
-                {status && (
-                  <Badge
-                    variant={getStatusBadgeVariant(status)}
-                    className="px-1.5 py-0 h-4.5 text-[9px] font-bold uppercase tracking-wider rounded sm:hidden shrink-0"
-                  >
-                    {getStatusLabel(status)}
-                  </Badge>
-                )}
-              </div>
+              
+              {status && (
+                <Badge
+                  variant={getStatusBadgeVariant(status)}
+                  className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md shrink-0 border-none shadow-sm"
+                >
+                  {getStatusLabel(status)}
+                </Badge>
+              )}
             </div>
-            {status && (
-              <Badge
-                variant={getStatusBadgeVariant(status)}
-                className="hidden sm:inline-flex px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md shrink-0"
-              >
-                {getStatusLabel(status)}
-              </Badge>
-            )}
-          </div>
-        )}
+          )}
+
+          {member && (
+            <>
+              <div className="hidden md:block h-4 w-px bg-slate-200/60 shrink-0" />
+              <div className="hidden md:flex items-center px-3 py-1.5 min-w-0">
+                <Link 
+                  href={`/members/${member.id}`}
+                  className="font-medium text-sm tracking-tight text-slate-500 hover:text-slate-900 transition-colors truncate leading-none"
+                >
+                  {displayName}
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar justify-end">

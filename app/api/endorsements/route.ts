@@ -140,3 +140,141 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ endorsement })
 }
+
+/**
+ * PUT /api/endorsements
+ * 
+ * Update an existing endorsement
+ * Requires authentication and admin/owner role
+ */
+export async function PUT(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Check authentication
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    )
+  }
+
+  // Check authorization - only admins and owners can update endorsements
+  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  if (!hasAccess) {
+    return NextResponse.json(
+      { error: 'Forbidden: Insufficient permissions' },
+      { status: 403 }
+    )
+  }
+
+  // Parse and validate request body
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid JSON in request body' },
+      { status: 400 }
+    )
+  }
+
+  const { id, ...updateData } = body
+
+  if (!id) {
+    return NextResponse.json(
+      { error: 'Endorsement ID is required' },
+      { status: 400 }
+    )
+  }
+
+  const validationResult = endorsementSchema.safeParse(updateData)
+  if (!validationResult.success) {
+    return NextResponse.json(
+      { error: 'Invalid request data', details: validationResult.error.issues },
+      { status: 400 }
+    )
+  }
+
+  // Update endorsement
+  const { data: endorsement, error } = await supabase
+    .from('endorsements')
+    .update({
+      ...validationResult.data,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating endorsement:', error)
+    return NextResponse.json(
+      { error: 'Failed to update endorsement' },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({ endorsement })
+}
+
+/**
+ * DELETE /api/endorsements
+ * 
+ * Soft delete an endorsement (sets voided_at timestamp)
+ * Requires authentication and admin/owner role
+ * 
+ * Query parameters:
+ * - id: string (required) - UUID of the endorsement to delete
+ */
+export async function DELETE(request: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Check authentication
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    )
+  }
+
+  // Check authorization - only admins and owners can delete endorsements
+  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  if (!hasAccess) {
+    return NextResponse.json(
+      { error: 'Forbidden: Insufficient permissions' },
+      { status: 403 }
+    )
+  }
+
+  // Get endorsement ID from query params
+  const searchParams = request.nextUrl.searchParams
+  const id = searchParams.get('id')
+
+  if (!id) {
+    return NextResponse.json(
+      { error: 'Endorsement ID is required' },
+      { status: 400 }
+    )
+  }
+
+  // Soft delete by setting voided_at timestamp
+  const { error } = await supabase
+    .from('endorsements')
+    .update({
+      voided_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting endorsement:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete endorsement' },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({ success: true })
+}

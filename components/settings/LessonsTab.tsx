@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Plus, Trash2, Edit, GripVertical, HelpCircle, GraduationCap, ChevronRight } from "lucide-react";
+import { BookOpen, Plus, Archive, Edit, GripVertical, HelpCircle, GraduationCap, ChevronRight, Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,10 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+  pointerWithin,
+  rectIntersection,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -32,8 +36,9 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { createPortal } from "react-dom";
 
 // Fetch functions
 const fetchSyllabi = async (): Promise<Syllabus[]> => {
@@ -69,7 +74,7 @@ function SortableLessonItem({ lesson, onEdit, onDelete }: SortableLessonItemProp
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.5 : 1,
   };
 
   return (
@@ -77,14 +82,14 @@ function SortableLessonItem({ lesson, onEdit, onDelete }: SortableLessonItemProp
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl transition-all duration-200",
-        isDragging ? "shadow-xl border-indigo-300 ring-2 ring-indigo-100 z-50" : "hover:border-slate-300 hover:shadow-sm"
+        "group flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl transition-colors duration-200",
+        "hover:border-slate-300 hover:shadow-sm"
       )}
     >
       <div
         {...attributes}
         {...listeners}
-        className="text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing p-1"
+        className="text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing p-1 touch-none"
       >
         <GripVertical className="w-4 h-4" />
       </div>
@@ -123,23 +128,54 @@ function SortableLessonItem({ lesson, onEdit, onDelete }: SortableLessonItemProp
         </div>
       </div>
 
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
           onClick={() => onEdit(lesson)}
+          className="hover:bg-slate-50"
         >
           <Edit className="w-4 h-4" />
         </Button>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="h-8 w-8 p-0 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
           onClick={() => onDelete(lesson.id)}
+          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+          title="Delete lesson"
         >
-          <Trash2 className="w-4 h-4" />
+          <Archive className="w-4 h-4" />
         </Button>
+      </div>
+    </div>
+  );
+}
+
+// Drag overlay component for smooth dragging visual feedback
+function LessonDragOverlay({ lesson }: { lesson: Lesson }) {
+  return (
+    <div className="flex items-center gap-3 p-3 bg-white border-2 border-indigo-400 rounded-xl shadow-2xl ring-4 ring-indigo-100 cursor-grabbing rotate-2 scale-105">
+      <div className="text-slate-400 p-1">
+        <GripVertical className="w-4 h-4" />
+      </div>
+
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-[10px] font-bold text-indigo-700 font-mono">
+          #{lesson.order}
+        </div>
+        
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="font-semibold text-sm text-slate-900 truncate">{lesson.name}</h4>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {lesson.is_required && (
+                <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-indigo-100 text-indigo-700 border-indigo-200 shadow-none">
+                  Required
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -394,13 +430,21 @@ export default function LessonsTab() {
   const [selectedSyllabus, setSelectedSyllabus] = useState<string | null>(null);
   const [lessonModalOpen, setLessonModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  const [pendingReorder, setPendingReorder] = useState<{
+    syllabusId: string;
+    newOrders: { id: string; order: number }[];
+    previousOrders: { id: string; order: number }[];
+  } | null>(null);
   const queryClient = useQueryClient();
 
-  // Sensors for dnd-kit
+  // Improved sensors for better drag experience
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
+        delay: 100,
+        tolerance: 5,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -435,7 +479,7 @@ export default function LessonsTab() {
     },
   });
 
-  // Reorder lessons mutation
+  // Reorder lessons mutation with undo support
   const reorderMutation = useMutation({
     mutationFn: async ({ syllabusId, lessonOrders }: { syllabusId: string; lessonOrders: { id: string; order: number }[] }) => {
       const response = await fetch("/api/lessons/reorder", {
@@ -449,53 +493,111 @@ export default function LessonsTab() {
       }
       return response.json();
     },
-    onMutate: async ({ syllabusId, lessonOrders }) => {
-      await queryClient.cancelQueries({ queryKey: ["lessons", syllabusId] });
-      const previousLessons = queryClient.getQueryData<Lesson[]>(["lessons", syllabusId]);
-
-      if (previousLessons) {
-        const updatedLessons = lessonOrders.map(order => {
-          const lesson = previousLessons.find(l => l.id === order.id);
-          return lesson ? { ...lesson, order: order.order } : null;
-        }).filter(Boolean) as Lesson[];
-        
-        updatedLessons.sort((a, b) => a.order - b.order);
-        queryClient.setQueryData(["lessons", syllabusId], updatedLessons);
-      }
-
-      return { previousLessons, syllabusId };
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["lessons", variables.syllabusId] });
+      setPendingReorder(null);
     },
     onError: (err, variables, context) => {
-      if (context?.previousLessons) {
-        queryClient.setQueryData(["lessons", context.syllabusId], context.previousLessons);
-      }
-      toast.error("Failed to reorder lessons");
-    },
-    onSuccess: () => {
-      toast.success("Lesson order updated");
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["lessons", selectedSyllabus] });
+      toast.error("Failed to save lesson order");
+      setPendingReorder(null);
     },
   });
 
-  // Handle drag and drop
+  // Handle undo reorder
+  const handleUndoReorder = () => {
+    if (!pendingReorder) return;
+
+    // Revert to previous order
+    reorderMutation.mutate({
+      syllabusId: pendingReorder.syllabusId,
+      lessonOrders: pendingReorder.previousOrders,
+    });
+
+    toast.success("Lesson order reverted");
+  };
+
+  // Confirm the pending reorder
+  const confirmReorder = () => {
+    if (!pendingReorder) return;
+
+    reorderMutation.mutate({
+      syllabusId: pendingReorder.syllabusId,
+      lessonOrders: pendingReorder.newOrders,
+    });
+  };
+
+  // Handle drag start
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const draggedLesson = lessons.find((l) => l.id === active.id);
+    setActiveLesson(draggedLesson || null);
+  };
+
+  // Handle drag end with undo support
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    setActiveLesson(null);
+
     if (!over || !selectedSyllabus || active.id === over.id) return;
 
     const oldIndex = lessons.findIndex((l) => l.id === active.id);
     const newIndex = lessons.findIndex((l) => l.id === over.id);
 
+    if (oldIndex === -1 || newIndex === -1) return;
+
     const reorderedItems = arrayMove(lessons, oldIndex, newIndex);
 
-    // Update order numbers
-    const lessonOrders = reorderedItems.map((lesson, index) => ({
+    // Store previous order
+    const previousOrders = lessons.map((lesson) => ({
+      id: lesson.id,
+      order: lesson.order,
+    }));
+
+    // Calculate new order numbers
+    const newOrders = reorderedItems.map((lesson, index) => ({
       id: lesson.id,
       order: index + 1,
     }));
 
-    reorderMutation.mutate({ syllabusId: selectedSyllabus, lessonOrders });
+    // Optimistically update the UI
+    const updatedLessons = reorderedItems.map((lesson, index) => ({
+      ...lesson,
+      order: index + 1,
+    }));
+    queryClient.setQueryData(["lessons", selectedSyllabus], updatedLessons);
+
+    // Store pending reorder for undo
+    setPendingReorder({
+      syllabusId: selectedSyllabus,
+      newOrders,
+      previousOrders,
+    });
+
+    // Show toast with undo option
+    const toastId = toast.success(
+      "Lesson order updated",
+      {
+        description: "Click undo to revert changes",
+        action: {
+          label: "Undo",
+          onClick: () => {
+            // Revert immediately in UI
+            queryClient.setQueryData(["lessons", selectedSyllabus], lessons);
+            setPendingReorder(null);
+            toast.dismiss(toastId);
+            toast.success("Changes reverted");
+          },
+        },
+        duration: 8000,
+      }
+    );
+
+    // Auto-confirm after toast duration
+    setTimeout(() => {
+      if (pendingReorder?.syllabusId === selectedSyllabus) {
+        confirmReorder();
+      }
+    }, 8000);
   };
 
   const selectedSyllabusData = syllabi.find(s => s.id === selectedSyllabus);
@@ -585,10 +687,9 @@ export default function LessonsTab() {
                   setEditingLesson(null);
                   setLessonModalOpen(true);
                 }} 
-                size="sm"
-                className="bg-indigo-600 hover:bg-indigo-700 h-8 text-[11px] font-bold rounded-lg px-3 shadow-sm"
+                className="bg-indigo-600 hover:bg-indigo-700"
               >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                <Plus className="w-4 h-4 mr-2" />
                 Add Lesson
               </Button>
             )}
@@ -618,17 +719,17 @@ export default function LessonsTab() {
                 </p>
                 <Button 
                   onClick={() => setLessonModalOpen(true)} 
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl border-slate-200 text-xs font-bold"
+                  className="bg-indigo-600 hover:bg-indigo-700"
                 >
-                  Create First Lesson
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Lesson
                 </Button>
               </div>
             ) : (
               <DndContext
                 sensors={sensors}
-                collisionDetection={closestCenter}
+                collisionDetection={pointerWithin}
+                onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 modifiers={[restrictToVerticalAxis]}
               >
@@ -636,7 +737,7 @@ export default function LessonsTab() {
                   items={lessons.map((l) => l.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 pb-4">
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 pb-4 scroll-smooth">
                     {lessons.map((lesson) => (
                       <SortableLessonItem
                         key={lesson.id}
@@ -650,6 +751,12 @@ export default function LessonsTab() {
                     ))}
                   </div>
                 </SortableContext>
+                {typeof window !== 'undefined' && createPortal(
+                  <DragOverlay dropAnimation={null}>
+                    {activeLesson ? <LessonDragOverlay lesson={activeLesson} /> : null}
+                  </DragOverlay>,
+                  document.body
+                )}
               </DndContext>
             )}
           </div>

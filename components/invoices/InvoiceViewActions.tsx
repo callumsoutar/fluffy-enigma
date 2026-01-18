@@ -15,7 +15,6 @@ import InvoiceReportPDF from "./InvoiceReportPDF"
 import type { InvoiceDocumentData, InvoiceDocumentItem, InvoicingSettings } from "./InvoiceDocumentView"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export type InvoiceViewActionsProps = {
   invoiceId: string
@@ -103,42 +102,6 @@ export default function InvoiceViewActions({
   return (
     <>
       <div className="flex items-center gap-2">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 sm:h-9 sm:w-9"
-                onClick={emailInvoice}
-                disabled={!canEmail}
-              >
-                <Mail className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{canEmail ? "Email Invoice" : "No email address provided"}</p>
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 sm:h-9 sm:w-9"
-                onClick={handleDownloadPDF}
-                disabled={isDownloading}
-              >
-                {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Download PDF</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
         {!isPaid && (
           <Button
             type="button"
@@ -165,6 +128,22 @@ export default function InvoiceViewActions({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem 
+              onSelect={(e) => { e.preventDefault(); emailInvoice(); }} 
+              disabled={!canEmail}
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              Email Invoice
+            </DropdownMenuItem>
+
+            <DropdownMenuItem 
+              onSelect={(e) => { e.preventDefault(); handleDownloadPDF(); }} 
+              disabled={isDownloading}
+            >
+              {isDownloading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+              Download PDF
+            </DropdownMenuItem>
+
             <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handlePrint(); }} disabled={isPrinting}>
               {isPrinting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Printer className="h-4 w-4 mr-2" />}
               Print PDF

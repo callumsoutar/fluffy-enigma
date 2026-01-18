@@ -100,6 +100,7 @@ export default function RecordPaymentModal({
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState(false)
   const [receiptId, setReceiptId] = React.useState<string | null>(null)
+  const [showAdditionalInfo, setShowAdditionalInfo] = React.useState(false)
   const [showNotes, setShowNotes] = React.useState(false)
 
   const willFullyPay = amount > 0 && computedRemaining > 0 && roundToTwoDecimals(amount) === roundToTwoDecimals(computedRemaining)
@@ -114,6 +115,7 @@ export default function RecordPaymentModal({
     setError(null)
     setSuccess(false)
     setReceiptId(null)
+    setShowAdditionalInfo(false)
     setShowNotes(false)
   }, [computedRemaining])
 
@@ -188,13 +190,13 @@ export default function RecordPaymentModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden",
+          "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden flex flex-col",
           "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[720px]",
           "top-[calc(env(safe-area-inset-top)+1rem)] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]",
-          "h-[calc(100dvh-2rem)] sm:h-auto sm:max-h-[calc(100dvh-4rem)]"
+          "h-[calc(100dvh-2rem)] sm:h-fit sm:max-h-[calc(100dvh-4rem)]"
         )}
       >
-        <div className="flex h-full min-h-0 flex-col bg-white">
+        <div className="flex flex-1 min-h-0 flex-col bg-white">
           <DialogHeader className="px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 text-left sm:pt-6">
             <div className="flex items-center gap-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-600">
@@ -335,56 +337,64 @@ export default function RecordPaymentModal({
                 </section>
 
                 {/* Additional Information */}
-                <section>
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                    <span className="text-xs font-semibold tracking-tight text-slate-900">Additional Information</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Reference Number</label>
-                      <div className="relative">
-                        <Receipt className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
-                        <Input
-                          placeholder="Transaction ID, check #, etc."
-                          value={reference}
-                          onChange={(e) => setReference(e.target.value)}
-                          disabled={loading}
-                          className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
-                        />
-                      </div>
+                <section className="border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdditionalInfo(!showAdditionalInfo)}
+                    className="flex items-center justify-between w-full text-left py-2 px-3 -mx-3 rounded-xl hover:bg-slate-50 transition-all group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "h-1.5 w-1.5 rounded-full transition-colors",
+                        showAdditionalInfo ? "bg-blue-500" : "bg-slate-300 group-hover:bg-slate-400"
+                      )} />
+                      <span className={cn(
+                        "text-xs font-semibold tracking-tight transition-colors",
+                        showAdditionalInfo ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
+                      )}>
+                        Additional Information
+                      </span>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Payment Date</label>
-                      <div className="relative">
-                        <CalendarIcon className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
-                        <Input
-                          type="date"
-                          value={paidDate}
-                          onChange={(e) => setPaidDate(e.target.value)}
-                          disabled={loading}
-                          className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
-                        />
+                    {showAdditionalInfo ? (
+                      <ChevronUp className="h-4 w-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-slate-400" />
+                    )}
+                  </button>
+
+                  {showAdditionalInfo && (
+                    <div className="mt-4 space-y-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Reference Number</label>
+                          <div className="relative">
+                            <Receipt className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                              placeholder="Transaction ID, check #, etc."
+                              value={reference}
+                              onChange={(e) => setReference(e.target.value)}
+                              disabled={loading}
+                              className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Payment Date</label>
+                          <div className="relative">
+                            <CalendarIcon className="absolute left-3 top-3 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                              type="date"
+                              value={paidDate}
+                              onChange={(e) => setPaidDate(e.target.value)}
+                              disabled={loading}
+                              className="h-10 rounded-xl border-slate-200 bg-white pl-9 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0"
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowNotes(!showNotes)}
-                      className="flex items-center justify-between w-full text-left py-2 px-3 rounded-xl hover:bg-slate-50 transition-colors"
-                    >
-                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 cursor-pointer">
-                        Add Notes (Optional)
-                      </label>
-                      {showNotes ? (
-                        <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
-                      ) : (
-                        <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                      )}
-                    </button>
-                    {showNotes && (
-                      <div className="mt-2">
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Notes (Optional)</label>
                         <Textarea
                           placeholder="Optional notes about this payment..."
                           value={notes}
@@ -393,8 +403,8 @@ export default function RecordPaymentModal({
                           className="rounded-xl border-slate-200 bg-white text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0 min-h-[100px] resize-none"
                         />
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </section>
 
                 {error && (

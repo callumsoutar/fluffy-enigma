@@ -178,15 +178,69 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'ID is required' }, { status: 400 })
   }
 
-  const { error } = await supabase
-    .from('lessons')
-    .delete()
-    .eq('id', id)
+  try {
+    // First, get the lesson's order and syllabus_id before deletion
+    const { data: lessonToDelete, error: fetchError } = await supabase
+      .from('lessons')
+      .select('"order", syllabus_id')
+      .eq('id', id)
+      .single()
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    if (fetchError) {
+      return NextResponse.json({ error: fetchError.message }, { status: 500 })
+    }
+
+    if (!lessonToDelete) {
+      return NextResponse.json({ error: 'Lesson not found' }, { status: 404 })
+    }
+
+    const deletedOrder = lessonToDelete.order
+    const syllabusId = lessonToDelete.syllabus_id
+
+    // Delete the lesson
+    const { error: deleteError } = await supabase
+      .from('lessons')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) {
+      return NextResponse.json({ error: deleteError.message }, { status: 500 })
+    }
+
+    // Get all lessons with order greater than the deleted lesson's order
+    const { data: subsequentLessons, error: subsequentError } = await supabase
+      .from('lessons')
+      .select('id, "order"')
+      .eq('syllabus_id', syllabusId)
+      .gt('"order"', deletedOrder)
+      .order('"order"', { ascending: true })
+
+    if (subsequentError) {
+      return NextResponse.json({ error: subsequentError.message }, { status: 500 })
+    }
+
+    // Reorder all subsequent lessons by decrementing their order by 1
+    if (subsequentLessons && subsequentLessons.length > 0) {
+      for (const lesson of subsequentLessons) {
+        const { error: updateError } = await supabase
+          .from('lessons')
+          .update({ 
+            order: lesson.order - 1,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', lesson.id)
+        
+        if (updateError) {
+          return NextResponse.json({ error: updateError.message }, { status: 500 })
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'An error occurred during deletion' 
+    }, { status: 500 })
   }
-
-  return NextResponse.json({ success: true })
 }
 

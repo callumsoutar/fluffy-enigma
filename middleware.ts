@@ -40,34 +40,27 @@ export async function middleware(request: NextRequest) {
     if (roleFromClaims && isValidRole(roleFromClaims)) {
       role = roleFromClaims
     } else {
-      // Fallback to database lookup using RPC function
-      const { data: roleName } = await supabase.rpc('get_user_role', {
-        user_id: user.id
-      })
+      // Fallback to database lookup using tenant_users
+      const { data: roleData } = await supabase
+        .from('tenant_users')
+        .select(`
+          role_id,
+          roles!inner (
+            name
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
       
-      if (roleName && isValidRole(roleName)) {
-        role = roleName
-      } else {
-        // If RPC fails, try direct query with join
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select(`
-            role_id,
-            roles!inner (
-              name
-            )
-          `)
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .single()
-        
-        if (roleData && roleData.roles) {
-          // Supabase returns joined relations as arrays
-          const roles = Array.isArray(roleData.roles) ? roleData.roles : [roleData.roles]
-          const roleObj = roles[0] as { name: string } | undefined
-          if (roleObj?.name && isValidRole(roleObj.name)) {
-            role = roleObj.name
-          }
+      if (roleData && roleData.roles) {
+        // Supabase returns joined relations as arrays
+        const roles = Array.isArray(roleData.roles) ? roleData.roles : [roleData.roles]
+        const roleObj = roles[0] as { name: string } | undefined
+        if (roleObj?.name && isValidRole(roleObj.name)) {
+          role = roleObj.name
         }
       }
     }

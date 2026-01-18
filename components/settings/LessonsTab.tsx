@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Plus, Archive, Edit, GripVertical, HelpCircle, GraduationCap, ChevronRight, Undo2 } from "lucide-react";
+import { BookOpen, Plus, Archive, Edit, GripVertical, HelpCircle, GraduationCap, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,6 @@ import type { Syllabus } from "@/lib/types/syllabus";
 import type { Lesson, SyllabusStage, LessonInsert, LessonUpdate } from "@/lib/types/lessons";
 import {
   DndContext,
-  closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -26,7 +25,6 @@ import {
   DragStartEvent,
   DragOverlay,
   pointerWithin,
-  rectIntersection,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -36,7 +34,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { createPortal } from "react-dom";
 
@@ -493,28 +491,15 @@ export default function LessonsTab() {
       }
       return response.json();
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["lessons", variables.syllabusId] });
       setPendingReorder(null);
     },
-    onError: (err, variables, context) => {
+    onError: () => {
       toast.error("Failed to save lesson order");
       setPendingReorder(null);
     },
   });
-
-  // Handle undo reorder
-  const handleUndoReorder = () => {
-    if (!pendingReorder) return;
-
-    // Revert to previous order
-    reorderMutation.mutate({
-      syllabusId: pendingReorder.syllabusId,
-      lessonOrders: pendingReorder.previousOrders,
-    });
-
-    toast.success("Lesson order reverted");
-  };
 
   // Confirm the pending reorder
   const confirmReorder = () => {

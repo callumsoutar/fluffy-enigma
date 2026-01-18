@@ -2,18 +2,28 @@ import { NextRequest, NextResponse } from "next/server"
 import type { User } from "@supabase/supabase-js"
 
 import { createClient } from "@/lib/supabase/server"
-import { userHasAnyRole } from "@/lib/auth/roles"
+import { getTenantContext } from "@/lib/auth/tenant"
 import type { UserRole } from "@/lib/types/roles"
+import type { TenantContext } from "@/lib/types/tenant"
 
 type OperationsAccessSuccess = {
   supabase: Awaited<ReturnType<typeof createClient>>
   user: User
+  /** Tenant context - available after migration to multi-tenant */
+  tenantContext: TenantContext
 }
 
 type OperationsAccessResult = OperationsAccessSuccess | { error: NextResponse }
 
+/**
+ * Require operations access (staff roles) for an API route
+ * Returns supabase client, user, and tenant context if access granted
+ * 
+ * @param _request - NextRequest (unused but kept for API compatibility)
+ * @param roles - Array of roles that grant access (default: owner, admin, instructor)
+ */
 export async function requireOperationsAccess(
-  request: NextRequest,
+  _request: NextRequest,
   roles: UserRole[] = ["owner", "admin", "instructor"]
 ): Promise<OperationsAccessResult> {
   const supabase = await createClient()
@@ -27,19 +37,41 @@ export async function requireOperationsAccess(
     }
   }
 
-  const hasAccess = await userHasAnyRole(user.id, roles)
-  if (!hasAccess) {
+  try {
+    const tenantContext = await getTenantContext(supabase)
+    
+    // Check if user has any of the required roles at their tenant
+    if (!roles.includes(tenantContext.userRole)) {
+      return {
+        error: NextResponse.json(
+          { error: "Forbidden: insufficient permissions" },
+          { status: 403 }
+        ),
+      }
+    }
+
+    return {
+      supabase,
+      user,
+      tenantContext,
+    }
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === "NO_MEMBERSHIP") {
+      return {
+        error: NextResponse.json(
+          { error: "Forbidden: No tenant membership" },
+          { status: 403 }
+        ),
+      }
+    }
+    
     return {
       error: NextResponse.json(
-        { error: "Forbidden: insufficient permissions" },
-        { status: 403 }
+        { error: "Failed to resolve tenant context" },
+        { status: 500 }
       ),
     }
-  }
-
-  return {
-    supabase,
-    user,
   }
 }
 

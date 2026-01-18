@@ -29,7 +29,7 @@ const formSchema = z.object({
   type: z.string().trim().min(1, "Type is required").max(100, "Type too long"),
   model: z.string().trim().max(100, "Model too long").optional(),
   manufacturer: z.string().trim().max(100, "Manufacturer too long").optional(),
-  year_manufactured: z.number().int().min(1900, "Invalid year").max(2100, "Invalid year").optional().or(z.literal(undefined)),
+  year_manufactured: z.number().int().min(1900, "Invalid year").max(2100, "Invalid year").optional(),
 
   status: z.string().trim().max(50, "Status too long").optional(),
   aircraft_type_id: z.string().uuid("Invalid aircraft type").optional(),
@@ -45,8 +45,8 @@ const formSchema = z.object({
     ])
     .optional(),
 
-  current_hobbs: z.number().min(0, "Must be >= 0").optional().or(z.literal(undefined)),
-  current_tach: z.number().min(0, "Must be >= 0").optional().or(z.literal(undefined)),
+  current_hobbs: z.number().min(0, "Must be >= 0").optional(),
+  current_tach: z.number().min(0, "Must be >= 0").optional(),
 
   on_line: z.boolean().optional(),
   prioritise_scheduling: z.boolean().optional(),
@@ -279,7 +279,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                       type="number"
                       className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. 2008"
-                      {...form.register("year_manufactured")}
+                      {...form.register("year_manufactured", { valueAsNumber: true })}
                     />
                     {errors.year_manufactured ? (
                       <p className="mt-1 text-[10px] text-destructive">{errors.year_manufactured.message}</p>
@@ -382,7 +382,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                       step="0.1"
                       className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. 1234.5"
-                      {...form.register("current_hobbs")}
+                      {...form.register("current_hobbs", { valueAsNumber: true })}
                     />
                     {errors.current_hobbs ? (
                       <p className="mt-1 text-[10px] text-destructive">{errors.current_hobbs.message}</p>
@@ -398,7 +398,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                       step="0.1"
                       className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
                       placeholder="e.g. 987.6"
-                      {...form.register("current_tach")}
+                      {...form.register("current_tach", { valueAsNumber: true })}
                     />
                     {errors.current_tach ? (
                       <p className="mt-1 text-[10px] text-destructive">{errors.current_tach.message}</p>

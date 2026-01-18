@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { memberCreateSchema, membersQuerySchema } from '@/lib/validation/members'
 import type { PersonType, MembershipStatus, MembersFilter, MemberWithRelations } from '@/lib/types/members'
 
@@ -9,28 +9,36 @@ import type { PersonType, MembershipStatus, MembersFilter, MemberWithRelations }
  * GET /api/members
  * 
  * Fetch members/people with optional filters
- * Requires authentication and instructor/admin/owner role
+ * Requires authentication and tenant membership
  * 
  * Security:
- * - Only instructors, admins, and owners can access
- * - RLS policies enforce final data access
+ * - Only instructors, admins, and owners can access (except instructor-only requests)
+ * - RLS policies enforce final data access and tenant isolation
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userRole } = tenantContext
 
   // Check authorization
   // - Staff (owner, admin, instructor) can view all members
   // - Members can only view instructors (needed for booking)
-  const isStaff = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const isStaff = ['owner', 'admin', 'instructor'].includes(userRole)
   
   // Get query params early to check if this is an instructor-only request
   const searchParams = request.nextUrl.searchParams
@@ -79,11 +87,40 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Build base query - select users with related data
-  // Note: We'll fetch related data separately to avoid complex joins
+  // SECURITY: Defense-in-depth - explicitly filter by tenant via tenant_users junction
+  // This ensures we only return users who belong to the current tenant
+  // RLS provides the primary security layer, but this is an additional safeguard
+  
+  // First, get all user IDs that belong to this tenant
+  const { data: tenantUserIds, error: tenantUsersError } = await supabase
+    .from('tenant_users')
+    .select('user_id')
+    .eq('tenant_id', tenantContext.tenantId)
+    .eq('is_active', true)
+  
+  if (tenantUsersError) {
+    console.error('Error fetching tenant users:', tenantUsersError)
+    return NextResponse.json(
+      { error: 'Failed to fetch members' },
+      { status: 500 }
+    )
+  }
+  
+  // If no users in tenant, return empty
+  if (!tenantUserIds || tenantUserIds.length === 0) {
+    return NextResponse.json({
+      members: [],
+      total: 0,
+    })
+  }
+  
+  const userIdsInTenant = tenantUserIds.map(tu => tu.user_id)
+  
+  // Build base query - select users filtered by tenant membership
   let query = supabase
     .from('users')
     .select('*')
+    .in('id', userIdsInTenant)  // Only users in this tenant
     .order('created_at', { ascending: false })
 
   // Apply filters
@@ -93,7 +130,7 @@ export async function GET(request: NextRequest) {
     query = query.eq('is_active', filters.is_active)
   }
 
-  // Execute query (RLS will filter based on user permissions)
+  // Execute query (RLS provides additional security layer)
   const { data: users, error } = await query
 
   if (error) {
@@ -140,9 +177,9 @@ export async function GET(request: NextRequest) {
     .select('*')
     .in('user_id', userIds)
 
-  // Fetch user roles
+  // Fetch user roles from tenant_users
   const { data: userRoles } = await supabase
-    .from('user_roles')
+    .from('tenant_users')
     .select(`
       user_id,
       role_id,
@@ -323,13 +360,24 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const { userRole } = tenantContext
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 })
   }
@@ -400,6 +448,7 @@ export async function POST(request: NextRequest) {
     insertPayload.id = authUserId
   }
 
+  // Step 1: Create the user record
   const { data: created, error } = await supabase
     .from('users')
     .insert(insertPayload)
@@ -420,14 +469,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create member' }, { status: 500 })
   }
 
-  // If we invited them, also create their initial role
-  if (send_invitation && authUserId) {
-    await supabase
-      .from('user_roles')
-      .insert({
-        user_id: authUserId,
-        role: 'member'
-      })
+  // Step 2: ALWAYS create tenant_users record to link user to tenant
+  // - If invited (has auth account): use 'member' role
+  // - If not invited (contact only): use 'student' role as default
+  const defaultRoleName = send_invitation ? 'member' : 'student'
+  
+  const { data: defaultRole, error: roleError } = await supabase
+    .from('roles')
+    .select('id')
+    .eq('name', defaultRoleName)
+    .single()
+  
+  if (roleError || !defaultRole) {
+    // Rollback: delete the user we just created
+    await supabase.from('users').delete().eq('id', created.id)
+    
+    console.error('Error finding role:', roleError)
+    return NextResponse.json({ error: 'Failed to assign role to member' }, { status: 500 })
+  }
+  
+  const { error: tenantUserError } = await supabase
+    .from('tenant_users')
+    .insert({
+      tenant_id: tenantContext.tenantId,
+      user_id: created.id,
+      role_id: defaultRole.id,
+      granted_by: tenantContext.userId,
+      is_active: true,
+    })
+  
+  if (tenantUserError) {
+    // Rollback: delete the user we just created
+    await supabase.from('users').delete().eq('id', created.id)
+    
+    console.error('Error creating tenant_users record:', tenantUserError)
+    return NextResponse.json({ error: 'Failed to link member to organization' }, { status: 500 })
   }
 
   return NextResponse.json({ member: created }, { status: 201 })

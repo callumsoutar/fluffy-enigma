@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { bookingCreateSchema } from '@/lib/validation/bookings'
 import { dayOfWeekFromYyyyMmDd, getZonedYyyyMmDdAndHHmm } from '@/lib/utils/timezone'
 import { getSchoolConfigServer } from '@/lib/utils/school-config'
@@ -15,16 +15,28 @@ const batchBookingCreateSchema = z.object({
  * POST /api/bookings/batch
  *
  * Create multiple bookings in a single action.
+ * Requires authentication and tenant membership.
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
-  const isStaff = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const { userId: currentUserId, userRole } = tenantContext
+  const isStaff = ['owner', 'admin', 'instructor'].includes(userRole)
 
   let body: unknown
   try {
@@ -44,14 +56,14 @@ export async function POST(request: NextRequest) {
   const payloads = []
   for (const data of bookings) {
     // Privilege checks
-    if (!isStaff && data.user_id && data.user_id !== user.id) {
+    if (!isStaff && data.user_id && data.user_id !== currentUserId) {
       return NextResponse.json({ error: 'Forbidden: Cannot create booking for another user' }, { status: 403 })
     }
     if (!isStaff && data.status && data.status !== 'unconfirmed') {
       return NextResponse.json({ error: 'Forbidden: Only staff can set booking status' }, { status: 403 })
     }
 
-    const userIdForBooking = isStaff ? (data.user_id ?? user.id) : user.id
+    const userIdForBooking = isStaff ? (data.user_id ?? currentUserId) : currentUserId
     const statusForBooking = isStaff ? (data.status ?? 'unconfirmed') : 'unconfirmed'
 
     // If an instructor is provided, ensure they're rostered on for this proposed time range.

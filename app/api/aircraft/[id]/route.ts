@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import type { AircraftWithType } from '@/lib/types/aircraft'
 
 /**
@@ -11,25 +11,33 @@ import type { AircraftWithType } from '@/lib/types/aircraft'
  * 
  * Security:
  * - Only instructors, admins, and owners can access
- * - RLS policies enforce final data access
+ * - RLS policies enforce final data access and tenant isolation
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Check authorization - only instructors, admins, and owners can view aircraft
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -207,18 +215,26 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Check authorization - only instructors, admins, and owners can update aircraft
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },

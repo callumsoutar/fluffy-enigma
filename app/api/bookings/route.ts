@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { bookingCreateSchema, bookingsQuerySchema } from '@/lib/validation/bookings'
 import type { BookingStatus, BookingType, BookingsFilter, BookingWithRelations } from '@/lib/types/bookings'
 import { dayOfWeekFromYyyyMmDd, getZonedYyyyMmDdAndHHmm } from '@/lib/utils/timezone'
@@ -10,25 +10,33 @@ import { getSchoolConfigServer } from '@/lib/utils/school-config'
  * GET /api/bookings
  * 
  * Fetch bookings with optional filters
- * Requires authentication
+ * Requires authentication and tenant membership
  * 
  * Security:
- * - All authenticated users can access (bookings are user-owned)
+ * - All tenant members can access (RLS enforces tenant isolation)
  * - Users can only filter by their own user_id unless admin/instructor
  * - Instructors can only filter by their own instructor_id unless admin
- * - RLS policies enforce final data access
+ * - RLS policies enforce final data access and tenant boundaries
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   // Get and validate query parameters
   const searchParams = request.nextUrl.searchParams
@@ -61,13 +69,13 @@ export async function GET(request: NextRequest) {
   }
 
   // Security: Validate filter parameters to prevent unauthorized data access
-  // Check if user is admin/instructor (can query any user's bookings)
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  // Check if user is admin/instructor (can query any user's bookings within tenant)
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
 
   // Validate user_id filter - users can only filter by their own user_id unless admin/instructor
-  // Instructors and admins can see all bookings (no user_id filter restriction)
+  // Instructors and admins can see all bookings within their tenant (no user_id filter restriction)
   if (filters.user_id) {
-    if (!isAdminOrInstructor && filters.user_id !== user.id) {
+    if (!isAdminOrInstructor && filters.user_id !== currentUserId) {
       return NextResponse.json(
         { error: 'Forbidden: Cannot query other users\' bookings' },
         { status: 403 }
@@ -78,20 +86,20 @@ export async function GET(request: NextRequest) {
     // - Regular users (students/members) default to own bookings only
     // - Instructors/admins can see all bookings (no filter applied)
     if (!isAdminOrInstructor) {
-      filters.user_id = user.id
+      filters.user_id = currentUserId
     }
     // Instructors and admins: filters.user_id remains undefined, allowing all bookings
   }
 
   // Validate instructor_id filter - instructors can only filter by their own instructor_id unless admin
   if (filters.instructor_id) {
-    const isAdmin = await userHasAnyRole(user.id, ['owner', 'admin'])
+    const isAdmin = ['owner', 'admin'].includes(userRole)
     if (!isAdmin) {
       // Check if the current user has an instructor record and if it matches the filter
       const { data: instructor } = await supabase
         .from('instructors')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUserId)
         .eq('is_actively_instructing', true)
         .single()
       
@@ -213,20 +221,32 @@ export async function GET(request: NextRequest) {
  * Create a new booking.
  *
  * Security:
- * - Requires authentication
+ * - Requires authentication and tenant membership
  * - Members/students can only create bookings for themselves (user_id forced)
  * - Only staff (owner/admin/instructor) can create on behalf of others and set non-default status
- * - RLS policies enforce final write access
+ * - RLS policies enforce final write access and tenant boundaries
+ * - tenant_id is automatically set via database default
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
-  const isStaff = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const { userId: currentUserId, userRole } = tenantContext
+  const isStaff = ['owner', 'admin', 'instructor'].includes(userRole)
 
   let body: unknown
   try {
@@ -246,7 +266,7 @@ export async function POST(request: NextRequest) {
   const data = parsed.data
 
   // Enforce privilege rules
-  if (!isStaff && data.user_id !== undefined && data.user_id !== null && data.user_id !== user.id) {
+  if (!isStaff && data.user_id !== undefined && data.user_id !== null && data.user_id !== currentUserId) {
     return NextResponse.json(
       { error: 'Forbidden: Cannot create booking for another user' },
       { status: 403 }
@@ -259,7 +279,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const userIdForBooking = isStaff ? (data.user_id ?? user.id) : user.id
+  const userIdForBooking = isStaff ? (data.user_id ?? currentUserId) : currentUserId
   const statusForBooking = isStaff ? (data.status ?? 'unconfirmed') : 'unconfirmed'
 
   // Lightweight referential checks (RLS/constraints are still authoritative)
@@ -278,7 +298,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Ensure user exists + active when staff creates on behalf of another user
-  if (isStaff && userIdForBooking !== user.id) {
+  if (isStaff && userIdForBooking !== currentUserId) {
     const { data: userRow } = await supabase
       .from('users')
       .select('id, is_active')

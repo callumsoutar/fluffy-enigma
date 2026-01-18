@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { bookingIdSchema } from '@/lib/validation/bookings'
 import { flightExperienceUpsertBodySchema } from '@/lib/validation/flight-experience'
 
@@ -52,10 +52,24 @@ async function ensureLessonProgressId(opts: {
  */
 export async function GET(_req: NextRequest, { params }: Params) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
+  }
 
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const { userRole } = tenantContext
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 })
 
   const { id: bookingId } = await params
@@ -106,10 +120,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
  */
 export async function PUT(req: NextRequest, { params }: Params) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
+  }
 
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const { userId: currentUserId, userRole } = tenantContext
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 })
 
   const { id: bookingId } = await params
@@ -202,7 +230,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     occurred_at: booking.start_time,
     notes: e.notes ?? null,
     conditions: e.conditions ?? null,
-    created_by: user.id,
+    created_by: currentUserId,
     updated_at: new Date().toISOString(),
   }))
 
@@ -255,10 +283,24 @@ export async function PUT(req: NextRequest, { params }: Params) {
  */
 export async function DELETE(req: NextRequest, { params }: Params) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
+  }
 
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const { userRole } = tenantContext
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 })
 
   const { id: bookingId } = await params

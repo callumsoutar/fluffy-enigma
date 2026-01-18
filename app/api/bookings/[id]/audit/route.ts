@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { bookingIdSchema } from '@/lib/validation/bookings'
 
 async function getInstructorIdForUser(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
@@ -16,22 +16,30 @@ async function getInstructorIdForUser(supabase: Awaited<ReturnType<typeof create
  * GET /api/bookings/[id]/audit
  * 
  * Fetch audit logs for a specific booking
- * Requires authentication
+ * Requires authentication and tenant membership
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   const { id: bookingId } = await params
 
@@ -52,11 +60,11 @@ export async function GET(
     .single()
 
   // Check permissions before revealing if booking exists (prevent information leakage)
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
-  const instructorIdForUser = await getInstructorIdForUser(supabase, user.id)
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
+  const instructorIdForUser = await getInstructorIdForUser(supabase, currentUserId)
   const canAccess = booking && (
     isAdminOrInstructor || 
-    booking.user_id === user.id ||
+    booking.user_id === currentUserId ||
     (!!instructorIdForUser && booking.instructor_id === instructorIdForUser)
   )
 

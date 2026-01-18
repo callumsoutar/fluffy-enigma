@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { invoicesQuerySchema, invoiceCreateSchema } from '@/lib/validation/invoices'
 import type { InvoiceStatus, InvoicesFilter, InvoiceWithRelations } from '@/lib/types/invoices'
 
@@ -8,24 +8,32 @@ import type { InvoiceStatus, InvoicesFilter, InvoiceWithRelations } from '@/lib/
  * GET /api/invoices
  * 
  * Fetch invoices with optional filters
- * Requires authentication
+ * Requires authentication and tenant membership
  * 
  * Security:
  * - All authenticated users can access (invoices are user-owned)
  * - Users can only filter by their own user_id unless admin/instructor
- * - RLS policies enforce final data access
+ * - RLS policies enforce final data access and tenant isolation
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   // Get and validate query parameters
   const searchParams = request.nextUrl.searchParams
@@ -56,11 +64,11 @@ export async function GET(request: NextRequest) {
 
   // Security: Validate filter parameters to prevent unauthorized data access
   // Check if user is admin/instructor (can query any user's invoices)
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
 
   // Validate user_id filter - users can only filter by their own user_id unless admin/instructor
   if (filters.user_id) {
-    if (!isAdminOrInstructor && filters.user_id !== user.id) {
+    if (!isAdminOrInstructor && filters.user_id !== currentUserId) {
       return NextResponse.json(
         { error: 'Forbidden: Cannot query other users\' invoices' },
         { status: 403 }
@@ -71,7 +79,7 @@ export async function GET(request: NextRequest) {
     // - Regular users (students/members) default to own invoices only
     // - Instructors/admins can see all invoices (no filter applied)
     if (!isAdminOrInstructor) {
-      filters.user_id = user.id
+      filters.user_id = currentUserId
     }
   }
 
@@ -154,18 +162,26 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Check authorization - only instructors, admins, and owners can create invoices
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },

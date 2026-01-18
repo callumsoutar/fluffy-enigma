@@ -45,7 +45,10 @@ function permissionToRegex(permissionPath: string, exact: boolean): RegExp {
 export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // Public routes (no role check needed - handled by auth middleware)
   { path: '/login', allowedRoles: [] },
+  { path: '/signup', allowedRoles: [] },
   { path: '/auth', allowedRoles: [] },
+  { path: '/onboarding', allowedRoles: [] },
+  { path: '/api/auth', allowedRoles: [] },
   
   // Dashboard - all authenticated users
   { path: '/', allowedRoles: ['owner', 'admin', 'instructor', 'member', 'student'], exact: true },

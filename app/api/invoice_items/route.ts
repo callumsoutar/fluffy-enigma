@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { invoiceItemCreateSchema, invoiceItemUpdateSchema } from '@/lib/validation/invoices'
 import { invoiceIdSchema } from '@/lib/validation/invoices'
 import type { InvoiceItemWithRelations } from '@/lib/types/invoice_items'
@@ -14,15 +14,23 @@ import { calculateItemAmounts, calculateInvoiceTotals, roundToTwoDecimals } from
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   // Get invoice_id from query params
   const searchParams = request.nextUrl.searchParams
@@ -60,8 +68,8 @@ export async function GET(request: NextRequest) {
   }
 
   // Check permissions
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
-  const canAccess = isAdminOrInstructor || invoice.user_id === user.id
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
+  const canAccess = isAdminOrInstructor || invoice.user_id === currentUserId
 
   if (!canAccess) {
     return NextResponse.json(
@@ -108,15 +116,23 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   // Validate request body
   let body
@@ -155,8 +171,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Check permissions
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
-  const canEdit = isAdminOrInstructor || invoice.user_id === user.id
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
+  const canEdit = isAdminOrInstructor || invoice.user_id === currentUserId
 
   if (!canEdit) {
     return NextResponse.json(
@@ -253,15 +269,23 @@ export async function POST(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   // Validate request body
   let body
@@ -323,8 +347,8 @@ export async function PATCH(request: NextRequest) {
   }
 
   // Check permissions
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
-  const canEdit = isAdminOrInstructor || invoice.user_id === user.id
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
+  const canEdit = isAdminOrInstructor || invoice.user_id === currentUserId
 
   if (!canEdit) {
     return NextResponse.json(
@@ -433,15 +457,23 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   // Validate request body
   let body
@@ -492,8 +524,8 @@ export async function DELETE(request: NextRequest) {
   }
 
   // Check permissions
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
-  const canEdit = isAdminOrInstructor || invoice.user_id === user.id
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
+  const canEdit = isAdminOrInstructor || invoice.user_id === currentUserId
 
   if (!canEdit) {
     return NextResponse.json(
@@ -515,7 +547,7 @@ export async function DELETE(request: NextRequest) {
     .from('invoice_items')
     .update({
       deleted_at: new Date().toISOString(),
-      deleted_by: user.id,
+      deleted_by: currentUserId,
     })
     .eq('id', body.id)
 

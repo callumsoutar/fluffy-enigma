@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { getTenantContext } from "@/lib/auth/tenant"
 import type {
   EmploymentType,
   InstructorStatus,
@@ -7,7 +8,6 @@ import type {
 } from "@/lib/types/instructors"
 import type { InstructorCategory } from "@/lib/types/instructor-categories"
 import { z } from "zod"
-import { requireStaffAccess } from "@/lib/api/require-staff-access"
 
 const instructorIdSchema = z.string().uuid()
 const EMPLOYMENT_TYPE_VALUES = ["full_time", "part_time", "casual", "contractor"] as const
@@ -185,9 +185,27 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const unauthorized = await requireStaffAccess(request)
-  if (unauthorized) {
-    return unauthorized
+  const supabase = await createClient()
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
+  }
+
+  const { userRole } = tenantContext
+  const hasAccess = ["owner", "admin"].includes(userRole)
+  if (!hasAccess) {
+    return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 })
   }
 
   const { id: instructorId } = await params
@@ -196,7 +214,6 @@ export async function GET(
     return NextResponse.json({ error: "Invalid instructor ID" }, { status: 400 })
   }
 
-  const supabase = await createClient()
   const instructor = await loadInstructor(supabase, instructorId)
   if (!instructor) {
     return NextResponse.json({ error: "Instructor not found" }, { status: 404 })
@@ -209,9 +226,27 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const unauthorized = await requireStaffAccess(request)
-  if (unauthorized) {
-    return unauthorized
+  const supabase = await createClient()
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
+  }
+
+  const { userRole } = tenantContext
+  const hasAccess = ["owner", "admin"].includes(userRole)
+  if (!hasAccess) {
+    return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 })
   }
 
   const { id: instructorId } = await params
@@ -220,7 +255,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid instructor ID" }, { status: 400 })
   }
 
-  const supabase = await createClient()
   const existing = await loadInstructor(supabase, instructorId)
   if (!existing) {
     return NextResponse.json({ error: "Instructor not found" }, { status: 404 })

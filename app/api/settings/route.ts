@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 
 /**
  * GET /api/settings
@@ -14,18 +14,26 @@ import { userHasAnyRole } from '@/lib/auth/roles'
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Check authorization - only owners and admins can view settings
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  const hasAccess = ['owner', 'admin'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -88,18 +96,26 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userId: currentUserId, userRole } = tenantContext
+
   // Check authorization - only owners and admins can update settings
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  const hasAccess = ['owner', 'admin'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -152,7 +168,7 @@ export async function PATCH(request: NextRequest) {
     .from('settings')
     .update({
       setting_value,
-      updated_by: user.id,
+      updated_by: currentUserId,
       updated_at: new Date().toISOString(),
     })
     .eq('id', existingSetting.id)

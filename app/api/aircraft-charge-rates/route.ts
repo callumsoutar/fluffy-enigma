@@ -1,19 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
 
-  // STEP 1: Authentication
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
-  // STEP 2: Authorization - Role check
-  // Charge rates are financial data - only instructors and above can view
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const { userRole } = tenantContext
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({
       error: 'Forbidden: Viewing aircraft charge rates requires instructor, admin, or owner role'
@@ -60,15 +68,23 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
 
-  // STEP 1: Authentication
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
-  // STEP 2: Authorization - Role check
-  // Only admin/owner can create charge rates (financial data)
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  const { userRole } = tenantContext
+  const hasAccess = ['owner', 'admin'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({
       error: 'Forbidden: Creating aircraft charge rates requires admin or owner role'
@@ -121,15 +137,23 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient()
 
-  // STEP 1: Authentication
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
-  // STEP 2: Authorization - Role check
-  // Only admin/owner can update charge rates (financial data)
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  const { userRole } = tenantContext
+  const hasAccess = ['owner', 'admin'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({
       error: 'Forbidden: Updating aircraft charge rates requires admin or owner role'
@@ -171,15 +195,23 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient()
 
-  // STEP 1: Authentication
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
-  // STEP 2: Authorization - Role check
-  // Only admin/owner can delete charge rates (financial data)
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  const { userRole } = tenantContext
+  const hasAccess = ['owner', 'admin'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({
       error: 'Forbidden: Deleting aircraft charge rates requires admin or owner role'

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import type { MaintenanceVisit } from '@/lib/types/maintenance_visits'
 import { getSchoolConfigServer } from '@/lib/utils/school-config'
 import { addDaysYyyyMmDd, getZonedYyyyMmDdAndHHmm } from '@/lib/utils/timezone'
@@ -8,14 +8,25 @@ import { addDaysYyyyMmDd, getZonedYyyyMmDdAndHHmm } from '@/lib/utils/timezone'
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   
-  // Auth check
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Role authorization check - only instructors and above can view maintenance visits
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({ 
       error: 'Forbidden: Insufficient permissions' 
@@ -134,14 +145,25 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   
-  // Auth check
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Role authorization check - only instructors and above can create maintenance visits
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({ 
       error: 'Forbidden: Creating maintenance visits requires instructor role or above' 
@@ -235,14 +257,25 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient()
   
-  // Auth check
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Role authorization check - only instructors and above can update maintenance visits
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({ 
       error: 'Forbidden: Updating maintenance visits requires instructor role or above' 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { userHasAnyRole } from "@/lib/auth/roles"
+import { getTenantContext } from "@/lib/auth/tenant"
 import { bookingsQuerySchema } from "@/lib/validation/bookings"
 import type { BookingStatus, BookingType, SchedulerBookingsResponse, SchedulerBookingWithRelations } from "@/lib/types/bookings"
 
@@ -21,13 +21,23 @@ import type { BookingStatus, BookingType, SchedulerBookingsResponse, SchedulerBo
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   // Validate query params (reuse existing schema for date parsing/validation)
   const searchParams = request.nextUrl.searchParams
@@ -54,7 +64,7 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const isStaff = await userHasAnyRole(user.id, ["owner", "admin", "instructor"])
+  const isStaff = ['owner', 'admin', 'instructor'].includes(userRole)
 
   // Fetch bookings for the scheduler date range using service_role (bypass bookings RLS).
   // We deliberately select only minimal fields required by the scheduler UI.
@@ -114,7 +124,7 @@ export async function GET(request: NextRequest) {
   const bookings = ((data ?? []) as unknown as SchedulerBookingWithRelations[]).map((b) => {
     if (isStaff) return b
 
-    const isOwn = b.user_id === user.id
+    const isOwn = b.user_id === currentUserId
     const isUnassigned = b.user_id === null
     const isOtherPersonsBooking = !isOwn && !isUnassigned
 

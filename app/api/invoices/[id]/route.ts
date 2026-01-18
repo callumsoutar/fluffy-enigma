@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { invoiceIdSchema, invoiceUpdateSchema } from '@/lib/validation/invoices'
 import type { InvoiceWithRelations } from '@/lib/types/invoices'
 import { calculateInvoiceTotals, roundToTwoDecimals } from '@/lib/invoice-calculations'
@@ -15,22 +15,30 @@ function isRpcSuccess(v: unknown): v is { success: true } {
  * GET /api/invoices/[id]
  * 
  * Fetch a single invoice by ID
- * Requires authentication
+ * Requires authentication and tenant membership
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   const { id: invoiceId } = await params
 
@@ -82,11 +90,11 @@ export async function GET(
   }
 
   // Security: Check if user can access this invoice
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
   const invoiceData = invoice as InvoiceWithRelations
 
   // Users can only access their own invoices unless admin/instructor
-  const canAccess = isAdminOrInstructor || invoiceData.user_id === user.id
+  const canAccess = isAdminOrInstructor || invoiceData.user_id === currentUserId
 
   if (!invoice || !canAccess) {
     // Return generic "not found" to prevent information leakage
@@ -103,7 +111,7 @@ export async function GET(
  * PATCH /api/invoices/[id]
  * 
  * Update an invoice
- * Requires authentication and appropriate permissions
+ * Requires authentication, tenant membership, and appropriate permissions
  * Only draft invoices can be updated
  */
 export async function PATCH(
@@ -111,15 +119,23 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   const { id: invoiceId } = await params
 
@@ -170,8 +186,8 @@ export async function PATCH(
   }
 
   // Check permissions
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
-  const canEdit = isAdminOrInstructor || existingInvoice.user_id === user.id
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
+  const canEdit = isAdminOrInstructor || existingInvoice.user_id === currentUserId
 
   if (!canEdit) {
     return NextResponse.json(
@@ -385,15 +401,23 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   const { id: invoiceId } = await params
 
@@ -407,7 +431,7 @@ export async function DELETE(
   }
 
   // Check authorization - only owners and admins can delete invoices
-  const isOwnerOrAdmin = await userHasAnyRole(user.id, ['owner', 'admin'])
+  const isOwnerOrAdmin = ['owner', 'admin'].includes(userRole)
   if (!isOwnerOrAdmin) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -452,7 +476,7 @@ export async function DELETE(
     .from('invoices')
     .update({
       deleted_at: new Date().toISOString(),
-      deleted_by: user.id,
+      deleted_by: currentUserId,
       deletion_reason: deletionReason,
     })
     .eq('id', invoiceId)

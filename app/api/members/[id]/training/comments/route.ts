@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { userHasAnyRole } from "@/lib/auth/roles"
+import { getTenantContext } from "@/lib/auth/tenant"
 import { memberIdSchema } from "@/lib/validation/members"
 
 /**
@@ -14,20 +14,30 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === "NO_MEMBERSHIP") {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   // Check authorization - members can see their own training comments, 
   // but trainers/admins can see anyone's
   const { id: memberId } = await params
   
-  const isSelf = user.id === memberId
-  const hasStaffAccess = await userHasAnyRole(user.id, ["owner", "admin", "instructor"])
+  const isSelf = currentUserId === memberId
+  const hasStaffAccess = ["owner", "admin", "instructor"].includes(userRole)
   
   if (!isSelf && !hasStaffAccess) {
     return NextResponse.json(

@@ -77,13 +77,24 @@ const rosterRuleCreateSchema = z
   })
 
 export async function GET(request: NextRequest) {
-  // Allow all authenticated users to view roster rules (needed for scheduler)
+  // Allow all authenticated users with tenant membership to view roster rules (needed for scheduler)
   // Write operations still restricted via requireOperationsAccess
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  
+  // Import getTenantContext dynamically to avoid circular dependencies
+  const { getTenantContext } = await import('@/lib/auth/tenant')
+  
+  try {
+    await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
   const searchParams = new URL(request.url).searchParams

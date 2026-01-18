@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { bookingIdSchema, bookingUpdateSchema } from '@/lib/validation/bookings'
 import type { BookingWithRelations } from '@/lib/types/bookings'
 
@@ -17,22 +17,30 @@ async function getInstructorIdForUser(supabase: Awaited<ReturnType<typeof create
  * GET /api/bookings/[id]
  * 
  * Fetch a single booking by ID
- * Requires authentication
+ * Requires authentication and tenant membership
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   const { id: bookingId } = await params
 
@@ -137,14 +145,14 @@ export async function GET(
 
   // Security: Check if user can access this booking
   // Check permissions before revealing if booking exists (prevent information leakage)
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
   const bookingData = booking as BookingWithRelations
-  const instructorIdForUser = await getInstructorIdForUser(supabase, user.id)
+  const instructorIdForUser = await getInstructorIdForUser(supabase, currentUserId)
 
   // Users can only access their own bookings unless admin/instructor
   // Also check if user is the assigned instructor
   const canAccess = isAdminOrInstructor || 
-                    bookingData.user_id === user.id ||
+                    bookingData.user_id === currentUserId ||
                     (!!instructorIdForUser && bookingData.instructor_id === instructorIdForUser)
 
   if (!booking || !canAccess) {
@@ -162,22 +170,30 @@ export async function GET(
  * PATCH /api/bookings/[id]
  * 
  * Update a booking
- * Requires authentication and appropriate permissions
+ * Requires authentication, tenant membership, and appropriate permissions
  */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
+
+  const { userId: currentUserId, userRole } = tenantContext
 
   const { id: bookingId } = await params
 
@@ -250,10 +266,10 @@ export async function PATCH(
   }
 
   // Check permissions
-  const isAdminOrInstructor = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
-  const instructorIdForUser = await getInstructorIdForUser(supabase, user.id)
+  const isAdminOrInstructor = ['owner', 'admin', 'instructor'].includes(userRole)
+  const instructorIdForUser = await getInstructorIdForUser(supabase, currentUserId)
   const canEdit = isAdminOrInstructor || 
-                  existingBooking.user_id === user.id ||
+                  existingBooking.user_id === currentUserId ||
                   (!!instructorIdForUser && existingBooking.instructor_id === instructorIdForUser)
 
   if (!canEdit) {
@@ -423,7 +439,7 @@ export async function PATCH(
     // Set cancelled_at to current timestamp if not already cancelled
     if (!existingBooking.cancelled_at) {
       updateData.cancelled_at = new Date().toISOString()
-      updateData.cancelled_by = user.id
+      updateData.cancelled_by = currentUserId
       // Also update status to cancelled
       updateData.status = 'cancelled'
     }

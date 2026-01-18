@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 
 const ObservationSchema = z.object({
   reported_by: z.string().uuid().optional(),
@@ -24,14 +24,25 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient()
     
-    // Auth check
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get tenant context (includes auth check)
+    let tenantContext
+    try {
+      tenantContext = await getTenantContext(supabase)
+    } catch (err) {
+      const error = err as { code?: string }
+      if (error.code === 'UNAUTHORIZED') {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
+      if (error.code === 'NO_MEMBERSHIP') {
+        return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+      }
+      return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
     }
 
+    const { userId: currentUserId, userRole } = tenantContext
+
     // Role authorization check - observations are safety-critical data
-    const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor', 'member'])
+    const hasAccess = ['owner', 'admin', 'instructor', 'member'].includes(userRole)
     if (!hasAccess) {
       return NextResponse.json({ 
         error: 'Forbidden: Observations access requires member role or above' 
@@ -39,7 +50,7 @@ export async function GET(req: NextRequest) {
     }
 
   // Members can only view observations for aircraft they have bookings for
-  const isMember = await userHasAnyRole(user.id, ['member'])
+  const isMember = userRole === 'member'
   if (isMember) {
     const aircraft_id = new URL(req.url).searchParams.get('aircraft_id')
     
@@ -53,7 +64,7 @@ export async function GET(req: NextRequest) {
     const { data: userBooking, error: bookingError } = await supabase
       .from("bookings")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", currentUserId)
       .eq("aircraft_id", aircraft_id)
       .limit(1)
 
@@ -115,14 +126,25 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   
-  // Auth check
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
+  const { userId: currentUserId, userRole } = tenantContext
+
   // Role authorization check - observations creation requires instructor role or above
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({ 
       error: 'Forbidden: Observation creation requires instructor role or above' 
@@ -141,7 +163,7 @@ export async function POST(req: NextRequest) {
     name: parse.data.name,
     description: parse.data.description || null,
     stage: parse.data.stage || parse.data.observation_stage || 'open',
-    reported_by: parse.data.reported_by || parse.data.user_id || user.id,
+    reported_by: parse.data.reported_by || parse.data.user_id || currentUserId,
     priority: parse.data.priority || 'medium',
     resolution_comments: parse.data.resolution_comments || null,
     closed_by: parse.data.closed_by || null,
@@ -174,14 +196,25 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient()
   
-  // Auth check
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Role authorization check - observations modification requires instructor role or above
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({ 
       error: 'Forbidden: Observation modification requires instructor role or above' 
@@ -264,14 +297,25 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient()
   
-  // Auth check
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: "Forbidden: No tenant membership" }, { status: 403 })
+    }
+    return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Role authorization check - observations deletion requires admin or owner role
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  const hasAccess = ['owner', 'admin'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json({ 
       error: 'Forbidden: Observation deletion requires admin or owner role' 

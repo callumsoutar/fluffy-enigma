@@ -101,7 +101,6 @@ export default function RecordPaymentModal({
   const [success, setSuccess] = React.useState(false)
   const [receiptId, setReceiptId] = React.useState<string | null>(null)
   const [showAdditionalInfo, setShowAdditionalInfo] = React.useState(false)
-  const [showNotes, setShowNotes] = React.useState(false)
 
   const willFullyPay = amount > 0 && computedRemaining > 0 && roundToTwoDecimals(amount) === roundToTwoDecimals(computedRemaining)
 
@@ -116,7 +115,6 @@ export default function RecordPaymentModal({
     setSuccess(false)
     setReceiptId(null)
     setShowAdditionalInfo(false)
-    setShowNotes(false)
   }, [computedRemaining])
 
   React.useEffect(() => {

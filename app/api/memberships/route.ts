@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { z } from 'zod'
 import { calculateMembershipStatus } from '@/lib/utils/membership-utils'
 import {
@@ -46,18 +46,26 @@ const renewMembershipSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Check authorization - only instructors, admins, and owners can view memberships
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -169,18 +177,26 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userId: currentUserId, userRole } = tenantContext
+
   // Check authorization - only instructors, admins, and owners can create/renew memberships
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -282,7 +298,7 @@ export async function POST(request: NextRequest) {
       auto_renew: auto_renew ?? currentMembership.auto_renew,
       grace_period_days: currentMembership.grace_period_days || 30,
       notes: notes || null,
-      updated_by: user.id,
+      updated_by: currentUserId,
     }
 
     const { data: newMembership, error: createError } = await supabase
@@ -367,7 +383,7 @@ export async function POST(request: NextRequest) {
       auto_renew: auto_renew || false,
       grace_period_days: 30, // Default grace period
       notes: notes || null,
-      updated_by: user.id,
+      updated_by: currentUserId,
     }
 
     const { data: newMembership, error: createError } = await supabase

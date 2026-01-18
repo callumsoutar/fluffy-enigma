@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 
 /**
  * POST /api/settings/logo
@@ -13,18 +13,26 @@ import { userHasAnyRole } from '@/lib/auth/roles'
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userId: currentUserId, userRole } = tenantContext
+
   // Check authorization - only owners and admins can upload logos
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  const hasAccess = ['owner', 'admin'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -64,7 +72,7 @@ export async function POST(request: NextRequest) {
     // Generate unique filename: {user_id}/logo-{timestamp}.{ext}
     const fileExt = file.name.split('.').pop() || 'png'
     const timestamp = Date.now()
-    const fileName = `${user.id}/logo-${timestamp}.${fileExt}`
+    const fileName = `${currentUserId}/logo-${timestamp}.${fileExt}`
 
     // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer()
@@ -126,7 +134,7 @@ export async function POST(request: NextRequest) {
         .from('settings')
         .update({
           setting_value: logoUrl,
-          updated_by: user.id,
+          updated_by: currentUserId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingSetting.id)
@@ -147,8 +155,8 @@ export async function POST(request: NextRequest) {
           description: 'Company logo URL',
           is_public: false,
           is_required: false,
-          created_by: user.id,
-          updated_by: user.id,
+          created_by: currentUserId,
+          updated_by: currentUserId,
         })
 
       if (insertError) {
@@ -182,18 +190,26 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userId: currentUserId, userRole } = tenantContext
+
   // Check authorization - only owners and admins can delete logos
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin'])
+  const hasAccess = ['owner', 'admin'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -238,7 +254,7 @@ export async function DELETE() {
         .from('settings')
         .update({
           setting_value: null,
-          updated_by: user.id,
+          updated_by: currentUserId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', setting.id)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { userHasAnyRole } from '@/lib/auth/roles'
+import { getTenantContext } from '@/lib/auth/tenant'
 import { memberIdSchema } from '@/lib/validation/members'
 import type { MemberWithRelations } from '@/lib/types/members'
 import { z } from 'zod'
@@ -34,18 +34,26 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Check authorization - only instructors, admins, and owners can view members
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -61,6 +69,22 @@ export async function GET(
     return NextResponse.json(
       { error: 'Invalid member ID format' },
       { status: 400 }
+    )
+  }
+
+  // SECURITY: Verify member belongs to current tenant
+  const { data: tenantMembership, error: membershipError } = await supabase
+    .from('tenant_users')
+    .select('user_id')
+    .eq('user_id', memberId)
+    .eq('tenant_id', tenantContext.tenantId)
+    .eq('is_active', true)
+    .single()
+
+  if (membershipError || !tenantMembership) {
+    return NextResponse.json(
+      { error: 'Member not found' },
+      { status: 404 }
     )
   }
 
@@ -154,11 +178,13 @@ export async function GET(
  * Update a member
  * Requires authentication and instructor/admin/owner role
  */
+// Note: Using passthrough() instead of strict() to allow extra fields from frontend
+// but only the defined fields will be used for the update
 const memberUpdateSchema = z.object({
   first_name: z.string().max(100).optional(),
   last_name: z.string().max(100).optional(),
   email: z.string().email().optional(),
-  phone: z.string().max(20).optional(),
+  phone: z.string().max(20).optional().nullable(),
   date_of_birth: z.string().optional().nullable(),
   gender: z.string().optional().nullable(),
   street_address: z.string().max(200).optional().nullable(),
@@ -184,25 +210,33 @@ const memberUpdateSchema = z.object({
   class_2_medical_due: z.string().optional().nullable(),
   DL9_due: z.string().optional().nullable(),
   BFR_due: z.string().optional().nullable(),
-}).strict()
+}).passthrough()
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Check authentication
-  if (!user) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+  
+  // Get tenant context (includes auth check)
+  let tenantContext
+  try {
+    tenantContext = await getTenantContext(supabase)
+  } catch (err) {
+    const error = err as { code?: string }
+    if (error.code === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error.code === 'NO_MEMBERSHIP') {
+      return NextResponse.json({ error: 'Forbidden: No tenant membership' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
+  const { userRole } = tenantContext
+
   // Check authorization - only instructors, admins, and owners can update members
-  const hasAccess = await userHasAnyRole(user.id, ['owner', 'admin', 'instructor'])
+  const hasAccess = ['owner', 'admin', 'instructor'].includes(userRole)
   if (!hasAccess) {
     return NextResponse.json(
       { error: 'Forbidden: Insufficient permissions' },
@@ -234,13 +268,31 @@ export async function PATCH(
 
   const bodyValidation = memberUpdateSchema.safeParse(body)
   if (!bodyValidation.success) {
+    console.error('Member update validation failed:', JSON.stringify(bodyValidation.error.issues, null, 2))
+    console.error('Request body was:', JSON.stringify(body, null, 2))
     return NextResponse.json(
       { error: 'Invalid request data', details: bodyValidation.error.issues },
       { status: 400 }
     )
   }
 
-  // Check if member exists
+  // SECURITY: Verify member belongs to current tenant
+  const { data: tenantMembership, error: membershipError } = await supabase
+    .from('tenant_users')
+    .select('user_id')
+    .eq('user_id', memberId)
+    .eq('tenant_id', tenantContext.tenantId)
+    .eq('is_active', true)
+    .single()
+
+  if (membershipError || !tenantMembership) {
+    return NextResponse.json(
+      { error: 'Member not found' },
+      { status: 404 }
+    )
+  }
+
+  // Check if member exists in users table
   const { data: existingMember, error: fetchError } = await supabase
     .from('users')
     .select('id')

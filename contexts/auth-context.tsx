@@ -21,6 +21,9 @@ export interface UserProfile {
   avatarUrl: string | null
 }
 
+// Role change tracking
+const ROLE_CHECK_INTERVAL = 60000 // Check for role changes every 60 seconds
+
 // Cache keys for user profile
 const PROFILE_CACHE_KEY = 'auth_user_profile'
 
@@ -61,6 +64,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>
   hasRole: (role: UserRole) => boolean
   hasAnyRole: (roles: UserRole[]) => boolean
+  roleChangedSinceLogin: boolean // True if role has changed since JWT was issued
 }
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined)
@@ -70,11 +74,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = React.useState<UserRole | null>(null)
   const [profile, setProfile] = React.useState<UserProfile | null>(null)
   const [loading, setLoading] = React.useState(true)
+  const [roleChangedSinceLogin, setRoleChangedSinceLogin] = React.useState(false)
   
   // Use refs to track initialization state without causing re-renders
   // This prevents race conditions between getSession and onAuthStateChange
   const isInitializedRef = React.useRef(false)
   const isProcessingAuthChangeRef = React.useRef(false)
+  
+  // Track when we last verified the role from database
+  const lastRoleCheckRef = React.useRef<number>(0)
   
   // Create supabase client once and memoize
   const supabase = React.useMemo(() => createClient(), [])
@@ -193,6 +201,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearCachedProfile()
       }
 
+      // Reset role changed flag on fresh sign-in
+      if (isSignIn) {
+        setRoleChangedSinceLogin(false)
+      }
+
       // Mark as initialized after first auth event
       if (isInitialSession || isSignIn || isSignOut) {
         isInitializedRef.current = true
@@ -296,6 +309,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, handleAuthChange])
 
   /**
+   * Periodic role change detection
+   * 
+   * This checks if the user's role has changed in the database since their
+   * JWT was issued. If so, it sets a flag that can be used to prompt the
+   * user to refresh their session.
+   */
+  React.useEffect(() => {
+    if (!user) return
+
+    const checkForRoleChanges = async () => {
+      try {
+        // Get the JWT issued at time
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+
+        // Decode the JWT to get iat (issued at)
+        const payload = JSON.parse(atob(session.access_token.split('.')[1]))
+        const tokenIssuedAt = new Date(payload.iat * 1000)
+
+        // Call the database function to check if role changed
+        const { data, error } = await supabase.rpc('needs_session_refresh', {
+          p_user_id: user.id,
+          p_token_issued_at: tokenIssuedAt.toISOString()
+        })
+
+        if (error) {
+          console.error('Error checking for role changes:', error)
+          return
+        }
+
+        if (data === true && !roleChangedSinceLogin) {
+          console.log('🔐 [AUTH] Role has changed since login, user should refresh session')
+          setRoleChangedSinceLogin(true)
+          // Also refresh the user data to get the new role
+          await refreshUser()
+        }
+      } catch (error) {
+        console.error('Error in role change check:', error)
+      }
+    }
+
+    // Initial check
+    checkForRoleChanges()
+
+    // Set up periodic check
+    const intervalId = setInterval(checkForRoleChanges, ROLE_CHECK_INTERVAL)
+
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [user, supabase, roleChangedSinceLogin, refreshUser])
+
+  /**
    * Sign out the current user
    * Uses server action to properly clear HTTP-only cookies
    */
@@ -369,6 +435,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshUser,
         hasRole,
         hasAnyRole,
+        roleChangedSinceLogin,
       }}
     >
       {children}

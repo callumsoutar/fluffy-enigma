@@ -1,0 +1,17 @@
+-- Migration: Move pg_net extension from public to extensions schema
+-- 
+-- SECURITY: Extensions in the public schema can interfere with RLS policies
+-- and increase the attack surface. Moving to a dedicated extensions schema
+-- follows Supabase best practices.
+--
+-- STATUS: NOT APPLIED - pg_net does not support SET SCHEMA
+-- The pg_net extension returns error: extension "pg_net" does not support SET SCHEMA
+-- This is a known limitation and cannot be worked around.
+-- The security warning for this extension will remain.
+--
+-- Keeping this file for documentation purposes only.
+
+-- The following commands would be used if pg_net supported SET SCHEMA:
+-- CREATE SCHEMA IF NOT EXISTS extensions;
+-- GRANT USAGE ON SCHEMA extensions TO postgres, anon, authenticated, service_role;
+-- ALTER EXTENSION pg_net SET SCHEMA extensions;

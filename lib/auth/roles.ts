@@ -1,26 +1,24 @@
 /**
  * Server-side role checking utilities
  * 
- * These functions provide the authoritative role checking for server components,
- * API routes, and middleware. They check the database first, with JWT claims
- * as a performance optimization.
+ * This module provides tenant-aware role checking for server components,
+ * API routes, and middleware. All functions are designed for multi-tenant
+ * scenarios and query the canonical tenant_users table.
  * 
- * MULTI-TENANT MIGRATION NOTE:
- * This file contains both legacy (global role) and new (tenant-scoped role) functions.
+ * USAGE:
+ * - For tenant context and role: Use getTenantContext() - returns full context
+ * - For role checking: Use hasTenantRole() - checks if user has specific roles
+ * - For session validation: Use needsSessionRefresh() - detects role drift
  * 
- * DEPRECATED functions (will be removed after migration):
- * - getUserRole() - Use getTenantContext() from lib/auth/tenant.ts
- * - userHasRole() - Use hasTenantRole() from lib/auth/tenant.ts  
- * - userHasAnyRole() - Use hasTenantRole() from lib/auth/tenant.ts
- * 
- * These legacy functions now query tenant_users instead of user_roles,
- * but still work for single-tenant scenarios (returning the user's only tenant role).
+ * All deprecated legacy functions have been removed. Use the tenant-aware
+ * equivalents from lib/auth/tenant.ts instead.
  */
 
 import { createClient } from '@/lib/supabase/server';
 import type { UserRole } from '@/lib/types/roles';
-import { isValidRole } from '@/lib/types/roles';
-// Re-export tenant functions for convenience
+import { isValidRole, ROLE_HIERARCHY } from '@/lib/types/roles';
+
+// Re-export all tenant functions as the primary API
 export { 
   getTenantId, 
   getTenantContext, 
@@ -32,76 +30,124 @@ export {
 } from './tenant';
 
 /**
- * Get the user's role from the database
+ * Check if user's session needs to be refreshed due to role changes
  * 
- * @deprecated Use getTenantContext() from lib/auth/tenant.ts for tenant-aware role checking
+ * This function checks if the user's role has changed since their JWT was issued.
+ * Use this to detect when a user's permissions have been modified by an admin.
  * 
- * This function now queries tenant_users (the new multi-tenant table).
- * For single-tenant scenarios, it returns the user's role at their only tenant.
+ * @param userId - The user's ID
+ * @param tokenIssuedAt - When the current JWT was issued (from JWT claims)
+ * @returns true if the session should be refreshed
+ * 
+ * @example
+ * // In middleware or API route
+ * const jwt = await getUser()
+ * const needsRefresh = await needsSessionRefresh(jwt.id, new Date(jwt.iat * 1000))
+ * if (needsRefresh) {
+ *   // Force re-authentication or token refresh
+ * }
  */
-export async function getUserRole(userId: string): Promise<UserRole | null> {
+export async function needsSessionRefresh(
+  userId: string,
+  tokenIssuedAt: Date
+): Promise<boolean> {
   const supabase = await createClient();
   
-  // Query tenant_users instead of user_roles (migrated table)
+  const { data, error } = await supabase.rpc('needs_session_refresh', {
+    p_user_id: userId,
+    p_token_issued_at: tokenIssuedAt.toISOString()
+  });
+  
+  if (error) {
+    console.error('Error checking session refresh:', error);
+    // On error, assume session is valid to prevent blocking users
+    return false;
+  }
+  
+  return data === true;
+}
+
+/**
+ * Get the current role state from the database
+ * 
+ * Returns the user's current role as stored in the database, which can be
+ * compared with JWT claims to detect role drift.
+ * 
+ * @param userId - The user's ID
+ * @returns Current role state or null if not found
+ */
+export async function getCurrentRoleState(userId: string): Promise<{
+  tenantId: string;
+  roleName: UserRole;
+  roleChangedAt: Date;
+} | null> {
+  const supabase = await createClient();
+  
+  const { data, error } = await supabase.rpc('get_current_role_state', {
+    p_user_id: userId
+  });
+  
+  if (error || !data || !data.role_name) {
+    return null;
+  }
+  
+  return {
+    tenantId: data.tenant_id,
+    roleName: data.role_name as UserRole,
+    roleChangedAt: new Date(data.role_changed_at)
+  };
+}
+
+/**
+ * Check if user has minimum role level within their current tenant
+ * 
+ * Uses the role hierarchy to determine if user has at least the specified
+ * level of access.
+ * 
+ * @param userId - The user's ID
+ * @param minimumRole - The minimum role required
+ * @returns true if user has at least the minimum role
+ */
+export async function userHasMinimumRole(
+  userId: string,
+  minimumRole: UserRole
+): Promise<boolean> {
+  const supabase = await createClient();
+  
+  // Get user's current role from database
   const { data, error } = await supabase
     .from('tenant_users')
     .select(`
-      role_id,
-      roles!inner (
+      role:roles!inner (
         name
       )
     `)
     .eq('user_id', userId)
     .eq('is_active', true)
     .limit(1)
-    .single();
-  
-  if (error || !data || !data.roles) {
-    return null;
-  }
-  
-  // Supabase returns joined relations as arrays
-  const roles = Array.isArray(data.roles) ? data.roles : [data.roles];
-  const roleObj = roles[0] as { name: string } | undefined;
-  
-  if (!roleObj?.name) {
-    return null;
-  }
-  
-  return isValidRole(roleObj.name) ? roleObj.name : null;
-}
-
-/**
- * Get user role from JWT custom claims (fast, cached)
- * Falls back to database lookup if not in claims
- * 
- * @deprecated Use getTenantContext() from lib/auth/tenant.ts for tenant-aware role checking
- */
-export async function getUserRoleCached(userId: string): Promise<UserRole | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  // Check JWT custom claims first (fast)
-  const roleFromClaims = user?.user_metadata?.role as string | undefined;
-  if (roleFromClaims && isValidRole(roleFromClaims)) {
-    return roleFromClaims;
-  }
-  
-  // Fallback to database lookup using new tenant-aware function
-  const { data, error } = await supabase.rpc('get_tenant_user_role', {
-    p_user_id: userId
-  });
+    .maybeSingle();
   
   if (error || !data) {
-    // If RPC fails, try direct query
-    return getUserRole(userId);
+    return false;
   }
   
-  return isValidRole(data) ? data : null;
+  const roleObj = Array.isArray(data.role) ? data.role[0] : data.role;
+  const userRole = roleObj?.name;
+  
+  if (!userRole || !isValidRole(userRole)) {
+    return false;
+  }
+  
+  return ROLE_HIERARCHY[userRole as UserRole] >= ROLE_HIERARCHY[minimumRole];
 }
 
 /**
  * Get the current authenticated user's role
+ * 
+ * This is a convenience function that gets the current user and returns
+ * their role. For full tenant context, use getTenantContext() instead.
+ * 
+ * @returns The user's role or null if not authenticated
  */
 export async function getCurrentUserRole(): Promise<UserRole | null> {
   const supabase = await createClient();
@@ -111,118 +157,43 @@ export async function getCurrentUserRole(): Promise<UserRole | null> {
     return null;
   }
   
-  return getUserRoleCached(user.id);
-}
-
-/**
- * Check if user has a specific role
- * 
- * @deprecated Use hasTenantRole() from lib/auth/tenant.ts for tenant-aware role checking
- * 
- * This function now queries tenant_users for backwards compatibility.
- */
-export async function userHasRole(
-  userId: string,
-  requiredRole: UserRole
-): Promise<boolean> {
-  const supabase = await createClient();
-  
-  // Query tenant_users directly (backwards compatible for single-tenant)
-  const { data, error } = await supabase
-    .from('tenant_users')
-    .select(`
-      roles!inner (
-        name
-      )
-    `)
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .limit(1)
-    .single();
-  
-  if (error || !data) {
-    return false;
+  // Check JWT claims first (fast path)
+  const roleFromClaims = user.user_metadata?.role as string | undefined;
+  if (roleFromClaims && isValidRole(roleFromClaims)) {
+    return roleFromClaims;
   }
   
-  const role = Array.isArray(data.roles) ? data.roles[0] : data.roles;
-  return role?.name === requiredRole;
-}
-
-/**
- * Check if user has any of the provided roles
- * 
- * @deprecated Use hasTenantRole() from lib/auth/tenant.ts for tenant-aware role checking
- * 
- * This function now queries tenant_users for backwards compatibility.
- */
-export async function userHasAnyRole(
-  userId: string,
-  requiredRoles: UserRole[]
-): Promise<boolean> {
-  const supabase = await createClient();
-  
-  // Query tenant_users directly (backwards compatible for single-tenant)
-  const { data, error } = await supabase
-    .from('tenant_users')
-    .select(`
-      roles!inner (
-        name
-      )
-    `)
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .limit(1)
-    .single();
+  // Fallback to database lookup
+  const { data, error } = await supabase.rpc('get_tenant_user_role', {
+    p_user_id: user.id
+  });
   
   if (error || !data) {
-    return false;
+    return null;
   }
   
-  const role = Array.isArray(data.roles) ? data.roles[0] : data.roles;
-  return requiredRoles.includes(role?.name as UserRole);
-}
-
-/**
- * Check if user has minimum role level
- */
-export async function userHasMinimumRole(
-  userId: string,
-  minimumRole: UserRole
-): Promise<boolean> {
-  const userRole = await getUserRoleCached(userId);
-  if (!userRole) return false;
-  
-  const ROLE_HIERARCHY: Record<UserRole, number> = {
-    owner: 5,
-    admin: 4,
-    instructor: 3,
-    member: 2,
-    student: 1,
-  };
-  
-  return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[minimumRole];
-}
-
-/**
- * Check if current authenticated user has a specific role
- */
-export async function currentUserHasRole(requiredRole: UserRole): Promise<boolean> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) return false;
-  
-  return userHasRole(user.id, requiredRole);
+  return isValidRole(data) ? data : null;
 }
 
 /**
  * Check if current authenticated user has any of the provided roles
+ * 
+ * @param requiredRoles - Array of roles that would grant access
+ * @returns true if user has any of the required roles
  */
 export async function currentUserHasAnyRole(requiredRoles: UserRole[]): Promise<boolean> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) return false;
-  
-  return userHasAnyRole(user.id, requiredRoles);
+  const role = await getCurrentUserRole();
+  if (!role) return false;
+  return requiredRoles.includes(role);
+}
+
+/**
+ * Check if current authenticated user has a specific role
+ * 
+ * @param requiredRole - The exact role required
+ * @returns true if user has the required role
+ */
+export async function currentUserHasRole(requiredRole: UserRole): Promise<boolean> {
+  const role = await getCurrentUserRole();
+  return role === requiredRole;
 }

@@ -14,8 +14,9 @@ export async function GET() {
   const supabase = await createClient()
   
   // Get tenant context (includes auth check)
+  let tenantContext
   try {
-    await getTenantContext(supabase)
+    tenantContext = await getTenantContext(supabase)
   } catch (err) {
     const error = err as { code?: string }
     if (error.code === "UNAUTHORIZED") {
@@ -27,7 +28,7 @@ export async function GET() {
     return NextResponse.json({ error: "Failed to resolve tenant" }, { status: 500 })
   }
 
-  const config = await getSchoolConfigServer()
+  const config = await getSchoolConfigServer(tenantContext.tenantId)
   return NextResponse.json({ config })
 }
 

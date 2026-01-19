@@ -142,25 +142,24 @@ export function GeneralTab() {
     }
   };
 
-  const handleTimezoneChange = async (value: string) => {
+  const handleTimezoneChange = (value: string) => {
     handleInputChange("timezone", value);
-    try {
-      await updateProfile({ timezone: value });
-      toast.success("Timezone updated");
-    } catch (error) {
-      console.error("Error updating timezone:", error);
-      toast.error("Failed to update timezone");
-    }
   };
 
-  const handleCurrencyChange = async (value: string) => {
+  const handleCurrencyChange = (value: string) => {
     handleInputChange("currency", value);
+  };
+
+  const handleSaveRegionalSettings = async () => {
     try {
-      await updateProfile({ currency: value });
-      toast.success("Currency updated");
+      await updateProfile({
+        timezone: formData.timezone,
+        currency: formData.currency,
+      });
+      toast.success("Regional settings saved successfully");
     } catch (error) {
-      console.error("Error updating currency:", error);
-      toast.error("Failed to update currency");
+      console.error("Error saving regional settings:", error);
+      toast.error("Failed to save regional settings");
     }
   };
 
@@ -590,6 +589,20 @@ export function GeneralTab() {
                     These settings affect how dates, times, and currency are
                     displayed throughout the application.
                   </p>
+                </div>
+                <div className="flex justify-end pt-4">
+                  <Button
+                    onClick={handleSaveRegionalSettings}
+                    disabled={isUpdatingProfile}
+                    className="bg-slate-900 text-white font-bold rounded-xl h-11 px-6 shadow-lg shadow-slate-900/10 hover:bg-slate-800 flex items-center gap-2"
+                  >
+                    {isUpdatingProfile ? (
+                      <IconLoader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <IconDeviceFloppy className="w-4 h-4" />
+                    )}
+                    Save Regional Settings
+                  </Button>
                 </div>
               </div>
 

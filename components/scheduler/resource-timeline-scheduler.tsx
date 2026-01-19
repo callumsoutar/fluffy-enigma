@@ -58,6 +58,7 @@ import { NewBookingModal, type NewBookingPrefill } from "@/components/bookings/n
 import { CancelBookingModal } from "@/components/bookings/cancel-booking-modal"
 import { useAuth } from "@/contexts/auth-context"
 import { useSchoolConfig } from "@/lib/hooks/use-school-config"
+import { DEFAULT_SETTINGS } from "@/lib/settings/defaults"
 
 type Resource =
   | { kind: "instructor"; data: InstructorResource }
@@ -298,11 +299,12 @@ export function ResourceTimelineScheduler() {
   const { data: schoolConfig } = useSchoolConfig()
 
   // Parse business hours and create timeline config
+  // Fallback to central DEFAULT_SETTINGS for consistency
   const config: TimelineConfig = React.useMemo(() => {
-    const openTime = schoolConfig?.business_open_time ?? "09:00:00"
-    const closeTime = schoolConfig?.business_close_time ?? "17:00:00"
-    const is24Hours = schoolConfig?.business_is_24_hours ?? false
-    const isClosed = schoolConfig?.business_is_closed ?? false
+    const openTime = schoolConfig?.business_open_time ?? DEFAULT_SETTINGS.business_open_time
+    const closeTime = schoolConfig?.business_close_time ?? DEFAULT_SETTINGS.business_close_time
+    const is24Hours = schoolConfig?.business_is_24_hours ?? DEFAULT_SETTINGS.business_is_24_hours
+    const isClosed = schoolConfig?.business_is_closed ?? DEFAULT_SETTINGS.business_is_closed
 
     // If closed, show a minimal range (still show something)
     if (isClosed) {

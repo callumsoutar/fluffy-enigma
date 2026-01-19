@@ -210,8 +210,8 @@ export const TenantProfileSchema = z.object({
   address: z.string().nullable().optional(),
   billing_address: z.string().nullable().optional(),
   gst_number: z.string().nullable().optional(),
-  timezone: z.string().default('UTC'),
-  currency: z.string().length(3).default('USD'),
+  timezone: z.string().default('Pacific/Auckland'),
+  currency: z.string().length(3).default('NZD'),
 });
 
 export type TenantProfile = z.infer<typeof TenantProfileSchema>;

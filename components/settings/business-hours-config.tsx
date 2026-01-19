@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { useSettingsManager } from "@/hooks/use-settings";
 import { formatTimeForDisplay } from "@/lib/utils";
+import { DEFAULT_SETTINGS } from "@/lib/settings/defaults";
 
 // Generate time options for dropdowns (30-minute intervals)
 const generateTimeOptions = () => {
@@ -39,10 +40,11 @@ export function BusinessHoursConfig() {
     isUpdating,
   } = useSettingsManager("general");
 
-  const [openTime, setOpenTime] = useState("09:00");
-  const [closeTime, setCloseTime] = useState("17:00");
-  const [isClosed, setIsClosed] = useState(false);
-  const [is24Hours, setIs24Hours] = useState(false);
+  // Initial state uses central defaults (substring to get HH:MM from HH:MM:SS)
+  const [openTime, setOpenTime] = useState(DEFAULT_SETTINGS.business_open_time.substring(0, 5));
+  const [closeTime, setCloseTime] = useState(DEFAULT_SETTINGS.business_close_time.substring(0, 5));
+  const [isClosed, setIsClosed] = useState(DEFAULT_SETTINGS.business_is_closed);
+  const [is24Hours, setIs24Hours] = useState(DEFAULT_SETTINGS.business_is_24_hours);
   const [hasChanges, setHasChanges] = useState(false);
 
   const timeOptions = generateTimeOptions();
@@ -50,10 +52,10 @@ export function BusinessHoursConfig() {
   // Initialize state based on current business hours
   useEffect(() => {
     if (settings) {
-      const openTimeValue = getSettingValue("business_open_time", "09:00:00");
-      const closeTimeValue = getSettingValue("business_close_time", "17:00:00");
-      const is24HoursValue = getSettingValue("business_is_24_hours", false);
-      const isClosedValue = getSettingValue("business_is_closed", false);
+      const openTimeValue = getSettingValue("business_open_time", DEFAULT_SETTINGS.business_open_time);
+      const closeTimeValue = getSettingValue("business_close_time", DEFAULT_SETTINGS.business_close_time);
+      const is24HoursValue = getSettingValue("business_is_24_hours", DEFAULT_SETTINGS.business_is_24_hours);
+      const isClosedValue = getSettingValue("business_is_closed", DEFAULT_SETTINGS.business_is_closed);
 
       const openTimeStr = openTimeValue.substring(0, 5);
       const closeTimeStr = closeTimeValue.substring(0, 5);
@@ -96,10 +98,10 @@ export function BusinessHoursConfig() {
 
   const handleReset = () => {
     if (settings) {
-      const openTimeValue = getSettingValue("business_open_time", "09:00:00");
-      const closeTimeValue = getSettingValue("business_close_time", "17:00:00");
-      const is24HoursValue = getSettingValue("business_is_24_hours", false);
-      const isClosedValue = getSettingValue("business_is_closed", false);
+      const openTimeValue = getSettingValue("business_open_time", DEFAULT_SETTINGS.business_open_time);
+      const closeTimeValue = getSettingValue("business_close_time", DEFAULT_SETTINGS.business_close_time);
+      const is24HoursValue = getSettingValue("business_is_24_hours", DEFAULT_SETTINGS.business_is_24_hours);
+      const isClosedValue = getSettingValue("business_is_closed", DEFAULT_SETTINGS.business_is_closed);
 
       const openTimeStr = openTimeValue.substring(0, 5);
       const closeTimeStr = closeTimeValue.substring(0, 5);

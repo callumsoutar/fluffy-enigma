@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { Settings, PartialSettings, SettingGroup } from "@/lib/settings";
 import { SETTING_GROUPS } from "@/lib/settings";
 
@@ -76,9 +76,13 @@ export function useSettingsManager(group?: SettingGroup) {
   const settings = data?.settings;
 
   // If a group is specified, filter to just those keys
-  const groupSettings = group && settings 
-    ? getGroupedSettings(settings, group)
-    : settings;
+  // Memoize to prevent new object references on each render
+  const groupSettings = useMemo(() => {
+    if (group && settings) {
+      return getGroupedSettings(settings, group);
+    }
+    return settings;
+  }, [settings, group]);
 
   /**
    * Get the value of a specific setting by key

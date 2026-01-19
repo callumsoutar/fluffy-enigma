@@ -7,7 +7,7 @@ import * as z from "zod"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { Plane, Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2 } from "lucide-react"
+import { Plane, Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2, Check } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { signInWithEmail } from "@/app/actions/auth"
 import { toast } from "sonner"
@@ -22,6 +22,8 @@ const loginSchema = z.object({
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
+
+type LoginState = "idle" | "loading" | "success"
 
 const carouselSlides = [
   {
@@ -41,6 +43,48 @@ const carouselSlides = [
   },
 ]
 
+// Animated checkmark component for success state
+function AnimatedCheckmark() {
+  return (
+    <div className="relative">
+      {/* Outer glow ring */}
+      <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
+      
+      {/* Success circle */}
+      <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+        <Check className="w-10 h-10 text-white animate-[scale-in_0.3s_ease-out_0.2s_both]" strokeWidth={3} />
+      </div>
+    </div>
+  )
+}
+
+// Success overlay component
+function LoginSuccessOverlay() {
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0B1527] animate-[fade-in_0.3s_ease-out]">
+      <div className="flex flex-col items-center gap-6">
+        <AnimatedCheckmark />
+        
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold text-white animate-[slide-up_0.4s_ease-out_0.3s_both]">
+            Welcome back!
+          </h2>
+          <p className="text-slate-400 animate-[slide-up_0.4s_ease-out_0.4s_both]">
+            Redirecting to your dashboard...
+          </p>
+        </div>
+        
+        {/* Loading dots */}
+        <div className="flex gap-1.5 animate-[fade-in_0.3s_ease-out_0.5s_both]">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-[bounce_1s_ease-in-out_infinite]" />
+          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-[bounce_1s_ease-in-out_0.1s_infinite]" />
+          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-[bounce_1s_ease-in-out_0.2s_infinite]" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function LoginForm({
   className,
   ...props
@@ -48,7 +92,7 @@ export function LoginForm({
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
-  const [isLoading, setIsLoading] = React.useState(false)
+  const [loginState, setLoginState] = React.useState<LoginState>("idle")
   const [showPassword, setShowPassword] = React.useState(false)
   const [currentSlide, setCurrentSlide] = React.useState(0)
   
@@ -78,36 +122,50 @@ export function LoginForm({
   })
 
   const rememberMeValue = watch("rememberMe")
+  const isLoading = loginState === "loading"
 
   const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true)
+    setLoginState("loading")
     try {
       // Use server action for login to properly set cookies on the server
       const result = await signInWithEmail(data.email, data.password)
 
       if (result.error) {
         toast.error(result.error || "Failed to sign in")
-        setIsLoading(false)
+        setLoginState("idle")
         return
       }
 
-      toast.success("Successfully signed in!")
+      // Show success state
+      setLoginState("success")
       
-      // Refresh first to ensure server components recognize the new session
-      // Then navigate to the home page
+      // After server action sets cookies, we need to sync the client-side auth state.
+      // The server action has already set cookies in the response, but the client-side
+      // Supabase client needs to be made aware of them. We do this by:
+      // 1. Calling getSession() to force the client to read the new cookies
+      // 2. Using a small delay to ensure cookies are propagated
+      // 3. Using router.refresh() to update server components
+      // 4. Then navigating with a full page reload to ensure clean state
+      
+      // Force client-side Supabase to sync with the new session cookies
+      await supabase.auth.getSession()
+      
+      // Small delay to ensure session is fully established
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Refresh server components to recognize the new session
       router.refresh()
       
-      // Small delay to ensure cookies are properly set before navigation
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // Brief delay for success animation, then navigate with full page reload
+      // Using window.location ensures all client state is fresh
+      await new Promise(resolve => setTimeout(resolve, 1000))
       
-      router.push("/")
+      window.location.href = "/"
     } catch (error) {
       toast.error("An unexpected error occurred")
       console.error("Login error:", error)
-      setIsLoading(false)
+      setLoginState("idle")
     }
-    // Note: We don't call setIsLoading(false) on success because
-    // we're navigating away and want to keep the loading state
   }
 
   const handleGoogleSignIn = async () => {
@@ -128,7 +186,10 @@ export function LoginForm({
   }
 
   return (
-    <div className={cn("min-h-screen w-full", className)} {...props}>
+    <div className={cn("min-h-screen w-full relative", className)} {...props}>
+      {/* Success Overlay */}
+      {loginState === "success" && <LoginSuccessOverlay />}
+      
       <div className="flex min-h-screen">
         {/* Left Panel - Image Carousel */}
         <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden rounded-3xl m-4">

@@ -139,9 +139,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     let mounted = true
+    let initialAuthComplete = false
 
     const initializeAuth = async () => {
-      await refreshUser()
+      // First, try to get cached role for immediate display
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('user_role')
+        if (stored && isValidRole(stored)) {
+          setRole(stored as UserRole)
+        }
+      }
+      
+      // Then get the actual session
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!mounted) return
+        
+        if (session?.user) {
+          setUser(session.user)
+          await fetchUserRole(session.user.id)
+        } else {
+          setUser(null)
+          setRole(null)
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('user_role')
+          }
+        }
+      } catch (error) {
+        console.error("Error initializing auth:", error)
+        if (mounted) {
+          setUser(null)
+          setRole(null)
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+          initialAuthComplete = true
+        }
+      }
     }
 
     initializeAuth()
@@ -150,6 +185,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return
+      
+      // Skip the initial session event if we've already handled it
+      if (_event === 'INITIAL_SESSION' && initialAuthComplete) {
+        return
+      }
       
       // Only set loading for actual auth state changes (sign in/out), not for token refreshes
       // This prevents navigation from disappearing on page refresh
@@ -172,7 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       if (isSignIn || isSignOut) {
-      setLoading(false)
+        setLoading(false)
       }
     })
 
@@ -181,7 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only run on mount - refreshUser and fetchUserRole are stable callbacks
+  }, []) // Only run on mount - fetchUserRole is a stable callback
 
   const signOut = React.useCallback(async () => {
     try {

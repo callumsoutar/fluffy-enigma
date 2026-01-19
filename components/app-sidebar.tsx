@@ -242,7 +242,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Only show loading state on initial load (when we have no cached role)
   // During refresh, keep showing the navigation with cached role
   // Also show loading during SSR/before mount to prevent hydration mismatch
-  const isInitialLoad = (!mounted) || (loading && !localCachedRole && !role)
+  // Note: We also check for role availability since loading might be false but role not yet resolved
+  const hasAnyRole = !!role || !!localCachedRole
+  const isInitialLoad = (!mounted) || (loading && !hasAnyRole)
 
   // Show loading state during SSR, initial load, or before mount
   if (isInitialLoad) {

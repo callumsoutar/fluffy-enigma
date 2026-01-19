@@ -80,6 +80,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // This prevents race conditions between getSession and onAuthStateChange
   const isInitializedRef = React.useRef(false)
   const isProcessingAuthChangeRef = React.useRef(false)
+  // Queue for auth events that arrive while processing
+  const pendingAuthEventRef = React.useRef<{ event: string; user: User | null } | null>(null)
   
   // Create supabase client once and memoize
   const supabase = React.useMemo(() => createClient(), [])
@@ -153,17 +155,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     eventType: string,
     sessionUser: User | null
   ) => {
-    // Prevent concurrent processing
+    // If we're already processing an event, queue this one instead of dropping it
+    // This is critical for handling stale token scenarios where multiple events
+    // fire in quick succession (e.g., INITIAL_SESSION followed by TOKEN_REFRESHED)
     if (isProcessingAuthChangeRef.current) {
+      console.log(`🔐 [AUTH] Queueing event: ${eventType} (currently processing another event)`)
+      pendingAuthEventRef.current = { event: eventType, user: sessionUser }
       return
     }
     isProcessingAuthChangeRef.current = true
 
     try {
+      console.log(`🔐 [AUTH] Processing event: ${eventType}, user: ${sessionUser?.id || 'null'}`)
+      
       // Determine if this is a sign in/out event that needs loading state
       const isSignIn = eventType === 'SIGNED_IN'
       const isSignOut = eventType === 'SIGNED_OUT'
       const isInitialSession = eventType === 'INITIAL_SESSION'
+      const isTokenRefreshed = eventType === 'TOKEN_REFRESHED'
 
       // Only show loading for actual auth state changes, not token refreshes
       // This prevents UI flicker on page refresh
@@ -182,6 +191,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setRole(resolvedRole)
           setCachedRole(resolvedRole)
         } else {
+          // Failed to resolve role - clear cached role to prevent stale state
+          console.warn('🔐 [AUTH] Failed to resolve role for authenticated user')
           setRole(null)
           clearCachedRole()
         }
@@ -203,16 +214,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRoleChangedSinceLogin(false)
       }
 
-      // Mark as initialized after first auth event
-      if (isInitialSession || isSignIn || isSignOut) {
+      // Mark as initialized after first auth event or token refresh
+      // TOKEN_REFRESHED can be the first meaningful event after stale cookies are cleared
+      if (isInitialSession || isSignIn || isSignOut || isTokenRefreshed) {
         isInitializedRef.current = true
       }
+    } catch (error) {
+      console.error('🔐 [AUTH] Error processing auth change:', error)
+      // On error, ensure we still mark as initialized to prevent infinite loading
+      isInitializedRef.current = true
     } finally {
-      // Always clear loading state after processing
-      if (isInitializedRef.current) {
-        setLoading(false)
-      }
+      // Always clear loading state after processing - don't gate on isInitializedRef
+      // This ensures loading is cleared even if initialization failed
+      setLoading(false)
       isProcessingAuthChangeRef.current = false
+
+      // Process any queued event
+      const pendingEvent = pendingAuthEventRef.current
+      if (pendingEvent) {
+        pendingAuthEventRef.current = null
+        console.log(`🔐 [AUTH] Processing queued event: ${pendingEvent.event}`)
+        // Use setTimeout to allow state updates to flush before processing next event
+        setTimeout(() => {
+          handleAuthChange(pendingEvent.event, pendingEvent.user)
+        }, 0)
+      }
     }
   }, [supabase, fetchUserProfile])
 
@@ -279,8 +305,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   React.useEffect(() => {
     let mounted = true
+    let initTimeout: NodeJS.Timeout | null = null
 
     // Load cached data immediately to prevent UI flicker during initialization
+    // Note: This is optimistic - if the session is invalid, we'll clear these
     const cachedRole = getCachedRole()
     if (cachedRole) {
       setRole(cachedRole)
@@ -290,17 +318,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(cachedProfile)
     }
 
+    // Safety timeout: If auth doesn't initialize within 5 seconds, force loading to false
+    // This handles edge cases where onAuthStateChange doesn't fire properly
+    // (e.g., corrupted cookies, browser extensions blocking requests)
+    initTimeout = setTimeout(() => {
+      if (!isInitializedRef.current && mounted) {
+        console.warn('🔐 [AUTH] Initialization timeout - forcing loading to false')
+        isInitializedRef.current = true
+        setLoading(false)
+        // Clear potentially stale cached data since we couldn't verify the session
+        clearCachedRole()
+        clearCachedProfile()
+        setRole(null)
+        setProfile(null)
+      }
+    }, 5000)
+
     // Set up the auth state change listener
     // INITIAL_SESSION is fired synchronously when listener is created
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
+      
+      // Clear the timeout since we received an auth event
+      if (initTimeout) {
+        clearTimeout(initTimeout)
+        initTimeout = null
+      }
+      
       await handleAuthChange(event, session?.user ?? null)
     })
 
     return () => {
       mounted = false
+      if (initTimeout) {
+        clearTimeout(initTimeout)
+      }
       subscription.unsubscribe()
     }
   }, [supabase, handleAuthChange])

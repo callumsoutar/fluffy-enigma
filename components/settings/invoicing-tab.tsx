@@ -23,7 +23,7 @@ export function InvoicingTab() {
   const {
     settings,
     getSettingValue,
-    updateSettingValue,
+    updateSettings,
     isLoading,
     isUpdating,
   } = useSettingsManager("invoicing");
@@ -42,14 +42,14 @@ export function InvoicingTab() {
 
   // Initialize form data when settings load
   React.useEffect(() => {
-    if (settings && settings.length > 0) {
+    if (settings) {
       setFormData({
         invoice_prefix: getSettingValue("invoice_prefix", "INV"),
-        default_invoice_due_days: getSettingValue<number>(
+        default_invoice_due_days: getSettingValue(
           "default_invoice_due_days",
           7
         ),
-        payment_terms_days: getSettingValue<number>("payment_terms_days", 30),
+        payment_terms_days: getSettingValue("payment_terms_days", 30),
         payment_terms_message: getSettingValue(
           "payment_terms_message",
           "Payment terms: Net 30 days."
@@ -58,23 +58,23 @@ export function InvoicingTab() {
           "invoice_footer_message",
           "Thank you for your business."
         ),
-        auto_generate_invoices: getSettingValue<boolean>(
+        auto_generate_invoices: getSettingValue(
           "auto_generate_invoices",
           false
         ),
-        include_logo_on_invoice: getSettingValue<boolean>(
+        include_logo_on_invoice: getSettingValue(
           "include_logo_on_invoice",
           true
         ),
-        invoice_due_reminder_days: getSettingValue<number>(
+        invoice_due_reminder_days: getSettingValue(
           "invoice_due_reminder_days",
           7
         ),
-        late_fee_percentage: getSettingValue<number>("late_fee_percentage", 0),
+        late_fee_percentage: getSettingValue("late_fee_percentage", 0),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.length]);
+  }, [settings]);
 
   const handleInputChange = (
     field: string,
@@ -85,11 +85,7 @@ export function InvoicingTab() {
 
   const handleSaveAll = async () => {
     try {
-      await Promise.all(
-        Object.entries(formData).map(([key, value]) =>
-          updateSettingValue(key, value)
-        )
-      );
+      await updateSettings(formData);
       toast.success("Invoicing settings saved successfully");
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -381,4 +377,3 @@ export function InvoicingTab() {
     </div>
   );
 }
-

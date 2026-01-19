@@ -201,7 +201,7 @@ export async function POST(request: Request) {
       )
     }
     
-    // Step 6: Update user metadata with tenant_id
+    // Step 8: Update user metadata with tenant_id
     await adminSupabase.auth.admin.updateUserById(data.userId, {
       user_metadata: {
         ...currentUser.user_metadata,

@@ -34,26 +34,10 @@ export function BusinessHoursConfig() {
   const {
     settings,
     getSettingValue,
-    updateSettingValue,
+    updateSettings,
     isLoading,
     isUpdating,
   } = useSettingsManager("general");
-
-  // Extract business hours from settings
-  const businessHours = React.useMemo(() => {
-    const openTime = getSettingValue<string>("business_open_time", "09:00:00");
-    const closeTime = getSettingValue<string>("business_close_time", "17:00:00");
-    const is24Hours = getSettingValue<boolean>("business_is_24_hours", false);
-    const isClosed = getSettingValue<boolean>("business_is_closed", false);
-
-    return {
-      open_time: openTime,
-      close_time: closeTime,
-      is_24_hours: is24Hours,
-      is_closed: isClosed,
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings]);
 
   const [openTime, setOpenTime] = useState("09:00");
   const [closeTime, setCloseTime] = useState("17:00");
@@ -65,16 +49,22 @@ export function BusinessHoursConfig() {
 
   // Initialize state based on current business hours
   useEffect(() => {
-    if (settings && settings.length > 0) {
-      const openTimeStr = businessHours.open_time.substring(0, 5);
-      const closeTimeStr = businessHours.close_time.substring(0, 5);
+    if (settings) {
+      const openTimeValue = getSettingValue("business_open_time", "09:00:00");
+      const closeTimeValue = getSettingValue("business_close_time", "17:00:00");
+      const is24HoursValue = getSettingValue("business_is_24_hours", false);
+      const isClosedValue = getSettingValue("business_is_closed", false);
+
+      const openTimeStr = openTimeValue.substring(0, 5);
+      const closeTimeStr = closeTimeValue.substring(0, 5);
       setOpenTime(openTimeStr);
       setCloseTime(closeTimeStr);
-      setIsClosed(businessHours.is_closed);
-      setIs24Hours(businessHours.is_24_hours);
+      setIsClosed(isClosedValue);
+      setIs24Hours(is24HoursValue);
       setHasChanges(false);
     }
-  }, [businessHours, settings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
 
   const handleTimeChange = (field: string, value: string | boolean) => {
     if (field === "openTime") setOpenTime(value as string);
@@ -86,18 +76,12 @@ export function BusinessHoursConfig() {
 
   const handleSave = async () => {
     try {
-      await Promise.all([
-        updateSettingValue(
-          "business_open_time",
-          openTime.length === 5 ? `${openTime}:00` : openTime
-        ),
-        updateSettingValue(
-          "business_close_time",
-          closeTime.length === 5 ? `${closeTime}:00` : closeTime
-        ),
-        updateSettingValue("business_is_24_hours", is24Hours),
-        updateSettingValue("business_is_closed", isClosed),
-      ]);
+      await updateSettings({
+        business_open_time: openTime.length === 5 ? `${openTime}:00` : openTime,
+        business_close_time: closeTime.length === 5 ? `${closeTime}:00` : closeTime,
+        business_is_24_hours: is24Hours,
+        business_is_closed: isClosed,
+      });
       setHasChanges(false);
       toast.success("Business hours updated successfully");
     } catch (error) {
@@ -111,13 +95,20 @@ export function BusinessHoursConfig() {
   };
 
   const handleReset = () => {
-    const openTimeStr = businessHours.open_time.substring(0, 5);
-    const closeTimeStr = businessHours.close_time.substring(0, 5);
-    setOpenTime(openTimeStr);
-    setCloseTime(closeTimeStr);
-    setIsClosed(businessHours.is_closed);
-    setIs24Hours(businessHours.is_24_hours);
-    setHasChanges(false);
+    if (settings) {
+      const openTimeValue = getSettingValue("business_open_time", "09:00:00");
+      const closeTimeValue = getSettingValue("business_close_time", "17:00:00");
+      const is24HoursValue = getSettingValue("business_is_24_hours", false);
+      const isClosedValue = getSettingValue("business_is_closed", false);
+
+      const openTimeStr = openTimeValue.substring(0, 5);
+      const closeTimeStr = closeTimeValue.substring(0, 5);
+      setOpenTime(openTimeStr);
+      setCloseTime(closeTimeStr);
+      setIsClosed(isClosedValue);
+      setIs24Hours(is24HoursValue);
+      setHasChanges(false);
+    }
   };
 
   if (isLoading) {
@@ -264,4 +255,3 @@ export function BusinessHoursConfig() {
     </div>
   );
 }
-

@@ -6,6 +6,7 @@ import { getTenantContext } from '@/lib/auth/tenant'
  * POST /api/settings/logo
  * 
  * Upload a company logo to Supabase Storage
+ * Stores the logo URL on the tenants table
  * Requires authentication and owner/admin role
  * 
  * Body (FormData):
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
-  const { userId: currentUserId, userRole } = tenantContext
+  const { tenantId, userRole } = tenantContext
 
   // Check authorization - only owners and admins can upload logos
   const hasAccess = ['owner', 'admin'].includes(userRole)
@@ -69,10 +70,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate unique filename: {user_id}/logo-{timestamp}.{ext}
+    // Generate unique filename: {tenant_id}/logo-{timestamp}.{ext}
     const fileExt = file.name.split('.').pop() || 'png'
     const timestamp = Date.now()
-    const fileName = `${currentUserId}/logo-${timestamp}.${fileExt}`
+    const fileName = `${tenantId}/logo-${timestamp}.${fileExt}`
 
     // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer()
@@ -95,7 +96,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Get signed URL for private access (valid for 1 year)
-    // Since the bucket is private, we must use signed URLs
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('company-logos')
       .createSignedUrl(fileName, 31536000) // 1 year in seconds
@@ -115,58 +115,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Store the signed URL in settings
-    // Note: Signed URLs expire after 1 year, so they may need to be refreshed
-    // For production, consider storing the file path and generating signed URLs on-demand
     const logoUrl = signedUrlData.signedUrl
 
-    // Update or create the logo_url setting
-    const { data: existingSetting } = await supabase
-      .from('settings')
-      .select('*')
-      .eq('category', 'general')
-      .eq('setting_key', 'logo_url')
-      .single()
+    // Update the logo_url on the tenants table
+    const { error: updateError } = await supabase
+      .from('tenants')
+      .update({
+        logo_url: logoUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', tenantId)
 
-    if (existingSetting) {
-      // Update existing setting
-      const { error: updateError } = await supabase
-        .from('settings')
-        .update({
-          setting_value: logoUrl,
-          updated_by: currentUserId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingSetting.id)
-
-      if (updateError) {
-        console.error('Error updating logo_url setting:', updateError)
-        // Don't fail the request, the file is already uploaded
-      }
-    } else {
-      // Create new setting
-      const { error: insertError } = await supabase
-        .from('settings')
-        .insert({
-          category: 'general',
-          setting_key: 'logo_url',
-          setting_value: logoUrl,
-          data_type: 'string',
-          description: 'Company logo URL',
-          is_public: false,
-          is_required: false,
-          created_by: currentUserId,
-          updated_by: currentUserId,
-        })
-
-      if (insertError) {
-        console.error('Error creating logo_url setting:', insertError)
-        // Don't fail the request, the file is already uploaded
-      }
+    if (updateError) {
+      console.error('Error updating tenant logo_url:', updateError)
+      // Don't fail the request, the file is already uploaded
     }
-
-    // If there was a previous logo, delete it (optional cleanup)
-    // This is handled by the upsert: true option above
 
     return NextResponse.json({
       success: true,
@@ -186,6 +149,7 @@ export async function POST(request: NextRequest) {
  * DELETE /api/settings/logo
  * 
  * Delete the company logo
+ * Clears the logo_url from the tenants table
  * Requires authentication and owner/admin role
  */
 export async function DELETE() {
@@ -206,7 +170,7 @@ export async function DELETE() {
     return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
-  const { userId: currentUserId, userRole } = tenantContext
+  const { tenantId, userRole } = tenantContext
 
   // Check authorization - only owners and admins can delete logos
   const hasAccess = ['owner', 'admin'].includes(userRole)
@@ -218,20 +182,17 @@ export async function DELETE() {
   }
 
   try {
-    // Get current logo URL from settings
-    const { data: setting } = await supabase
-      .from('settings')
-      .select('*')
-      .eq('category', 'general')
-      .eq('setting_key', 'logo_url')
+    // Get current tenant to check for existing logo
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('logo_url')
+      .eq('id', tenantId)
       .single()
 
-    if (setting && setting.setting_value) {
+    if (tenant?.logo_url) {
       // Extract file path from URL
-      const logoUrl = setting.setting_value as string
-      // The URL format is: https://...supabase.co/storage/v1/object/public/company-logos/{user_id}/logo-{timestamp}.{ext}
-      // Or signed URL format
-      const pathMatch = logoUrl.match(/company-logos\/(.+)$/)
+      const logoUrl = tenant.logo_url as string
+      const pathMatch = logoUrl.match(/company-logos\/(.+?)(?:\?|$)/)
       
       if (pathMatch) {
         const fileName = pathMatch[1]
@@ -243,29 +204,26 @@ export async function DELETE() {
 
         if (deleteError) {
           console.error('Error deleting file:', deleteError)
-          // Continue to delete the setting even if file deletion fails
+          // Continue to clear the setting even if file deletion fails
         }
       }
     }
 
-    // Delete or clear the setting
-    if (setting) {
-      const { error: updateError } = await supabase
-        .from('settings')
-        .update({
-          setting_value: null,
-          updated_by: currentUserId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', setting.id)
+    // Clear the logo_url on the tenants table
+    const { error: updateError } = await supabase
+      .from('tenants')
+      .update({
+        logo_url: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', tenantId)
 
-      if (updateError) {
-        console.error('Error clearing logo_url setting:', updateError)
-        return NextResponse.json(
-          { error: 'Failed to clear logo setting' },
-          { status: 500 }
-        )
-      }
+    if (updateError) {
+      console.error('Error clearing tenant logo_url:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to clear logo' },
+        { status: 500 }
+      )
     }
 
     return NextResponse.json({

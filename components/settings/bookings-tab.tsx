@@ -19,7 +19,7 @@ export function BookingsTab() {
   const {
     settings,
     getSettingValue,
-    updateSettingValue,
+    updateSettings,
     isLoading,
     isUpdating,
   } = useSettingsManager("bookings");
@@ -37,44 +37,44 @@ export function BookingsTab() {
 
   // Initialize form data when settings load
   React.useEffect(() => {
-    if (settings && settings.length > 0) {
+    if (settings) {
       setFormData({
-        default_booking_duration_hours: getSettingValue<number>(
+        default_booking_duration_hours: getSettingValue(
           "default_booking_duration_hours",
           2
         ),
-        minimum_booking_duration_minutes: getSettingValue<number>(
+        minimum_booking_duration_minutes: getSettingValue(
           "minimum_booking_duration_minutes",
           30
         ),
-        maximum_booking_duration_hours: getSettingValue<number>(
+        maximum_booking_duration_hours: getSettingValue(
           "maximum_booking_duration_hours",
           8
         ),
-        booking_buffer_minutes: getSettingValue<number>(
+        booking_buffer_minutes: getSettingValue(
           "booking_buffer_minutes",
           15
         ),
-        allow_past_bookings: getSettingValue<boolean>(
+        allow_past_bookings: getSettingValue(
           "allow_past_bookings",
           false
         ),
-        require_instructor_for_solo: getSettingValue<boolean>(
+        require_instructor_for_solo: getSettingValue(
           "require_instructor_for_solo",
           true
         ),
-        require_flight_authorization_for_solo: getSettingValue<boolean>(
+        require_flight_authorization_for_solo: getSettingValue(
           "require_flight_authorization_for_solo",
           false
         ),
-        auto_cancel_unpaid_hours: getSettingValue<number>(
+        auto_cancel_unpaid_hours: getSettingValue(
           "auto_cancel_unpaid_hours",
           72
         ),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.length]);
+  }, [settings]);
 
   const handleInputChange = (
     field: string,
@@ -85,11 +85,7 @@ export function BookingsTab() {
 
   const handleSaveAll = async () => {
     try {
-      await Promise.all(
-        Object.entries(formData).map(([key, value]) =>
-          updateSettingValue(key, value)
-        )
-      );
+      await updateSettings(formData);
       toast.success("Booking settings saved successfully");
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -339,4 +335,3 @@ export function BookingsTab() {
     </div>
   );
 }
-

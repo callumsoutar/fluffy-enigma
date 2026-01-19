@@ -207,7 +207,7 @@ export async function POST(request: Request) {
       )
     }
     
-    // Step 8: Send confirmation email
+    // Step 10: Send confirmation email
     // Supabase automatically sends confirmation email when email_confirm is false
     // But we can also manually trigger it if needed
     

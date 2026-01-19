@@ -9,18 +9,72 @@ import { Button } from "@/components/ui/button"
 import { IconPlaneDeparture } from "@tabler/icons-react"
 import { useAuth } from "@/contexts/auth-context"
 import { cn, getInitialsFromName } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
+import { useEffect, useState } from "react"
 
 export function SiteHeader() {
   const isMobile = useIsMobile()
   const { toggleSidebar } = useSidebar()
   const { user } = useAuth()
+  const [userName, setUserName] = useState<string>("Guest")
+  const supabase = createClient()
   
-  const userName = user
-    ? user.user_metadata?.full_name ||
-      user.user_metadata?.name ||
-      user.email?.split("@")[0] ||
-      "User"
-    : "Guest"
+  useEffect(() => {
+    const fetchUserName = async () => {
+      if (!user?.id) {
+        setUserName("Guest")
+        return
+      }
+
+      try {
+        // Fetch user's first_name and last_name from the database
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single()
+
+        if (error) {
+          console.error('Error fetching user name:', error)
+          // Fallback to user_metadata or email
+          const fallbackName = user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email?.split("@")[0] ||
+            "User"
+          setUserName(fallbackName)
+          return
+        }
+
+        // Construct display name from first_name and last_name
+        if (userData) {
+          const firstName = userData.first_name || ""
+          const lastName = userData.last_name || ""
+          const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
+          
+          if (fullName) {
+            setUserName(fullName)
+          } else {
+            // Fallback if both are empty
+            const fallbackName = user.user_metadata?.full_name ||
+              user.user_metadata?.name ||
+              user.email?.split("@")[0] ||
+              "User"
+            setUserName(fallbackName)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user name:', error)
+        // Fallback to user_metadata or email
+        const fallbackName = user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          user.email?.split("@")[0] ||
+          "User"
+        setUserName(fallbackName)
+      }
+    }
+
+    fetchUserName()
+  }, [user, supabase])
   
   const userEmail = user?.email || ""
   const userAvatar = user?.user_metadata?.avatar_url || ""

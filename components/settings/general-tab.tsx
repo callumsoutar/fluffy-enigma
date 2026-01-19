@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSettingsManager } from "@/hooks/use-settings";
+import { useTenantProfile } from "@/hooks/use-tenant-profile";
 import { toast } from "sonner";
 import { AircraftTypesConfig } from "./AircraftTypesConfig";
 import { BusinessHoursConfig } from "./business-hours-config";
@@ -56,30 +56,30 @@ export function GeneralTab() {
     }
   }, [selectedTab]);
 
+  // Use tenant profile hook for organization info
   const {
-    settings,
-    getSettingValue,
-    updateSettingValue,
-    isLoading,
-    isUpdating,
-    refetch,
-  } = useSettingsManager("general");
+    profile,
+    isLoading: isLoadingProfile,
+    isUpdating: isUpdatingProfile,
+    updateProfile,
+    refetch: refetchProfile,
+  } = useTenantProfile();
 
-  // Local state for form values
+  // Local state for form values (profile data)
   const [formData, setFormData] = useState({
-    // School Information
-    school_name: "",
+    // School Information (from tenants table)
+    name: "",
     registration_number: "",
     description: "",
     website_url: "",
     logo_url: "",
-    // Contact Information
+    // Contact Information (from tenants table)
     contact_email: "",
     contact_phone: "",
     address: "",
     billing_address: "",
     gst_number: "",
-    // System Settings
+    // Regional Settings (from tenants table)
     timezone: "",
     currency: "",
   });
@@ -87,48 +87,80 @@ export function GeneralTab() {
   // Logo upload state
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
-  // Initialize form data when settings load
+  // Initialize form data when profile loads
   React.useEffect(() => {
-    if (settings && settings.length > 0) {
+    if (profile) {
       setFormData({
-        school_name: getSettingValue("school_name", ""),
-        registration_number: getSettingValue("registration_number", ""),
-        description: getSettingValue("description", ""),
-        website_url: getSettingValue("website_url", ""),
-        logo_url: getSettingValue("logo_url", ""),
-        contact_email: getSettingValue("contact_email", ""),
-        contact_phone: getSettingValue("contact_phone", ""),
-        address: getSettingValue("address", ""),
-        billing_address: getSettingValue("billing_address", ""),
-        gst_number: getSettingValue("gst_number", ""),
-        timezone: getSettingValue("timezone", "Pacific/Auckland"),
-        currency: getSettingValue("currency", "NZD"),
+        name: profile.name || "",
+        registration_number: profile.registration_number || "",
+        description: profile.description || "",
+        website_url: profile.website_url || "",
+        logo_url: profile.logo_url || "",
+        contact_email: profile.contact_email || "",
+        contact_phone: profile.contact_phone || "",
+        address: profile.address || "",
+        billing_address: profile.billing_address || "",
+        gst_number: profile.gst_number || "",
+        timezone: profile.timezone || "Pacific/Auckland",
+        currency: profile.currency || "NZD",
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.length]);
+  }, [profile]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSaveSection = async (fields: string[]) => {
+  const handleSaveSchoolInfo = async () => {
     try {
-      const updates: Record<string, string> = {};
-      fields.forEach((field) => {
-        updates[field] = formData[field as keyof typeof formData];
+      await updateProfile({
+        name: formData.name,
+        registration_number: formData.registration_number || null,
+        description: formData.description || null,
+        website_url: formData.website_url || null,
       });
-
-      await Promise.all(
-        Object.entries(updates).map(([key, value]) =>
-          updateSettingValue(key, value)
-        )
-      );
-
-      toast.success("Settings saved successfully");
+      toast.success("School information saved successfully");
     } catch (error) {
-      console.error("Error saving settings:", error);
-      toast.error("Failed to save settings");
+      console.error("Error saving school info:", error);
+      toast.error("Failed to save school information");
+    }
+  };
+
+  const handleSaveContactInfo = async () => {
+    try {
+      await updateProfile({
+        contact_email: formData.contact_email || null,
+        contact_phone: formData.contact_phone || null,
+        address: formData.address || null,
+        billing_address: formData.billing_address || null,
+        gst_number: formData.gst_number || null,
+      });
+      toast.success("Contact information saved successfully");
+    } catch (error) {
+      console.error("Error saving contact info:", error);
+      toast.error("Failed to save contact information");
+    }
+  };
+
+  const handleTimezoneChange = async (value: string) => {
+    handleInputChange("timezone", value);
+    try {
+      await updateProfile({ timezone: value });
+      toast.success("Timezone updated");
+    } catch (error) {
+      console.error("Error updating timezone:", error);
+      toast.error("Failed to update timezone");
+    }
+  };
+
+  const handleCurrencyChange = async (value: string) => {
+    handleInputChange("currency", value);
+    try {
+      await updateProfile({ currency: value });
+      toast.success("Currency updated");
+    } catch (error) {
+      console.error("Error updating currency:", error);
+      toast.error("Failed to update currency");
     }
   };
 
@@ -150,9 +182,9 @@ export function GeneralTab() {
         setFormData((prev) => ({ ...prev, logo_url: "" }));
         toast.success("Logo removed successfully");
         
-        // Refresh settings if refetch is available
-        if (refetch) {
-          await refetch();
+        // Refresh profile
+        if (refetchProfile) {
+          await refetchProfile();
         }
       } catch (error) {
         console.error("Error deleting logo:", error);
@@ -165,12 +197,12 @@ export function GeneralTab() {
 
     try {
       setIsUploadingLogo(true);
-      const formData = new FormData();
-      formData.append("file", file);
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", file);
 
       const response = await fetch("/api/settings/logo", {
         method: "POST",
-        body: formData,
+        body: uploadFormData,
       });
 
       if (!response.ok) {
@@ -184,9 +216,9 @@ export function GeneralTab() {
       setFormData((prev) => ({ ...prev, logo_url: data.url }));
       toast.success("Logo uploaded successfully");
       
-      // Refresh settings to get updated logo_url if refetch is available
-      if (refetch) {
-        await refetch();
+      // Refresh profile
+      if (refetchProfile) {
+        await refetchProfile();
       }
     } catch (error) {
       console.error("Error uploading logo:", error);
@@ -198,7 +230,7 @@ export function GeneralTab() {
     }
   };
 
-  if (isLoading) {
+  if (isLoadingProfile) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <IconLoader2 className="w-8 h-8 animate-spin text-slate-400" />
@@ -261,18 +293,18 @@ export function GeneralTab() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label
-                    htmlFor="school_name"
+                    htmlFor="name"
                     className="text-xs font-bold uppercase tracking-wider text-slate-500"
                   >
                     School Name <span className="text-red-500">*</span>
                   </Label>
                   <Input
-                    id="school_name"
+                    id="name"
                     placeholder="Flight School Name"
-                    value={formData.school_name}
+                    value={formData.name}
                     className="rounded-xl border-slate-200 h-11"
                     onChange={(e) =>
-                      handleInputChange("school_name", e.target.value)
+                      handleInputChange("name", e.target.value)
                     }
                   />
                 </div>
@@ -281,7 +313,7 @@ export function GeneralTab() {
                     htmlFor="registration_number"
                     className="text-xs font-bold uppercase tracking-wider text-slate-500"
                   >
-                    Registration Number <span className="text-red-500">*</span>
+                    Registration Number
                   </Label>
                   <Input
                     id="registration_number"
@@ -341,7 +373,7 @@ export function GeneralTab() {
                   accept="image/*"
                   maxSize={5 * 1024 * 1024}
                   currentFile={formData.logo_url}
-                  disabled={isUploadingLogo || isUpdating}
+                  disabled={isUploadingLogo || isUpdatingProfile}
                   label="Drop logo here or click to upload"
                 />
                 <p className="text-[11px] text-slate-500 font-medium">
@@ -350,18 +382,11 @@ export function GeneralTab() {
               </div>
               <div className="flex justify-end pt-4">
                 <Button
-                  onClick={() =>
-                    handleSaveSection([
-                      "school_name",
-                      "registration_number",
-                      "description",
-                      "website_url",
-                    ])
-                  }
-                  disabled={isUpdating}
+                  onClick={handleSaveSchoolInfo}
+                  disabled={isUpdatingProfile}
                   className="bg-slate-900 text-white font-bold rounded-xl h-11 px-6 shadow-lg shadow-slate-900/10 hover:bg-slate-800 flex items-center gap-2"
                 >
-                  {isUpdating ? (
+                  {isUpdatingProfile ? (
                     <IconLoader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <IconDeviceFloppy className="w-4 h-4" />
@@ -470,19 +495,11 @@ export function GeneralTab() {
               </div>
               <div className="flex justify-end pt-4">
                 <Button
-                  onClick={() =>
-                    handleSaveSection([
-                      "contact_email",
-                      "contact_phone",
-                      "address",
-                      "billing_address",
-                      "gst_number",
-                    ])
-                  }
-                  disabled={isUpdating}
+                  onClick={handleSaveContactInfo}
+                  disabled={isUpdatingProfile}
                   className="bg-slate-900 text-white font-bold rounded-xl h-11 px-6 shadow-lg shadow-slate-900/10 hover:bg-slate-800 flex items-center gap-2"
                 >
-                  {isUpdating ? (
+                  {isUpdatingProfile ? (
                     <IconLoader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <IconDeviceFloppy className="w-4 h-4" />
@@ -500,7 +517,7 @@ export function GeneralTab() {
                 <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
                   <IconSettings className="w-4 h-4 text-slate-400" />
                   <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">
-                    General Settings
+                    Regional Settings
                   </h4>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -513,10 +530,7 @@ export function GeneralTab() {
                     </Label>
                     <Select
                       value={formData.timezone}
-                      onValueChange={(value) => {
-                        handleInputChange("timezone", value);
-                        updateSettingValue("timezone", value);
-                      }}
+                      onValueChange={handleTimezoneChange}
                     >
                       <SelectTrigger className="w-full h-11 rounded-xl border-slate-200">
                         <SelectValue placeholder="Select timezone" />
@@ -550,10 +564,7 @@ export function GeneralTab() {
                     </Label>
                     <Select
                       value={formData.currency}
-                      onValueChange={(value) => {
-                        handleInputChange("currency", value);
-                        updateSettingValue("currency", value);
-                      }}
+                      onValueChange={handleCurrencyChange}
                     >
                       <SelectTrigger className="w-full h-11 rounded-xl border-slate-200">
                         <SelectValue placeholder="Select currency" />
@@ -597,4 +608,3 @@ export function GeneralTab() {
     </div>
   );
 }
-

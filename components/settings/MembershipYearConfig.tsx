@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { useSettingsManager } from "@/hooks/use-settings";
 import { toast } from "sonner";
+import type { MembershipYear } from "@/lib/settings/types";
 
 const months = [
   { value: "1", label: "January" },
@@ -35,11 +36,19 @@ const months = [
   { value: "12", label: "December" },
 ];
 
+const DEFAULT_MEMBERSHIP_YEAR: MembershipYear = {
+  start_month: 4,
+  end_month: 3,
+  start_day: 1,
+  end_day: 31,
+  description: "Membership year runs from April 1st to March 31st",
+};
+
 export function MembershipYearConfig() {
   const {
     settings,
     getSettingValue,
-    updateSettingValue,
+    updateSettings,
     isLoading,
     isUpdating,
   } = useSettingsManager("memberships");
@@ -54,15 +63,9 @@ export function MembershipYearConfig() {
 
   // Initialize form data when settings load
   useEffect(() => {
-    if (settings && settings.length > 0) {
-      const membershipYear = getSettingValue<{
-        start_month?: number;
-        start_day?: number;
-        end_month?: number;
-        end_day?: number;
-        description?: string;
-      }>("membership_year", {});
-      if (membershipYear && Object.keys(membershipYear).length > 0) {
+    if (settings) {
+      const membershipYear = getSettingValue("membership_year", DEFAULT_MEMBERSHIP_YEAR);
+      if (membershipYear && typeof membershipYear === 'object') {
         setFormData({
           start_month: (membershipYear.start_month || 4).toString(),
           start_day: (membershipYear.start_day || 1).toString(),
@@ -73,7 +76,7 @@ export function MembershipYearConfig() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.length]);
+  }, [settings]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => {
@@ -99,7 +102,7 @@ export function MembershipYearConfig() {
 
   const handleSave = async () => {
     try {
-      const membershipYearValue = {
+      const membershipYearValue: MembershipYear = {
         start_month: parseInt(formData.start_month),
         start_day: parseInt(formData.start_day),
         end_month: parseInt(formData.end_month),
@@ -107,7 +110,7 @@ export function MembershipYearConfig() {
         description: formData.description,
       };
 
-      await updateSettingValue("membership_year", membershipYearValue);
+      await updateSettings({ membership_year: membershipYearValue });
       toast.success("Membership year settings saved successfully");
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -235,4 +238,3 @@ export function MembershipYearConfig() {
     </div>
   );
 }
-

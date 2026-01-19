@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantContext } from '@/lib/auth/tenant'
+import { 
+  getEffectiveSettings, 
+  extractOverrides,
+  PartialSettingsSchema,
+  type PartialSettings,
+} from '@/lib/settings'
 
 /**
  * GET /api/settings
  * 
- * Fetch settings from the settings table
- * Requires authentication and owner/admin role
- * 
- * Query parameters:
- * - category: string - Filter by category
- * - key: string - Filter by setting key
+ * Fetch settings with defaults merged with tenant overrides.
+ * Returns FLAT settings object (not nested by category).
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const supabase = await createClient()
   
   // Get tenant context (includes auth check)
@@ -30,7 +32,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
-  const { userRole } = tenantContext
+  const { tenantId, userRole } = tenantContext
 
   // Check authorization - only owners and admins can view settings
   const hasAccess = ['owner', 'admin'].includes(userRole)
@@ -41,58 +43,42 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Get query parameters
-  const searchParams = request.nextUrl.searchParams
-  const category = searchParams.get('category')
-  const key = searchParams.get('key')
+  // Fetch tenant overrides from tenant_settings
+  const { data: tenantSettings, error } = await supabase
+    .from('tenant_settings')
+    .select('settings')
+    .eq('tenant_id', tenantId)
+    .single()
 
-  // Build query
-  let query = supabase
-    .from('settings')
-    .select('*')
-
-  // Apply filters
-  if (category) {
-    query = query.eq('category', category)
-  }
-
-  if (key) {
-    query = query.eq('setting_key', key)
-  }
-
-  // Execute query
-  const { data: settings, error } = await query
-
-  if (error) {
-    console.error('Error fetching settings:', error)
+  if (error && error.code !== 'PGRST116') {
+    // PGRST116 = no rows found (not an error, just means no overrides)
+    console.error('Error fetching tenant settings:', error)
     return NextResponse.json(
       { error: 'Failed to fetch settings' },
       { status: 500 }
     )
   }
 
-  // If both category and key are provided, return single setting
-  if (category && key && settings && settings.length > 0) {
-    return NextResponse.json({
-      setting: settings[0],
-    })
-  }
+  // Handle both nested (legacy) and flat (new) formats
+  const rawOverrides = tenantSettings?.settings || {}
+  const overrides = flattenIfNested(rawOverrides) as PartialSettings
 
+  // Return effective settings (defaults merged with overrides)
+  const effectiveSettings = getEffectiveSettings(overrides)
+  
   return NextResponse.json({
-    settings: settings || [],
+    settings: effectiveSettings,
   })
 }
 
 /**
  * PATCH /api/settings
  * 
- * Update a setting value
- * Requires authentication and owner/admin role
+ * Update settings. Accepts flat key-value pairs.
+ * Only non-default values are stored.
  * 
  * Body:
- * - category: string - Setting category
- * - setting_key: string - Setting key
- * - setting_value: any - New value
+ * - settings: object - Settings to update (partial, flat structure)
  */
 export async function PATCH(request: NextRequest) {
   const supabase = await createClient()
@@ -112,7 +98,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
-  const { userId: currentUserId, userRole } = tenantContext
+  const { tenantId, userId, userRole } = tenantContext
 
   // Check authorization - only owners and admins can update settings
   const hasAccess = ['owner', 'admin'].includes(userRole)
@@ -134,56 +120,106 @@ export async function PATCH(request: NextRequest) {
     )
   }
 
-  const { category, setting_key, setting_value } = body as {
-    category?: string
-    setting_key?: string
-    setting_value?: unknown
+  const { settings: newSettings } = body as {
+    settings?: Record<string, unknown>
   }
 
-  // Validate required fields
-  if (!category || !setting_key) {
+  if (!newSettings || typeof newSettings !== 'object') {
     return NextResponse.json(
-      { error: 'Missing required fields: category and setting_key' },
+      { error: 'Missing required field: settings' },
       { status: 400 }
     )
   }
 
-  // Find the setting
-  const { data: existingSetting, error: findError } = await supabase
-    .from('settings')
-    .select('*')
-    .eq('category', category)
-    .eq('setting_key', setting_key)
+  // Fetch current tenant settings
+  const { data: currentTenantSettings } = await supabase
+    .from('tenant_settings')
+    .select('settings')
+    .eq('tenant_id', tenantId)
     .single()
 
-  if (findError || !existingSetting) {
+  // Handle both nested (legacy) and flat (new) formats
+  const rawCurrentOverrides = currentTenantSettings?.settings || {}
+  const currentOverrides = flattenIfNested(rawCurrentOverrides) as PartialSettings
+  
+  // Merge new settings with current overrides
+  const mergedSettings: PartialSettings = {
+    ...currentOverrides,
+    ...newSettings,
+  }
+
+  // Extract only non-default values to store
+  const settingsToStore = extractOverrides(mergedSettings)
+
+  // Validate the settings
+  const validationResult = PartialSettingsSchema.safeParse(settingsToStore)
+  if (!validationResult.success) {
     return NextResponse.json(
-      { error: 'Setting not found' },
-      { status: 404 }
+      { error: 'Invalid settings', details: validationResult.error.flatten() },
+      { status: 400 }
     )
   }
 
-  // Update the setting
-  const { data: updatedSetting, error: updateError } = await supabase
-    .from('settings')
-    .update({
-      setting_value,
-      updated_by: currentUserId,
+  // Upsert the tenant settings (store as flat structure)
+  const { error: upsertError } = await supabase
+    .from('tenant_settings')
+    .upsert({
+      tenant_id: tenantId,
+      settings: settingsToStore,
+      updated_by: userId,
       updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'tenant_id',
     })
-    .eq('id', existingSetting.id)
-    .select()
-    .single()
 
-  if (updateError) {
-    console.error('Error updating setting:', updateError)
+  if (upsertError) {
+    console.error('Error updating settings:', upsertError)
     return NextResponse.json(
-      { error: 'Failed to update setting' },
+      { error: 'Failed to update settings' },
       { status: 500 }
     )
   }
 
+  // Return the effective settings
+  const effectiveSettings = getEffectiveSettings(settingsToStore)
+
   return NextResponse.json({
-    setting: updatedSetting,
+    settings: effectiveSettings,
+    message: 'Settings updated successfully',
   })
+}
+
+/**
+ * Flatten nested settings structure to flat structure.
+ * This handles migration from old nested format to new flat format.
+ * 
+ * Old format: { general: { business_open_time: "..." }, bookings: { ... } }
+ * New format: { business_open_time: "...", allow_past_bookings: ... }
+ */
+function flattenIfNested(settings: Record<string, unknown>): Record<string, unknown> {
+  // Check if this is nested format (has category keys)
+  const nestedCategories = ['general', 'bookings', 'invoicing', 'maintenance', 'memberships', 'notifications', 'security', 'system', 'training']
+  const hasNestedStructure = Object.keys(settings).some(
+    key => nestedCategories.includes(key) && typeof settings[key] === 'object' && settings[key] !== null
+  )
+
+  if (!hasNestedStructure) {
+    // Already flat format
+    return settings
+  }
+
+  // Flatten the nested structure
+  const flattened: Record<string, unknown> = {}
+  
+  for (const [key, value] of Object.entries(settings)) {
+    if (nestedCategories.includes(key) && typeof value === 'object' && value !== null) {
+      // Spread category contents to top level
+      Object.assign(flattened, value)
+    } else {
+      // Keep non-category keys as-is
+      flattened[key] = value
+    }
+  }
+
+  return flattened
 }

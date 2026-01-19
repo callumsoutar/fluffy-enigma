@@ -7,29 +7,16 @@ import { isValidRole } from "@/lib/types/roles"
 
 export async function middleware(request: NextRequest) {
   // First, update session (handles authentication)
-  const response = await updateSession(request)
+  // This returns both the response with updated cookies AND the user
+  const { response, user } = await updateSession(request)
+  
+  // If the response is a redirect (e.g., to login), return it immediately
+  if (response.headers.get('location')) {
+    return response
+  }
   
   // Get the pathname
   const pathname = request.nextUrl.pathname
-  
-  // Create supabase client to check user role
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll() {
-          // Cookies handled by updateSession
-        },
-      },
-    }
-  )
-  
-  // Get user and check role
-  const { data: { user } } = await supabase.auth.getUser()
   
   if (user) {
     // Get role from JWT claims (fast) or database
@@ -40,6 +27,26 @@ export async function middleware(request: NextRequest) {
     if (roleFromClaims && isValidRole(roleFromClaims)) {
       role = roleFromClaims
     } else {
+      // Create a lightweight supabase client just for the role query
+      // Use the cookies from the request (already updated by updateSession)
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll() {
+              return request.cookies.getAll()
+            },
+            setAll(cookiesToSet) {
+              // Forward any cookie changes to the response
+              cookiesToSet.forEach(({ name, value, options }) =>
+                response.cookies.set(name, value, options)
+              )
+            },
+          },
+        }
+      )
+      
       // Fallback to database lookup using tenant_users
       const { data: roleData } = await supabase
         .from('tenant_users')
@@ -71,17 +78,27 @@ export async function middleware(request: NextRequest) {
     if (!isAllowed) {
       // API routes should return 403, page routes should redirect
       if (pathname.startsWith('/api/')) {
-        return new NextResponse(
+        const apiResponse = new NextResponse(
           JSON.stringify({ error: 'Unauthorized' }),
           { status: 403, headers: { 'Content-Type': 'application/json' } }
         )
+        // Copy cookies to the API response
+        response.cookies.getAll().forEach((cookie) => {
+          apiResponse.cookies.set(cookie.name, cookie.value)
+        })
+        return apiResponse
       }
       
       // Page routes redirect
       const url = request.nextUrl.clone()
       url.pathname = '/'
       url.searchParams.set('error', 'unauthorized')
-      return NextResponse.redirect(url)
+      const redirectResponse = NextResponse.redirect(url)
+      // Copy cookies to the redirect response
+      response.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value)
+      })
+      return redirectResponse
     }
   }
   

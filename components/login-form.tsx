@@ -9,6 +9,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Plane, Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { signInWithEmail } from "@/app/actions/auth"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -81,25 +82,32 @@ export function LoginForm({
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
-      })
+      // Use server action for login to properly set cookies on the server
+      const result = await signInWithEmail(data.email, data.password)
 
-      if (error) {
-        toast.error(error.message || "Failed to sign in")
+      if (result.error) {
+        toast.error(result.error || "Failed to sign in")
+        setIsLoading(false)
         return
       }
 
       toast.success("Successfully signed in!")
-      router.push("/")
+      
+      // Refresh first to ensure server components recognize the new session
+      // Then navigate to the home page
       router.refresh()
+      
+      // Small delay to ensure cookies are properly set before navigation
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      router.push("/")
     } catch (error) {
       toast.error("An unexpected error occurred")
       console.error("Login error:", error)
-    } finally {
       setIsLoading(false)
     }
+    // Note: We don't call setIsLoading(false) on success because
+    // we're navigating away and want to keep the loading state
   }
 
   const handleGoogleSignIn = async () => {

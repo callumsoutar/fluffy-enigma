@@ -1,7 +1,13 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import type { User } from "@supabase/supabase-js"
 
-export async function updateSession(request: NextRequest) {
+export type UpdateSessionResult = {
+  response: NextResponse
+  user: User | null
+}
+
+export async function updateSession(request: NextRequest): Promise<UpdateSessionResult> {
   let supabaseResponse = NextResponse.next({
     request,
   })
@@ -45,9 +51,17 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !isPublicPath) {
     // no user and not on a public path, redirect to login
+    // IMPORTANT: Copy cookies to the redirect response
     const url = request.nextUrl.clone()
     url.pathname = "/login"
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    
+    // Copy any cookies that were set during the session check
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value)
+    })
+    
+    return { response: redirectResponse, user: null }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
@@ -63,6 +77,6 @@ export async function updateSession(request: NextRequest) {
   // If this is not done, you may be causing the browser and server to go out
   // of sync and terminate the user's session prematurely.
 
-  return supabaseResponse
+  return { response: supabaseResponse, user }
 }
 

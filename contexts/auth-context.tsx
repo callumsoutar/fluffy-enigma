@@ -180,12 +180,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(true)
       }
 
-      // Update user state
-      setUser(sessionUser)
-
       if (sessionUser) {
-        // Resolve role using centralized utility
-        const { role: resolvedRole } = await resolveUserRole(supabase, sessionUser)
+        // First, validate the session is actually valid by checking with the server
+        // This is critical for handling stale cookies/tokens
+        // We do this BEFORE updating state to prevent UI flicker with invalid data
+        const { data: { user: validatedUser }, error: userError } = await supabase.auth.getUser()
+        
+        if (userError || !validatedUser) {
+          // The session from cookies is stale/invalid - clear everything
+          console.warn('🔐 [AUTH] Session validation failed - clearing stale session', userError?.message)
+          setUser(null)
+          setRole(null)
+          setProfile(null)
+          clearCachedRole()
+          clearCachedProfile()
+          
+          // Mark as initialized since we've determined the auth state (no valid session)
+          isInitializedRef.current = true
+          
+          // Also sign out to clear the invalid cookies
+          // Note: This will trigger a SIGNED_OUT event which will be queued
+          try {
+            await supabase.auth.signOut()
+          } catch (signOutError) {
+            console.error('🔐 [AUTH] Error signing out stale session:', signOutError)
+          }
+          return
+        }
+
+        // Session is valid - update user state with validated user
+        setUser(validatedUser)
+
+        // Use the validated user for role resolution
+        const { role: resolvedRole } = await resolveUserRole(supabase, validatedUser)
         
         if (resolvedRole) {
           setRole(resolvedRole)
@@ -198,11 +225,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Fetch and cache user profile
-        const userProfile = await fetchUserProfile(sessionUser.id, sessionUser.email, sessionUser.user_metadata)
+        const userProfile = await fetchUserProfile(validatedUser.id, validatedUser.email, validatedUser.user_metadata)
         setProfile(userProfile)
         setCachedProfile(userProfile)
       } else {
-        // No user - clear role and profile
+        // No user - clear all state
+        setUser(null)
         setRole(null)
         setProfile(null)
         clearCachedRole()

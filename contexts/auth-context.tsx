@@ -81,9 +81,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isInitializedRef = React.useRef(false)
   const isProcessingAuthChangeRef = React.useRef(false)
   
-  // Track when we last verified the role from database
-  const lastRoleCheckRef = React.useRef<number>(0)
-  
   // Create supabase client once and memoize
   const supabase = React.useMemo(() => createClient(), [])
 

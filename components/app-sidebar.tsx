@@ -18,6 +18,7 @@ import {
 } from "@tabler/icons-react"
 import { useAuth } from "@/contexts/auth-context"
 import type { UserRole } from "@/lib/types/roles"
+import { getCachedRole } from "@/lib/auth/resolve-role"
 
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
@@ -151,38 +152,32 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, role, loading } = useAuth()
   const isMobile = useIsMobile()
   const [mounted, setMounted] = React.useState(false)
-  const [cachedRole, setCachedRole] = React.useState<UserRole | null>(null)
+  const [localCachedRole, setLocalCachedRole] = React.useState<UserRole | null>(null)
   
-  // Load cached role from localStorage after mount (prevents hydration mismatch)
+  // Load cached role after mount (prevents hydration mismatch)
+  // Uses centralized cache function for consistency
   React.useEffect(() => {
     setMounted(true)
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('user_role')
-      if (stored) {
-        setCachedRole(stored as UserRole)
-      }
+    const cached = getCachedRole()
+    if (cached) {
+      setLocalCachedRole(cached)
     }
   }, [])
   
-  // Update cached role when we have a valid role
+  // Sync local state with auth context role
+  // The auth context is responsible for setting/clearing the cache
   React.useEffect(() => {
     if (role) {
-      setCachedRole(role)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user_role', role)
-      }
+      setLocalCachedRole(role)
     } else if (user === null && mounted) {
-      // Clear cache on sign out (only after mount)
-      setCachedRole(null)
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('user_role')
-      }
+      // Clear local state on sign out (only after mount)
+      setLocalCachedRole(null)
     }
   }, [role, user, mounted])
   
   // Use current role, or cached role if loading, or null
   // Only use cached role after mount to prevent hydration mismatch
-  const effectiveRole = role || (loading && mounted ? cachedRole : null)
+  const effectiveRole = role || (loading && mounted ? localCachedRole : null)
 
   // Filter navigation items based on user role
   // Use effectiveRole to prevent navigation from disappearing during refresh
@@ -190,7 +185,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     // During SSR or before mount, return empty to prevent hydration mismatch
     if (!mounted) return []
     
-    const roleToUse = effectiveRole || cachedRole
+    const roleToUse = effectiveRole || localCachedRole
     if (!roleToUse) return []
     
     return navigationConfig
@@ -202,20 +197,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           .map(({ roles, ...item }) => item), // Remove roles property
       }))
       .filter(section => section.items.length > 0) // Remove empty sections
-  }, [effectiveRole, cachedRole, mounted])
+  }, [effectiveRole, localCachedRole, mounted])
 
   const filteredNavSecondary = React.useMemo(() => {
     // During SSR or before mount, return empty to prevent hydration mismatch
     if (!mounted) return []
     
-    const roleToUse = effectiveRole || cachedRole
+    const roleToUse = effectiveRole || localCachedRole
     if (!roleToUse) return []
     
     return secondaryNavItems
       .filter(item => item.roles.includes(roleToUse))
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       .map(({ roles, ...item }) => item) // Remove roles property
-  }, [effectiveRole, cachedRole, mounted])
+  }, [effectiveRole, localCachedRole, mounted])
 
   const userData = React.useMemo(() => {
     if (!user) {
@@ -246,7 +241,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Only show loading state on initial load (when we have no cached role)
   // During refresh, keep showing the navigation with cached role
   // Also show loading during SSR/before mount to prevent hydration mismatch
-  const isInitialLoad = (!mounted) || (loading && !cachedRole && !role)
+  const isInitialLoad = (!mounted) || (loading && !localCachedRole && !role)
 
   // Show loading state during SSR, initial load, or before mount
   if (isInitialLoad) {

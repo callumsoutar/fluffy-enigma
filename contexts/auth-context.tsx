@@ -5,7 +5,12 @@ import { createClient } from "@/lib/supabase/client"
 import type { User } from "@supabase/supabase-js"
 import { useRouter } from "next/navigation"
 import type { UserRole } from "@/lib/types/roles"
-import { isValidRole } from "@/lib/types/roles"
+import {
+  resolveUserRole,
+  getCachedRole,
+  setCachedRole,
+  clearCachedRole,
+} from "@/lib/auth/resolve-role"
 
 interface AuthContextType {
   user: User | null
@@ -24,213 +29,153 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = React.useState<UserRole | null>(null)
   const [loading, setLoading] = React.useState(true)
   const router = useRouter()
-  const supabase = createClient()
+  
+  // Use refs to track initialization state without causing re-renders
+  // This prevents race conditions between getSession and onAuthStateChange
+  const isInitializedRef = React.useRef(false)
+  const isProcessingAuthChangeRef = React.useRef(false)
+  
+  // Create supabase client once and memoize
+  const supabase = React.useMemo(() => createClient(), [])
 
-  const fetchUserRole = React.useCallback(async (userId: string) => {
+  /**
+   * Handle session changes from onAuthStateChange
+   * This is the single source of truth for auth state
+   */
+  const handleAuthChange = React.useCallback(async (
+    eventType: string,
+    sessionUser: User | null
+  ) => {
+    // Prevent concurrent processing
+    if (isProcessingAuthChangeRef.current) {
+      return
+    }
+    isProcessingAuthChangeRef.current = true
+
     try {
-      // First check JWT claims (fast)
-      const { data: { user: currentUser } } = await supabase.auth.getUser()
-      const roleFromClaims = currentUser?.user_metadata?.role as string | undefined
-      
-      if (roleFromClaims && isValidRole(roleFromClaims)) {
-        setRole(roleFromClaims)
-        // Cache in localStorage for persistence across refreshes
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('user_role', roleFromClaims)
-        }
-        return
+      // Determine if this is a sign in/out event that needs loading state
+      const isSignIn = eventType === 'SIGNED_IN'
+      const isSignOut = eventType === 'SIGNED_OUT'
+      const isInitialSession = eventType === 'INITIAL_SESSION'
+
+      // Only show loading for actual auth state changes, not token refreshes
+      // This prevents UI flicker on page refresh
+      if (isSignIn || isSignOut) {
+        setLoading(true)
       }
-      
-      // Fallback to database lookup - use RPC function for optimized query
-      const { data: roleName, error: rpcError } = await supabase.rpc('get_user_role', {
-        user_id: userId
-      })
-      
-      if (!rpcError && roleName && isValidRole(roleName)) {
-        setRole(roleName)
-        // Cache in localStorage for persistence across refreshes
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('user_role', roleName)
-        }
-        return
-      }
-      
-      // If RPC fails, try direct query with join
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select(`
-          role_id,
-          roles!inner (
-            name
-          )
-        `)
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .single()
-      
-      if (!error && data && data.roles) {
-        // Supabase returns joined relations as arrays
-        const roles = Array.isArray(data.roles) ? data.roles : [data.roles]
-        const roleObj = roles[0] as { name: string } | undefined
-        if (roleObj?.name && isValidRole(roleObj.name)) {
-          setRole(roleObj.name)
-          // Cache in localStorage for persistence across refreshes
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('user_role', roleObj.name)
-          }
+
+      // Update user state
+      setUser(sessionUser)
+
+      if (sessionUser) {
+        // Resolve role using centralized utility
+        const { role: resolvedRole } = await resolveUserRole(supabase, sessionUser)
+        
+        if (resolvedRole) {
+          setRole(resolvedRole)
+          setCachedRole(resolvedRole)
         } else {
           setRole(null)
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('user_role')
-          }
+          clearCachedRole()
         }
       } else {
+        // No user - clear role
         setRole(null)
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('user_role')
-        }
+        clearCachedRole()
       }
-    } catch (error) {
-      console.error("Error fetching user role:", error)
-      setRole(null)
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('user_role')
+
+      // Mark as initialized after first auth event
+      if (isInitialSession || isSignIn || isSignOut) {
+        isInitializedRef.current = true
       }
+    } finally {
+      // Always clear loading state after processing
+      if (isInitializedRef.current) {
+        setLoading(false)
+      }
+      isProcessingAuthChangeRef.current = false
     }
   }, [supabase])
 
+  /**
+   * Manual refresh function for when components need to re-fetch auth state
+   */
   const refreshUser = React.useCallback(async () => {
-    // Try to get cached role first to prevent navigation from disappearing
-    let cachedRole: UserRole | null = null
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('user_role')
-      if (stored && isValidRole(stored)) {
-        cachedRole = stored as UserRole
-        setRole(cachedRole) // Set immediately to prevent UI flicker
-      }
+    // Get cached role immediately to prevent UI flicker
+    const cachedRole = getCachedRole()
+    if (cachedRole) {
+      setRole(cachedRole)
     }
-    
+
     setLoading(true)
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
-      
-      if (user) {
-        await fetchUserRole(user.id)
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      setUser(currentUser)
+
+      if (currentUser) {
+        const { role: resolvedRole } = await resolveUserRole(supabase, currentUser)
+        if (resolvedRole) {
+          setRole(resolvedRole)
+          setCachedRole(resolvedRole)
+        } else {
+          setRole(null)
+          clearCachedRole()
+        }
       } else {
         setRole(null)
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('user_role')
-        }
+        clearCachedRole()
       }
     } catch (error) {
       console.error("Error refreshing user:", error)
       setUser(null)
       setRole(null)
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('user_role')
-      }
+      clearCachedRole()
     } finally {
       setLoading(false)
     }
-  }, [supabase, fetchUserRole])
+  }, [supabase])
 
+  /**
+   * Initialize auth state on mount
+   * 
+   * We use onAuthStateChange as the single source of truth.
+   * The INITIAL_SESSION event is fired synchronously when the listener
+   * is set up, which handles the initial auth check.
+   * 
+   * This approach eliminates race conditions between getSession()
+   * and onAuthStateChange by not calling getSession() at all.
+   */
   React.useEffect(() => {
     let mounted = true
-    let initialAuthComplete = false
 
-    const initializeAuth = async () => {
-      // First, try to get cached role for immediate display
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('user_role')
-        if (stored && isValidRole(stored)) {
-          setRole(stored as UserRole)
-        }
-      }
-      
-      // Then get the actual session
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!mounted) return
-        
-        if (session?.user) {
-          setUser(session.user)
-          await fetchUserRole(session.user.id)
-        } else {
-          setUser(null)
-          setRole(null)
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('user_role')
-          }
-        }
-      } catch (error) {
-        console.error("Error initializing auth:", error)
-        if (mounted) {
-          setUser(null)
-          setRole(null)
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false)
-          initialAuthComplete = true
-        }
-      }
+    // Load cached role immediately to prevent UI flicker during initialization
+    const cachedRole = getCachedRole()
+    if (cachedRole) {
+      setRole(cachedRole)
     }
 
-    initializeAuth()
-
+    // Set up the auth state change listener
+    // INITIAL_SESSION is fired synchronously when listener is created
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
-      
-      // Skip the initial session event if we've already handled it
-      if (_event === 'INITIAL_SESSION' && initialAuthComplete) {
-        return
-      }
-      
-      // Only set loading for actual auth state changes (sign in/out), not for token refreshes
-      // This prevents navigation from disappearing on page refresh
-      const isSignIn = _event === 'SIGNED_IN'
-      const isSignOut = _event === 'SIGNED_OUT'
-      
-      if (isSignIn || isSignOut) {
-        setLoading(true)
-      }
-      
-      setUser(session?.user ?? null)
-      
-      if (session?.user) {
-        await fetchUserRole(session.user.id)
-      } else {
-        setRole(null)
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('user_role')
-        }
-      }
-      
-      if (isSignIn || isSignOut) {
-        setLoading(false)
-      }
+      await handleAuthChange(event, session?.user ?? null)
     })
 
     return () => {
       mounted = false
       subscription.unsubscribe()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only run on mount - fetchUserRole is a stable callback
+  }, [supabase, handleAuthChange])
 
+  /**
+   * Sign out the current user
+   */
   const signOut = React.useCallback(async () => {
     try {
       await supabase.auth.signOut()
-      setUser(null)
-      setRole(null)
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('user_role')
-      }
+      // State will be updated by onAuthStateChange listener
       router.push("/login")
       router.refresh()
     } catch (error) {
@@ -239,10 +184,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, router])
 
+  /**
+   * Check if user has a specific role
+   */
   const hasRole = React.useCallback((requiredRole: UserRole): boolean => {
     return role === requiredRole
   }, [role])
 
+  /**
+   * Check if user has any of the specified roles
+   */
   const hasAnyRole = React.useCallback((requiredRoles: UserRole[]): boolean => {
     if (!role) return false
     return requiredRoles.includes(role)
@@ -272,4 +223,3 @@ export function useAuth() {
   }
   return context
 }
-

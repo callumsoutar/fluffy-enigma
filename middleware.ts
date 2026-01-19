@@ -2,8 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { updateSession } from "@/lib/supabase/middleware"
 import { createServerClient } from "@supabase/ssr"
 import { isRoleAllowedForRoute } from "@/lib/auth/route-permissions"
-import type { UserRole } from "@/lib/types/roles"
-import { isValidRole } from "@/lib/types/roles"
+import { resolveUserRole } from "@/lib/auth/resolve-role"
 
 export async function middleware(request: NextRequest) {
   // First, update session (handles authentication)
@@ -19,58 +18,29 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   
   if (user) {
-    // Get role from JWT claims (fast) or database
-    let role: UserRole | null = null
-    
-    // Check JWT claims first
-    const roleFromClaims = user.user_metadata?.role as string | undefined
-    if (roleFromClaims && isValidRole(roleFromClaims)) {
-      role = roleFromClaims
-    } else {
-      // Create a lightweight supabase client just for the role query
-      // Use the cookies from the request (already updated by updateSession)
-      const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          cookies: {
-            getAll() {
-              return request.cookies.getAll()
-            },
-            setAll(cookiesToSet) {
-              // Forward any cookie changes to the response
-              cookiesToSet.forEach(({ name, value, options }) =>
-                response.cookies.set(name, value, options)
-              )
-            },
+    // Create a lightweight supabase client for role resolution
+    // Uses cookies from the request (already updated by updateSession)
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
           },
-        }
-      )
-      
-      // Fallback to database lookup using tenant_users
-      const { data: roleData } = await supabase
-        .from('tenant_users')
-        .select(`
-          role_id,
-          roles!inner (
-            name
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-      
-      if (roleData && roleData.roles) {
-        // Supabase returns joined relations as arrays
-        const roles = Array.isArray(roleData.roles) ? roleData.roles : [roleData.roles]
-        const roleObj = roles[0] as { name: string } | undefined
-        if (roleObj?.name && isValidRole(roleObj.name)) {
-          role = roleObj.name
-        }
+          setAll(cookiesToSet) {
+            // Forward any cookie changes to the response
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            )
+          },
+        },
       }
-    }
+    )
+    
+    // Resolve role using centralized utility
+    // This checks JWT claims first, then falls back to database
+    const { role } = await resolveUserRole(supabase, user)
     
     // Check if role is allowed for this route
     const isAllowed = isRoleAllowedForRoute(role, pathname)

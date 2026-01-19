@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { timeZone } = await getSchoolConfigServer()
+  const { timeZone } = await getSchoolConfigServer(tenantContext.tenantId)
 
   // Accept new scheduling fields
   const {
@@ -283,7 +283,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { timeZone } = await getSchoolConfigServer()
+  const { timeZone } = await getSchoolConfigServer(tenantContext.tenantId)
   const { id, booking_id, scheduled_for, scheduled_end, scheduled_by, ...updateFields } = body
   
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 })

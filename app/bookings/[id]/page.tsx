@@ -208,6 +208,60 @@ function getErrorMessage(err: unknown) {
   return "Request failed"
 }
 
+// Fields that should be shown in audit logs (whitelist approach)
+const AUDIT_FIELD_WHITELIST = new Set([
+  'status',
+  'start_time',
+  'end_time',
+  'aircraft_id',
+  'checked_out_aircraft_id',
+  'instructor_id',
+  'checked_out_instructor_id',
+  'flight_type_id',
+  'lesson_id',
+  'booking_type',
+  'notes',
+  'cancellation_reason',
+  'cancellation_category_id',
+  'dual_time',
+  'solo_time',
+  'pic_time',
+  'flight_time',
+  'tach_start',
+  'tach_end',
+  'hobbs_start',
+  'hobbs_end',
+  'billing_basis',
+  'billing_hours',
+  'checkout_notes',
+  'checkin_notes',
+])
+
+// Fields that are datetime/timestamp values (not duration)
+const DATETIME_FIELDS = new Set([
+  'start_time',
+  'end_time',
+  'checkin_approved_at',
+  'checkout_approved_at',
+  'created_at',
+  'updated_at',
+])
+
+// Fields that are numeric duration/hours values
+const NUMERIC_DURATION_FIELDS = new Set([
+  'dual_time',
+  'solo_time',
+  'pic_time',
+  'flight_time',
+  'billing_hours',
+  'tach_start',
+  'tach_end',
+  'hobbs_start',
+  'hobbs_end',
+  'total_hours_start',
+  'total_hours_end',
+])
+
 // Format audit log description from column changes
 function formatAuditDescription(log: AuditLog): string {
   if (log.action === 'INSERT') {
@@ -218,28 +272,31 @@ function formatAuditDescription(log: AuditLog): string {
     return log.action
   }
 
-  const changes = Object.entries(log.column_changes).map(([key, value]) => {
-    const fieldName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-    const oldVal = formatAuditValue((value as { old?: unknown }).old)
-    const newVal = formatAuditValue((value as { new?: unknown }).new)
-    
-    // Format time values specially
-    if (key.includes('time')) {
-      const oldTime = oldVal ? formatTimeForAudit(oldVal) : oldVal
-      const newTime = newVal ? formatTimeForAudit(newVal) : newVal
-      return `${fieldName}: ${oldTime} → ${newTime}`
-    }
-    
-    return `${fieldName}: ${oldVal} → ${newVal}`
-  })
+  // Filter to only whitelisted fields
+  const changes = Object.entries(log.column_changes)
+    .filter(([key]) => AUDIT_FIELD_WHITELIST.has(key))
+    .map(([key, value]) => {
+      const fieldName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+      const oldVal = (value as { old?: unknown }).old
+      const newVal = (value as { new?: unknown }).new
+      
+      // Format based on field type
+      const formattedOld = formatAuditValue(key, oldVal)
+      const formattedNew = formatAuditValue(key, newVal)
+      
+      return `${fieldName}: ${formattedOld} → ${formattedNew}`
+    })
 
-  return changes.join('; ')
+  return changes.length > 0 ? changes.join('; ') : log.action
 }
 
-// Format time value for audit display
+// Format time value for audit display (datetime/timestamp)
 function formatTimeForAudit(value: string): string {
   try {
     const date = new Date(value)
+    if (isNaN(date.getTime())) {
+      return value
+    }
     const hours = date.getHours()
     const minutes = date.getMinutes()
     const ampm = hours >= 12 ? 'PM' : 'AM'
@@ -251,16 +308,46 @@ function formatTimeForAudit(value: string): string {
   }
 }
 
-// Format audit value for display
-function formatAuditValue(value: unknown): string {
+// Format numeric duration/hours value
+function formatNumericDuration(value: number): string {
+  return `${value.toFixed(1)} hrs`
+}
+
+// Format audit value for display based on field type
+function formatAuditValue(fieldKey: string, value: unknown): string {
   if (value === null || value === undefined) return "—"
-  if (typeof value === 'string') {
-    // Check if it's a datetime string
-    if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
+  
+  // Handle datetime fields
+  if (DATETIME_FIELDS.has(fieldKey)) {
+    if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/)) {
       return formatTimeForAudit(value)
     }
+  }
+  
+  // Handle numeric duration fields
+  if (NUMERIC_DURATION_FIELDS.has(fieldKey)) {
+    if (typeof value === 'number') {
+      return formatNumericDuration(value)
+    }
+    // Sometimes these come as strings from the DB
+    if (typeof value === 'string') {
+      const numValue = parseFloat(value)
+      if (!isNaN(numValue)) {
+        return formatNumericDuration(numValue)
+      }
+    }
+  }
+  
+  // Handle boolean fields
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No'
+  }
+  
+  // Default: return as string
+  if (typeof value === 'string') {
     return value
   }
+  
   return String(value)
 }
 

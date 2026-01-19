@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getTenantContext } from '@/lib/auth/tenant'
@@ -399,21 +400,24 @@ export async function POST(request: NextRequest) {
 
   const { email, first_name, last_name, phone, street_address, send_invitation } = parsed.data
 
+  // Create admin client for database operations
+  // Authorization has already been verified via getTenantContext() above
+  // We use admin client to bypass RLS since this is an administrative operation
+  let adminSupabase
+  try {
+    adminSupabase = createAdminClient()
+  } catch (e) {
+    console.error('Admin client creation failed:', e)
+    return NextResponse.json(
+      { error: 'Server configuration error: Missing admin privileges.' },
+      { status: 500 }
+    )
+  }
+
   let authUserId: string | null = null
 
   // Handle invitation if requested
   if (send_invitation) {
-    let adminSupabase
-    try {
-      adminSupabase = createAdminClient()
-    } catch (e) {
-      console.error('Admin client creation failed:', e)
-      return NextResponse.json(
-        { error: 'Server configuration error: Missing admin privileges for invitations.' },
-        { status: 500 }
-      )
-    }
-    
     const { data: inviteData, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
       data: {
         first_name: first_name ?? '',
@@ -433,7 +437,13 @@ export async function POST(request: NextRequest) {
     authUserId = inviteData.user.id
   }
 
+  // Generate an ID for the user record
+  // - If invited: use the auth user ID to maintain 1:1 relationship with auth.users
+  // - If not invited (contact only): generate a new UUID
+  const userId = authUserId ?? randomUUID()
+
   const insertPayload: Record<string, string | boolean | null> = {
+    id: userId,
     email,
     first_name: first_name ?? null,
     last_name: last_name ?? null,
@@ -442,14 +452,10 @@ export async function POST(request: NextRequest) {
     is_active: true,
   }
 
-  // If we have an auth user ID (either from a new invite or existing auth user),
-  // use it as the primary key for the public.users record to maintain 1:1 relationship.
-  if (authUserId) {
-    insertPayload.id = authUserId
-  }
-
-  // Step 1: Create the user record
-  const { data: created, error } = await supabase
+  // Step 1: Create the user record using admin client
+  // We use admin client because RLS policies require the current user to be staff,
+  // but we've already verified this at the API layer via getTenantContext()
+  const { data: created, error } = await adminSupabase
     .from('users')
     .insert(insertPayload)
     .select('*')
@@ -474,7 +480,8 @@ export async function POST(request: NextRequest) {
   // - If not invited (contact only): use 'student' role as default
   const defaultRoleName = send_invitation ? 'member' : 'student'
   
-  const { data: defaultRole, error: roleError } = await supabase
+  // Use admin client for roles lookup (RLS restricts access to admin/owner only)
+  const { data: defaultRole, error: roleError } = await adminSupabase
     .from('roles')
     .select('id')
     .eq('name', defaultRoleName)
@@ -482,13 +489,14 @@ export async function POST(request: NextRequest) {
   
   if (roleError || !defaultRole) {
     // Rollback: delete the user we just created
-    await supabase.from('users').delete().eq('id', created.id)
+    await adminSupabase.from('users').delete().eq('id', created.id)
     
     console.error('Error finding role:', roleError)
     return NextResponse.json({ error: 'Failed to assign role to member' }, { status: 500 })
   }
   
-  const { error: tenantUserError } = await supabase
+  // Use admin client for tenant_users insert (RLS restricts to owner/admin only)
+  const { error: tenantUserError } = await adminSupabase
     .from('tenant_users')
     .insert({
       tenant_id: tenantContext.tenantId,
@@ -500,7 +508,7 @@ export async function POST(request: NextRequest) {
   
   if (tenantUserError) {
     // Rollback: delete the user we just created
-    await supabase.from('users').delete().eq('id', created.id)
+    await adminSupabase.from('users').delete().eq('id', created.id)
     
     console.error('Error creating tenant_users record:', tenantUserError)
     return NextResponse.json({ error: 'Failed to link member to organization' }, { status: 500 })

@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { useAllSettings } from "@/hooks/use-settings"
 import {
   Select,
   SelectContent,
@@ -282,11 +283,18 @@ export function NewBookingModal(props: {
   const queryClient = useQueryClient()
   const { user, role, hasAnyRole } = useAuth()
   const { data: schoolConfig } = useSchoolConfig()
+  const { settings } = useAllSettings()
 
   const isStaff = hasAnyRole(["owner", "admin", "instructor"])
   const isMemberOrStudent = role === "member" || role === "student"
 
   const [bookingMode, setBookingMode] = React.useState<"regular" | "trial">("regular")
+
+  // Get default booking duration from settings (default to 2 hours if not available)
+  const defaultBookingDurationMinutes = React.useMemo(() => {
+    const hours = settings?.default_booking_duration_hours ?? 2
+    return hours * 60
+  }, [settings?.default_booking_duration_hours])
 
   const { data: options, isLoading: optionsLoading, isError: optionsError } = useQuery({
     queryKey: ["bookings", "options"],
@@ -300,7 +308,7 @@ export function NewBookingModal(props: {
     defaultValues: {
       date: prefill?.date ?? new Date(),
       startTime: prefill?.startTime ?? "09:00",
-      endTime: addMinutesToHHmm(prefill?.startTime ?? "09:00", 60),
+      endTime: addMinutesToHHmm(prefill?.startTime ?? "09:00", defaultBookingDurationMinutes),
       aircraftId: prefill?.aircraftId ?? "",
       flightTypeId: null,
       lessonId: null,
@@ -320,13 +328,13 @@ export function NewBookingModal(props: {
   const startTime = form.watch("startTime")
   const endTime = form.watch("endTime")
 
-  // Auto-adjust end time when start time changes (simple/default behavior)
+  // Auto-adjust end time when start time changes using the default booking duration from settings
   React.useEffect(() => {
     if (!open) return
     if (!startTime) return
-    const nextEnd = addMinutesToHHmm(startTime, 60)
+    const nextEnd = addMinutesToHHmm(startTime, defaultBookingDurationMinutes)
     form.setValue("endTime", nextEnd, { shouldValidate: true })
-  }, [open, startTime, form])
+  }, [open, startTime, defaultBookingDurationMinutes, form])
 
   // Apply prefill when opening
   React.useEffect(() => {
@@ -336,7 +344,7 @@ export function NewBookingModal(props: {
     form.reset({
       date,
       startTime: st,
-      endTime: addMinutesToHHmm(st, 60),
+      endTime: addMinutesToHHmm(st, defaultBookingDurationMinutes),
       aircraftId: prefill?.aircraftId ?? "",
       flightTypeId: null,
       lessonId: null,
@@ -352,7 +360,7 @@ export function NewBookingModal(props: {
     // Always set to "regular" mode, especially for members/students who can't see trial flights
     setBookingMode("regular")
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, prefill?.date, prefill?.startTime, prefill?.aircraftId, prefill?.instructorId, prefill?.member])
+  }, [open, prefill?.date, prefill?.startTime, prefill?.aircraftId, prefill?.instructorId, prefill?.member, defaultBookingDurationMinutes])
 
   // Ensure bookingMode is always "regular" for members/students
   React.useEffect(() => {

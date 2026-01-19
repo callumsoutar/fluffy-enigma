@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
 
   const action = body.action
   // Canonical strategy: date-only fields must be computed in the *school timezone* (DST-safe).
-  const { timeZone } = await getSchoolConfigServer()
+  const { timeZone } = await getSchoolConfigServer(tenantContext.tenantId)
 
   if (action === "renew") {
     const validationResult = renewMembershipSchema.safeParse(body)

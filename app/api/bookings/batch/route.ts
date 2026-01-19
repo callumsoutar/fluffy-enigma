@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     if (data.instructor_id) {
       const start = new Date(data.start_time)
       const end = new Date(data.end_time)
-      const { timeZone: tz } = await getSchoolConfigServer()
+      const { timeZone: tz } = await getSchoolConfigServer(tenantContext.tenantId)
       const startLocal = getZonedYyyyMmDdAndHHmm(start, tz)
       const endLocal = getZonedYyyyMmDdAndHHmm(end, tz)
 

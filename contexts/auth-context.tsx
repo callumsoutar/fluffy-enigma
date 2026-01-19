@@ -3,7 +3,6 @@
 import * as React from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { User } from "@supabase/supabase-js"
-import { useRouter } from "next/navigation"
 import type { UserRole } from "@/lib/types/roles"
 import {
   resolveUserRole,
@@ -11,10 +10,52 @@ import {
   setCachedRole,
   clearCachedRole,
 } from "@/lib/auth/resolve-role"
+import { signOut as signOutAction } from "@/app/actions/auth"
+
+// User profile data from the database
+export interface UserProfile {
+  firstName: string | null
+  lastName: string | null
+  displayName: string
+  email: string
+  avatarUrl: string | null
+}
+
+// Cache keys for user profile
+const PROFILE_CACHE_KEY = 'auth_user_profile'
+
+function getCachedProfile(): UserProfile | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const cached = localStorage.getItem(PROFILE_CACHE_KEY)
+    return cached ? JSON.parse(cached) : null
+  } catch {
+    return null
+  }
+}
+
+function setCachedProfile(profile: UserProfile): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile))
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
+function clearCachedProfile(): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.removeItem(PROFILE_CACHE_KEY)
+  } catch {
+    // Ignore localStorage errors
+  }
+}
 
 interface AuthContextType {
   user: User | null
   role: UserRole | null
+  profile: UserProfile | null
   loading: boolean
   signOut: () => Promise<void>
   refreshUser: () => Promise<void>
@@ -27,8 +68,8 @@ const AuthContext = React.createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null)
   const [role, setRole] = React.useState<UserRole | null>(null)
+  const [profile, setProfile] = React.useState<UserProfile | null>(null)
   const [loading, setLoading] = React.useState(true)
-  const router = useRouter()
   
   // Use refs to track initialization state without causing re-renders
   // This prevents race conditions between getSession and onAuthStateChange
@@ -37,6 +78,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   // Create supabase client once and memoize
   const supabase = React.useMemo(() => createClient(), [])
+
+  /**
+   * Fetch user profile from database
+   */
+  const fetchUserProfile = React.useCallback(async (userId: string, userEmail: string | undefined, userMetadata: Record<string, unknown> | undefined): Promise<UserProfile> => {
+    try {
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('first_name, last_name')
+        .eq('id', userId)
+        .single()
+
+      if (error || !userData) {
+        // Fallback to user_metadata
+        const fallbackName = (userMetadata?.full_name as string) ||
+          (userMetadata?.name as string) ||
+          userEmail?.split("@")[0] ||
+          "User"
+        
+        return {
+          firstName: null,
+          lastName: null,
+          displayName: fallbackName,
+          email: userEmail || "",
+          avatarUrl: (userMetadata?.avatar_url as string) || null,
+        }
+      }
+
+      const firstName = userData.first_name || ""
+      const lastName = userData.last_name || ""
+      const fullName = [firstName, lastName].filter(Boolean).join(" ").trim()
+      
+      const displayName = fullName || 
+        (userMetadata?.full_name as string) ||
+        (userMetadata?.name as string) ||
+        userEmail?.split("@")[0] ||
+        "User"
+
+      return {
+        firstName: userData.first_name,
+        lastName: userData.last_name,
+        displayName,
+        email: userEmail || "",
+        avatarUrl: (userMetadata?.avatar_url as string) || null,
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error)
+      const fallbackName = (userMetadata?.full_name as string) ||
+        (userMetadata?.name as string) ||
+        userEmail?.split("@")[0] ||
+        "User"
+      
+      return {
+        firstName: null,
+        lastName: null,
+        displayName: fallbackName,
+        email: userEmail || "",
+        avatarUrl: (userMetadata?.avatar_url as string) || null,
+      }
+    }
+  }, [supabase])
 
   /**
    * Handle session changes from onAuthStateChange
@@ -78,10 +180,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setRole(null)
           clearCachedRole()
         }
+
+        // Fetch and cache user profile
+        const userProfile = await fetchUserProfile(sessionUser.id, sessionUser.email, sessionUser.user_metadata)
+        setProfile(userProfile)
+        setCachedProfile(userProfile)
       } else {
-        // No user - clear role
+        // No user - clear role and profile
         setRole(null)
+        setProfile(null)
         clearCachedRole()
+        clearCachedProfile()
       }
 
       // Mark as initialized after first auth event
@@ -95,16 +204,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       isProcessingAuthChangeRef.current = false
     }
-  }, [supabase])
+  }, [supabase, fetchUserProfile])
 
   /**
    * Manual refresh function for when components need to re-fetch auth state
    */
   const refreshUser = React.useCallback(async () => {
-    // Get cached role immediately to prevent UI flicker
+    // Get cached data immediately to prevent UI flicker
     const cachedRole = getCachedRole()
     if (cachedRole) {
       setRole(cachedRole)
+    }
+    const cachedProfile = getCachedProfile()
+    if (cachedProfile) {
+      setProfile(cachedProfile)
     }
 
     setLoading(true)
@@ -121,19 +234,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setRole(null)
           clearCachedRole()
         }
+
+        // Fetch and cache user profile
+        const userProfile = await fetchUserProfile(currentUser.id, currentUser.email, currentUser.user_metadata)
+        setProfile(userProfile)
+        setCachedProfile(userProfile)
       } else {
         setRole(null)
+        setProfile(null)
         clearCachedRole()
+        clearCachedProfile()
       }
     } catch (error) {
       console.error("Error refreshing user:", error)
       setUser(null)
       setRole(null)
+      setProfile(null)
       clearCachedRole()
+      clearCachedProfile()
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, fetchUserProfile])
 
   /**
    * Initialize auth state on mount
@@ -148,10 +270,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     let mounted = true
 
-    // Load cached role immediately to prevent UI flicker during initialization
+    // Load cached data immediately to prevent UI flicker during initialization
     const cachedRole = getCachedRole()
     if (cachedRole) {
       setRole(cachedRole)
+    }
+    const cachedProfile = getCachedProfile()
+    if (cachedProfile) {
+      setProfile(cachedProfile)
     }
 
     // Set up the auth state change listener
@@ -171,18 +297,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Sign out the current user
+   * Uses server action to properly clear HTTP-only cookies
    */
   const signOut = React.useCallback(async () => {
+    console.log("🔐 [AUTH] signOut() called")
     try {
-      await supabase.auth.signOut()
-      // State will be updated by onAuthStateChange listener
-      router.push("/login")
-      router.refresh()
+      // Clear local state first for immediate UI feedback
+      console.log("🔐 [AUTH] Clearing local state")
+      setUser(null)
+      setRole(null)
+      setProfile(null)
+      clearCachedRole()
+      clearCachedProfile()
+      
+      // Clear localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          Object.keys(localStorage).forEach(key => {
+            if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
+              localStorage.removeItem(key)
+            }
+          })
+        } catch (e) {
+          console.error("Error clearing localStorage:", e)
+        }
+      }
+      
+      // Call server action to clear server-side cookies
+      console.log("🔐 [AUTH] Calling server action signOut()")
+      const result = await signOutAction()
+      
+      if (result.error) {
+        console.error("🔐 [AUTH] Server signOut error:", result.error)
+      } else {
+        console.log("🔐 [AUTH] Server signOut successful")
+      }
+      
+      // Redirect to login page
+      console.log("🔐 [AUTH] Redirecting to /login")
+      window.location.href = "/login"
     } catch (error) {
-      console.error("Error signing out:", error)
-      throw error
+      console.error("🔐 [AUTH] Error signing out:", error)
+      // Force redirect anyway - we've already cleared local state
+      window.location.href = "/login"
     }
-  }, [supabase, router])
+  }, [])
 
   /**
    * Check if user has a specific role
@@ -204,6 +363,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         role,
+        profile,
         loading,
         signOut,
         refreshUser,

@@ -330,7 +330,7 @@ export async function POST(request: NextRequest) {
     // (UI filters this, but we must enforce it server-side to prevent stale selections / direct API calls)
     const start = new Date(data.start_time)
     const end = new Date(data.end_time)
-    const { timeZone: tz } = await getSchoolConfigServer()
+    const { timeZone: tz } = await getSchoolConfigServer(tenantContext.tenantId)
 
     // Convert UTC instants into school-local calendar date + wall-clock time.
     // This is DST-safe and avoids server-local timezone bugs.

@@ -121,22 +121,9 @@ function formatExpectedReturn(equipment: EquipmentWithIssuance): React.ReactNode
 }
 
 function formatNextDue(equipment: EquipmentWithIssuance): React.ReactNode {
-  const issuanceDueDate = equipment.most_recent_issuance?.expected_return 
-    ? new Date(equipment.most_recent_issuance.expected_return) 
-    : null;
-  const updateDueDate = equipment.latest_update?.next_due_at 
-    ? new Date(equipment.latest_update.next_due_at) 
-    : null;
-
-  // Use the earliest date as the "Next Due" date, or whichever exists
-  let nextDueDate: Date | null = null;
-  if (issuanceDueDate && updateDueDate) {
-    nextDueDate = issuanceDueDate < updateDueDate ? issuanceDueDate : updateDueDate;
-  } else {
-    nextDueDate = issuanceDueDate || updateDueDate;
-  }
-
-  return formatOverdueableDate(nextDueDate);
+  // Only show the next update due date from maintenance/update history
+  // Do NOT mix with issuance expected return dates (those are shown in the "Expected Return" column)
+  return formatOverdueableDate(equipment.latest_update?.next_due_at || null);
 }
 
 export function EquipmentTable({ 
@@ -252,10 +239,9 @@ export function EquipmentTable({
         return <div>{formatNextDue(equipment)}</div>
       },
       sortingFn: (rowA, rowB) => {
+        // Sort only by update history next_due_at, not by issuance dates
         const getNextDue = (item: EquipmentWithIssuance) => {
-          const d1 = item.most_recent_issuance?.expected_return ? new Date(item.most_recent_issuance.expected_return).getTime() : Infinity;
-          const d2 = item.latest_update?.next_due_at ? new Date(item.latest_update.next_due_at).getTime() : Infinity;
-          return Math.min(d1, d2);
+          return item.latest_update?.next_due_at ? new Date(item.latest_update.next_due_at).getTime() : Infinity;
         };
         const dateA = getNextDue(rowA.original);
         const dateB = getNextDue(rowB.original);

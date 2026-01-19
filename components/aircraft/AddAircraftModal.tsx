@@ -33,20 +33,18 @@ const formSchema = z.object({
 
   status: z.string().trim().max(50, "Status too long").optional(),
   aircraft_type_id: z.string().uuid("Invalid aircraft type").optional(),
-  total_time_method: z
-    .enum([
-      "hobbs",
-      "tacho",
-      "airswitch",
-      "hobbs less 5%",
-      "hobbs less 10%",
-      "tacho less 5%",
-      "tacho less 10%",
-    ])
-    .optional(),
+  total_time_method: z.enum([
+    "hobbs",
+    "tacho",
+    "airswitch",
+    "hobbs less 5%",
+    "hobbs less 10%",
+    "tacho less 5%",
+    "tacho less 10%",
+  ], { message: "Total time method is required" }),
 
-  current_hobbs: z.number().min(0, "Must be >= 0").optional(),
-  current_tach: z.number().min(0, "Must be >= 0").optional(),
+  current_hobbs: z.number({ message: "Current hobbs is required" }).min(0, "Must be >= 0"),
+  current_tach: z.number({ message: "Current tacho is required" }).min(0, "Must be >= 0"),
 
   on_line: z.boolean().optional(),
   prioritise_scheduling: z.boolean().optional(),
@@ -82,7 +80,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
       year_manufactured: undefined,
       status: "active",
       aircraft_type_id: undefined,
-      total_time_method: undefined,
+      total_time_method: "hobbs",
       current_hobbs: 0,
       current_tach: 0,
       on_line: true,
@@ -104,7 +102,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
       year_manufactured: undefined,
       status: "active",
       aircraft_type_id: undefined,
-      total_time_method: undefined,
+      total_time_method: "hobbs",
       current_hobbs: 0,
       current_tach: 0,
       on_line: true,
@@ -134,9 +132,9 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
           year_manufactured: values.year_manufactured ?? null,
           status: values.status?.trim() ? values.status : "active",
           aircraft_type_id: values.aircraft_type_id ?? null,
-          total_time_method: (values.total_time_method as TotalTimeMethod | undefined) ?? null,
-          current_hobbs: values.current_hobbs ?? 0,
-          current_tach: values.current_tach ?? 0,
+          total_time_method: values.total_time_method as TotalTimeMethod,
+          current_hobbs: values.current_hobbs,
+          current_tach: values.current_tach,
           on_line: values.on_line ?? true,
           prioritise_scheduling: values.prioritise_scheduling ?? false,
           record_hobbs: values.record_hobbs ?? false,
@@ -179,7 +177,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
           "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden",
           "w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[720px]",
           "top-[calc(env(safe-area-inset-top)+1rem)] sm:top-[50%] translate-y-0 sm:translate-y-[-50%]",
-          "h-[calc(100dvh-2rem)] sm:h-auto sm:max-h-[calc(100dvh-4rem)]"
+          "h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)]"
         )}
       >
         <div className="flex h-full min-h-0 flex-col bg-white">
@@ -334,12 +332,12 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
 
                   <div>
                     <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                      TOTAL TIME METHOD
+                      TOTAL TIME METHOD <span className="text-destructive">*</span>
                     </label>
                     <Select
                       value={form.watch("total_time_method") || ""}
                       onValueChange={(v) =>
-                        form.setValue("total_time_method", (v || undefined) as FormValues["total_time_method"], {
+                        form.setValue("total_time_method", v as FormValues["total_time_method"], {
                           shouldDirty: true,
                         })
                       }
@@ -375,7 +373,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                      CURRENT HOBBS
+                      CURRENT HOBBS <span className="text-destructive">*</span>
                     </label>
                     <Input
                       type="number"
@@ -391,7 +389,7 @@ export function AddAircraftModal(props: { open: boolean; onOpenChange: (open: bo
 
                   <div>
                     <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                      CURRENT TACH
+                      CURRENT TACH <span className="text-destructive">*</span>
                     </label>
                     <Input
                       type="number"

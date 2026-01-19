@@ -45,24 +45,36 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const { signOut } = useAuth()
   const [isSigningOut, setIsSigningOut] = React.useState(false)
+  const isSigningOutRef = React.useRef(false)
+  const [dropdownOpen, setDropdownOpen] = React.useState(false)
 
-  const handleSignOut = async () => {
+  const handleSignOut = React.useCallback(async () => {
+    // Prevent double-clicks and multiple triggers
+    if (isSigningOutRef.current) {
+      return
+    }
+
+    isSigningOutRef.current = true
     setIsSigningOut(true)
+    setDropdownOpen(false) // Close the dropdown immediately
+
     try {
       await signOut()
       toast.success("Successfully signed out")
     } catch (error) {
-      toast.error("Failed to sign out")
       console.error("Sign out error:", error)
-    } finally {
+      toast.error("Failed to sign out")
+      // Reset state on error so user can retry
+      isSigningOutRef.current = false
       setIsSigningOut(false)
     }
-  }
+    // Note: Don't reset in finally block because component will unmount on successful signout
+  }, [signOut])
 
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
@@ -121,9 +133,24 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} disabled={isSigningOut}>
-              <IconLogout />
-              {isSigningOut ? "Signing out..." : "Log out"}
+            <DropdownMenuItem 
+              onSelect={(e) => {
+                e.preventDefault()
+              }}
+              asChild
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  e.preventDefault()
+                  handleSignOut()
+                }}
+                className="relative flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground data-[disabled]:opacity-50"
+              >
+                <IconLogout className={`size-4 shrink-0 pointer-events-none ${isSigningOut ? "animate-pulse" : ""}`} />
+                <span className="pointer-events-none">{isSigningOut ? "Signing out..." : "Log out"}</span>
+              </button>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

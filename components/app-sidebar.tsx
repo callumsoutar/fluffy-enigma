@@ -149,7 +149,7 @@ const secondaryNavItems: NavItem[] = [
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { user, role, loading } = useAuth()
+  const { user, role, profile, loading } = useAuth()
   const isMobile = useIsMobile()
   const [mounted, setMounted] = React.useState(false)
   const [localCachedRole, setLocalCachedRole] = React.useState<UserRole | null>(null)
@@ -222,21 +222,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
     }
 
-    const name =
+    // Use profile from auth context (cached and persisted across navigations)
+    const name = profile?.displayName ||
       user.user_metadata?.full_name ||
       user.user_metadata?.name ||
       user.email?.split("@")[0] ||
       "User"
-    const email = user.email || ""
+    const email = profile?.email || user.email || ""
     const initials = getInitialsFromName(name, email)
 
     return {
       name,
       email,
-      avatar: user.user_metadata?.avatar_url || "",
+      avatar: profile?.avatarUrl || user.user_metadata?.avatar_url || "",
       initials,
     }
-  }, [user])
+  }, [user, profile])
 
   // Only show loading state on initial load (when we have no cached role)
   // During refresh, keep showing the navigation with cached role

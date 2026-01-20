@@ -212,20 +212,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(validatedUser)
 
         // Use the validated user for role resolution
-        const { role: resolvedRole } = await resolveUserRole(supabase, validatedUser)
+        console.log('🔐 [AUTH] Resolving role for user:', validatedUser.id)
+        const { role: resolvedRole, source } = await resolveUserRole(supabase, validatedUser)
+        console.log('🔐 [AUTH] Role resolution result:', { resolvedRole, source })
         
         if (resolvedRole) {
           setRole(resolvedRole)
           setCachedRole(resolvedRole)
+          console.log('🔐 [AUTH] Role set successfully:', resolvedRole)
         } else {
-          // Failed to resolve role - clear cached role to prevent stale state
-          console.warn('🔐 [AUTH] Failed to resolve role for authenticated user')
+          // Failed to resolve role - this might indicate a database issue or missing tenant_users entry
+          console.warn('🔐 [AUTH] Failed to resolve role for authenticated user - check tenant_users table')
           setRole(null)
           clearCachedRole()
         }
 
         // Fetch and cache user profile
+        console.log('🔐 [AUTH] Fetching user profile for:', validatedUser.id)
         const userProfile = await fetchUserProfile(validatedUser.id, validatedUser.email, validatedUser.user_metadata)
+        console.log('🔐 [AUTH] Profile fetched:', { displayName: userProfile.displayName, email: userProfile.email })
         setProfile(userProfile)
         setCachedProfile(userProfile)
       } else {
@@ -251,9 +256,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('🔐 [AUTH] Error processing auth change:', error)
       // On error, ensure we still mark as initialized to prevent infinite loading
       isInitializedRef.current = true
+      // Also clear the user state to ensure consistent state
+      setUser(null)
+      setRole(null)
+      setProfile(null)
+      clearCachedRole()
+      clearCachedProfile()
     } finally {
       // Always clear loading state after processing - don't gate on isInitializedRef
       // This ensures loading is cleared even if initialization failed
+      console.log('🔐 [AUTH] handleAuthChange complete, setting loading to false')
       setLoading(false)
       isProcessingAuthChangeRef.current = false
 
@@ -324,50 +336,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /**
    * Initialize auth state on mount
    * 
-   * We use onAuthStateChange as the single source of truth.
-   * The INITIAL_SESSION event is fired synchronously when the listener
-   * is set up, which handles the initial auth check.
+   * We use a combination of onAuthStateChange and explicit getUser() check.
+   * The INITIAL_SESSION event is fired when the listener is set up, but we also
+   * do an explicit check to ensure we have the latest auth state.
    * 
-   * This approach eliminates race conditions between getSession()
-   * and onAuthStateChange by not calling getSession() at all.
+   * This hybrid approach handles:
+   * 1. Normal page loads (INITIAL_SESSION handles it)
+   * 2. Logout → login transitions (explicit check ensures fresh state)
+   * 3. Stale cookies (explicit check validates with server)
    */
   React.useEffect(() => {
     let mounted = true
     let initTimeout: NodeJS.Timeout | null = null
+    let hasReceivedAuthEvent = false
+
+    console.log('🔐 [AUTH] AuthProvider useEffect running - setting up auth listener')
 
     // Load cached data immediately to prevent UI flicker during initialization
     // Note: This is optimistic - if the session is invalid, we'll clear these
     const cachedRole = getCachedRole()
+    const cachedProfile = getCachedProfile()
+    console.log('🔐 [AUTH] Cached data:', { cachedRole, hasCachedProfile: !!cachedProfile })
+    
     if (cachedRole) {
       setRole(cachedRole)
     }
-    const cachedProfile = getCachedProfile()
     if (cachedProfile) {
       setProfile(cachedProfile)
     }
 
-    // Safety timeout: If auth doesn't initialize within 5 seconds, force loading to false
-    // This handles edge cases where onAuthStateChange doesn't fire properly
-    // (e.g., corrupted cookies, browser extensions blocking requests)
-    initTimeout = setTimeout(() => {
-      if (!isInitializedRef.current && mounted) {
-        console.warn('🔐 [AUTH] Initialization timeout - forcing loading to false')
-        isInitializedRef.current = true
-        setLoading(false)
-        // Clear potentially stale cached data since we couldn't verify the session
-        clearCachedRole()
-        clearCachedProfile()
-        setRole(null)
-        setProfile(null)
-      }
-    }, 5000)
-
     // Set up the auth state change listener
-    // INITIAL_SESSION is fired synchronously when listener is created
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return
+      console.log('🔐 [AUTH] onAuthStateChange fired:', { event, userId: session?.user?.id, mounted })
+      
+      if (!mounted) {
+        console.log('🔐 [AUTH] Component unmounted, ignoring event')
+        return
+      }
+      
+      hasReceivedAuthEvent = true
       
       // Clear the timeout since we received an auth event
       if (initTimeout) {
@@ -378,11 +387,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await handleAuthChange(event, session?.user ?? null)
     })
 
+    // Also do an explicit auth check after a short delay
+    // This catches cases where onAuthStateChange might not fire or fires with stale data
+    // especially after logout → login transitions
+    const explicitCheckTimeout = setTimeout(async () => {
+      if (!mounted) return
+      
+      // Only do explicit check if we haven't received an auth event yet
+      if (!hasReceivedAuthEvent) {
+        console.log('🔐 [AUTH] Performing explicit auth check (no auth event received)')
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser()
+          if (!mounted) return
+          
+          if (error) {
+            console.log('🔐 [AUTH] Explicit check: No valid session', error.message)
+            if (!isInitializedRef.current) {
+              setUser(null)
+              setRole(null)
+              setProfile(null)
+              clearCachedRole()
+              clearCachedProfile()
+              isInitializedRef.current = true
+              setLoading(false)
+            }
+          } else if (user) {
+            console.log('🔐 [AUTH] Explicit check: Found user', user.id)
+            // If we have a user but auth state wasn't set, trigger handleAuthChange
+            if (!isInitializedRef.current) {
+              await handleAuthChange('INITIAL_SESSION', user)
+            }
+          } else {
+            console.log('🔐 [AUTH] Explicit check: No user')
+            if (!isInitializedRef.current) {
+              setUser(null)
+              setRole(null)
+              setProfile(null)
+              clearCachedRole()
+              clearCachedProfile()
+              isInitializedRef.current = true
+              setLoading(false)
+            }
+          }
+        } catch (err) {
+          console.error('🔐 [AUTH] Explicit check error:', err)
+          if (!isInitializedRef.current && mounted) {
+            isInitializedRef.current = true
+            setLoading(false)
+          }
+        }
+      }
+    }, 100)
+
+    // Safety timeout: If auth doesn't initialize within 5 seconds, force loading to false
+    initTimeout = setTimeout(() => {
+      if (!isInitializedRef.current && mounted) {
+        console.warn('🔐 [AUTH] Initialization timeout - forcing loading to false')
+        isInitializedRef.current = true
+        setLoading(false)
+        clearCachedRole()
+        clearCachedProfile()
+        setRole(null)
+        setProfile(null)
+      }
+    }, 5000)
+
+    console.log('🔐 [AUTH] Auth listener set up complete')
+
     return () => {
+      console.log('🔐 [AUTH] AuthProvider cleanup - unmounting')
       mounted = false
       if (initTimeout) {
         clearTimeout(initTimeout)
       }
+      clearTimeout(explicitCheckTimeout)
       subscription.unsubscribe()
     }
   }, [supabase, handleAuthChange])
@@ -452,17 +530,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setRole(null)
       setProfile(null)
+      
+      // Clear all auth-related caches explicitly
       clearCachedRole()
       clearCachedProfile()
       
-      // Clear localStorage
+      // Reset initialization state so next login starts fresh
+      isInitializedRef.current = false
+      isProcessingAuthChangeRef.current = false
+      pendingAuthEventRef.current = null
+      
+      // Clear localStorage - be comprehensive about what we clear
       if (typeof window !== 'undefined') {
         try {
-          Object.keys(localStorage).forEach(key => {
-            if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
-              localStorage.removeItem(key)
+          // Clear all supabase-related keys AND our custom cache keys
+          const keysToRemove: string[] = []
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && (
+              key.includes('supabase') || 
+              key.includes('sb-') || 
+              key.includes('auth') ||
+              key === 'user_role' ||  // Explicitly include our role cache
+              key === 'auth_user_profile'  // Explicitly include our profile cache
+            )) {
+              keysToRemove.push(key)
             }
-          })
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key))
+          console.log("🔐 [AUTH] Cleared localStorage keys:", keysToRemove)
         } catch (e) {
           console.error("Error clearing localStorage:", e)
         }

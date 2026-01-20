@@ -165,19 +165,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [])
   
   // Sync local state with auth context role
-  // The auth context is responsible for setting/clearing the cache
+  // This effect runs whenever role, user, loading, or mounted changes
   React.useEffect(() => {
+    if (!mounted) return
+    
     if (role) {
+      // Role is available from auth context - use it
       setLocalCachedRole(role)
-    } else if (user === null && mounted) {
-      // Clear local state on sign out (only after mount)
+    } else if (!loading && user === null) {
+      // Not loading and no user - clear the cached role
+      // This handles the logout case
+      setLocalCachedRole(null)
+    } else if (!loading && user !== null && role === null) {
+      // Edge case: user exists but role is null (role resolution failed)
+      // Clear the stale cached role to prevent showing wrong permissions
       setLocalCachedRole(null)
     }
-  }, [role, user, mounted])
+    // Note: When loading=true, we keep the localCachedRole to prevent flicker
+  }, [role, user, loading, mounted])
   
-  // Use current role, or cached role if loading, or null
+  // Use current role from context (authoritative), or fall back to cached during loading
   // Only use cached role after mount to prevent hydration mismatch
-  const effectiveRole = role || (loading && mounted ? localCachedRole : null)
+  const effectiveRole = role || (mounted && loading ? localCachedRole : null)
 
   // Filter navigation items based on user role
   // Use effectiveRole to prevent navigation from disappearing during refresh
@@ -239,12 +248,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [user, profile])
 
-  // Only show loading state on initial load (when we have no cached role)
-  // During refresh, keep showing the navigation with cached role
-  // Also show loading during SSR/before mount to prevent hydration mismatch
-  // Note: We also check for role availability since loading might be false but role not yet resolved
+  // Determine if we should show the loading state
+  // Show loading when:
+  // 1. Not yet mounted (SSR/hydration)
+  // 2. Auth is loading AND we don't have a role to display
+  // Note: If loading is false but role is null (role resolution failed), we still render
+  // the navigation (which will be empty) - this is better than showing loading forever
   const hasAnyRole = !!role || !!localCachedRole
-  const isInitialLoad = (!mounted) || (loading && !hasAnyRole)
+  const isAuthLoading = loading
+  const isInitialLoad = !mounted || (isAuthLoading && !hasAnyRole)
 
   // Show loading state during SSR, initial load, or before mount
   if (isInitialLoad) {

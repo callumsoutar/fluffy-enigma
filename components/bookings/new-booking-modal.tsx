@@ -46,7 +46,13 @@ import { zonedDateTimeToUtc } from "@/lib/utils/timezone"
 type BookingOptionsResponse = {
   aircraft: { id: string; registration: string; type: string; model: string | null; manufacturer: string | null }[]
   members: { id: string; first_name: string | null; last_name: string | null; email: string }[]
-  instructors: { id: string; first_name: string | null; last_name: string | null; user: { id: string; email: string } | null }[]
+  instructors: { 
+    id: string; 
+    first_name: string | null; 
+    last_name: string | null; 
+    is_actively_instructing: boolean;
+    user: { id: string; email: string; is_active: boolean } | null 
+  }[]
   flightTypes: { id: string; name: string; instruction_type: string | null }[]
   lessons: { id: string; name: string; description: string | null }[]
 }
@@ -474,15 +480,33 @@ export function NewBookingModal(props: {
 
   const availableInstructors = React.useMemo(() => {
     const all = options?.instructors ?? []
-    // Instructor availability is roster-driven: if we can't compute the time interval,
+    // Instructor availability is roster-driven for flights: if we can't compute the time interval,
     // don't show the rostered list yet (prevents showing instructors who aren't on shift).
     if (!isValidTimeRange) return []
-    return all.filter(
-      (i) => rosteredInstructorIds.has(i.id) && !unavailable.unavailableInstructorIds.has(i.id)
-    )
+
+    const isGroundOrOther = bookingType === "groundwork" || bookingType === "other"
+
+    return all.filter((i) => {
+      // Basic availability: must not have an overlapping booking
+      const isNotOverlapping = !unavailable.unavailableInstructorIds.has(i.id)
+
+      if (isGroundOrOther) {
+        // For groundwork/other, we show them if they aren't overlapping,
+        // regardless of active status or roster.
+        return isNotOverlapping
+      }
+
+      // For flight bookings, they must be active AND on the roster AND not overlapping.
+      // We check both the instructor's teaching status and the user's account status.
+      const isInstructorActive = i.is_actively_instructing
+      const isUserActive = i.user?.is_active ?? true
+      
+      return isInstructorActive && isUserActive && rosteredInstructorIds.has(i.id) && isNotOverlapping
+    })
   }, [
     options?.instructors,
     isValidTimeRange,
+    bookingType,
     rosteredInstructorIds,
     unavailable.unavailableInstructorIds,
   ])
@@ -499,20 +523,36 @@ export function NewBookingModal(props: {
     }
 
     const selectedInstructorId = form.getValues("instructorId")
+    const isGroundOrOther = bookingType === "groundwork" || bookingType === "other"
+    
     // Important: do NOT treat "rules still loading" as "not rostered".
     // Otherwise, opening the modal from the scheduler (with a prefilled instructor)
     // can incorrectly clear the instructor before roster rules arrive.
-    if (selectedInstructorId && rosterRulesRes && !rosteredInstructorIds.has(selectedInstructorId)) {
+    if (selectedInstructorId && !isGroundOrOther && rosterRulesRes && !rosteredInstructorIds.has(selectedInstructorId)) {
       form.setValue("instructorId", null, { shouldValidate: true, shouldDirty: true })
       toast.message("Selected instructor is not rostered on for this time range.")
     } else if (selectedInstructorId && unavailable.unavailableInstructorIds.has(selectedInstructorId)) {
       form.setValue("instructorId", null, { shouldValidate: true, shouldDirty: true })
       toast.message("Selected instructor is no longer available for this time range.")
+    } else if (selectedInstructorId && !isGroundOrOther) {
+      // For flight bookings, also check if they are actively instructing and their user account is active
+      const instructor = options?.instructors.find(i => i.id === selectedInstructorId)
+      if (instructor) {
+        const isInstructorActive = instructor.is_actively_instructing
+        const isUserActive = instructor.user?.is_active ?? true
+        
+        if (!isInstructorActive || !isUserActive) {
+          form.setValue("instructorId", null, { shouldValidate: true, shouldDirty: true })
+          toast.message("Selected instructor is no longer active for flight bookings.")
+        }
+      }
     }
   }, [
     open,
     isValidTimeRange,
     form,
+    bookingType,
+    options,
     rosterRulesRes,
     rosteredInstructorIds,
     unavailable.unavailableAircraftIds,
@@ -1151,9 +1191,10 @@ export function NewBookingModal(props: {
                       {availableInstructors.map((i) => {
                         const full = [i.first_name, i.last_name].filter(Boolean).join(" ").trim()
                         const label = full || i.user?.email || "Instructor"
+                        const isInactive = !i.is_actively_instructing || i.user?.is_active === false
                         return (
                           <SelectItem key={i.id} value={i.id} className="rounded-lg py-2 text-xs">
-                            {label}
+                            {label} {isInactive && <span className="ml-1 text-slate-400 font-normal">(Inactive)</span>}
                           </SelectItem>
                         )
                       })}

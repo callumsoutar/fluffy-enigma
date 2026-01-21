@@ -135,10 +135,10 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
       },
     },
     {
-      accessorKey: "total_hours",
+      accessorKey: "total_time_in_service",
       header: () => <div className="text-right">Total Hours</div>,
       cell: ({ row }) => {
-        const hours = row.original.total_hours
+        const hours = row.original.total_time_in_service
         return (
           <div className="text-right font-semibold text-slate-900">
             {formatTotalHours(hours)}
@@ -236,7 +236,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
                       key={header.id}
                       className={cn(
                         "px-4 py-3 font-semibold text-xs uppercase tracking-wide text-slate-600",
-                        header.id === "total_hours" ? "text-right" : 
+                        header.id === "total_time_in_service" ? "text-right" : 
                         header.id === "status" ? "text-center" : "text-left"
                       )}
                     >
@@ -330,7 +330,7 @@ export function AircraftTable({ aircraft }: AircraftTableProps) {
                       <IconClock className="w-3 h-3" /> Total Hours
                     </div>
                     <div className="font-semibold text-sm text-slate-900">
-                      {formatTotalHours(aircraft.total_hours)}
+                      {formatTotalHours(aircraft.total_time_in_service)}
                     </div>
                   </div>
                 </div>

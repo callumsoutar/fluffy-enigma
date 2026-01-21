@@ -24,6 +24,8 @@ import {
   IconPencil,
   IconLoader2,
   IconChevronDown,
+  IconEdit,
+  IconInfoCircle,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -73,8 +75,10 @@ import {
 import { BookingHeader } from "@/components/bookings/booking-header"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Separator } from "@/components/ui/separator"
+import { FlightCorrectionDialog } from "@/components/bookings/FlightCorrectionDialog"
 
 import { useAuth } from "@/contexts/auth-context"
+import { useFlightCorrection } from "@/hooks/useFlightCorrection"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useOrganizationTaxRate } from "@/hooks/use-tax-rate"
 import type { BookingWithRelations } from "@/lib/types/bookings"
@@ -264,6 +268,15 @@ export default function BookingCheckinPage() {
   // State for collapsible sections
   const [isBillingCollapsed, setIsBillingCollapsed] = React.useState(isApproved)
   const [isInvoiceCollapsed, setIsInvoiceCollapsed] = React.useState(isApproved)
+
+  // Flight correction hook (for approved bookings)
+  const {
+    isCorrectionDialogOpen,
+    openCorrectionDialog,
+    closeCorrectionDialog,
+    correctFlight,
+    isSubmitting: isCorrecting,
+  } = useFlightCorrection({ bookingId })
 
   // Fetch invoice details if approved
   const invoiceQuery = useQuery({
@@ -1313,6 +1326,20 @@ export default function BookingCheckinPage() {
 
   const headerActions = isAdminOrInstructor && (
     <div className="flex items-center gap-2 sm:gap-3">
+      {/* Correction button - shown only for approved bookings and admin/owner */}
+      {isApproved && (role === 'owner' || role === 'admin') && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9 px-4 border-amber-200 hover:bg-amber-50 dark:border-amber-900 dark:hover:bg-amber-950 text-amber-700 dark:text-amber-300 font-medium"
+          onClick={openCorrectionDialog}
+          disabled={isCorrecting}
+        >
+          <IconEdit className="h-4 w-4 mr-2" />
+          Correct Flight
+        </Button>
+      )}
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button 
@@ -1377,10 +1404,20 @@ export default function BookingCheckinPage() {
               backHref={`/bookings/${bookingId}`}
               backLabel="Back to Booking"
               actions={headerActions}
-              extra={!isApproved && (
-                <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 rounded-full text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5">
-                  Check-In In Progress
-                </Badge>
+              extra={(
+                <>
+                  {!isApproved && (
+                    <Badge variant="outline" className="bg-blue-50/50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 rounded-full text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5">
+                      Check-In In Progress
+                    </Badge>
+                  )}
+                  {isApproved && booking?.corrected_at && (
+                    <Badge variant="outline" className="bg-amber-50/50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800 rounded-full text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 flex items-center gap-1">
+                      <IconEdit className="h-3 w-3" />
+                      Corrected
+                    </Badge>
+                  )}
+                </>
               )}
             />
 
@@ -2980,6 +3017,17 @@ export default function BookingCheckinPage() {
         </div>
       </SidebarInset>
     </SidebarProvider>
+
+    {/* Flight Correction Dialog */}
+    {booking && isApproved && (role === 'owner' || role === 'admin') && (
+      <FlightCorrectionDialog
+        booking={booking}
+        open={isCorrectionDialogOpen}
+        onOpenChange={closeCorrectionDialog}
+        onCorrect={correctFlight}
+        isSubmitting={isCorrecting}
+      />
+    )}
     </>
   )
 }

@@ -22,7 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Edit, Archive, AlertCircle, GraduationCap } from "lucide-react";
+import { Plus, Edit, Archive, AlertCircle, GraduationCap, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Syllabus, SyllabusFormData } from "@/lib/types/syllabus";
 
@@ -30,6 +30,7 @@ export default function SyllabusConfig() {
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingSyllabus, setEditingSyllabus] = useState<Syllabus | null>(null);
@@ -39,6 +40,7 @@ export default function SyllabusConfig() {
     number_of_exams: 0,
     is_active: true,
   });
+  const [hasExams, setHasExams] = useState(false);
 
   const fetchSyllabi = async () => {
     try {
@@ -68,6 +70,7 @@ export default function SyllabusConfig() {
       number_of_exams: 0,
       is_active: true,
     });
+    setHasExams(false);
   };
 
   const handleAdd = async () => {
@@ -149,6 +152,8 @@ export default function SyllabusConfig() {
 
   const openEditDialog = (syllabus: Syllabus) => {
     setEditingSyllabus(syllabus);
+    const hasExamsValue = syllabus.number_of_exams > 0;
+    setHasExams(hasExamsValue);
     setFormData({
       name: syllabus.name,
       description: syllabus.description || "",
@@ -157,6 +162,13 @@ export default function SyllabusConfig() {
     });
     setIsEditDialogOpen(true);
   };
+
+  const filteredSyllabi = syllabi.filter((syllabus) => {
+    return (
+      syllabus.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      syllabus.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   if (loading) {
     return (
@@ -188,15 +200,35 @@ export default function SyllabusConfig() {
       )}
 
       {/* Actions Bar */}
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-slate-500">
-          {syllabi.length} {syllabi.length === 1 ? "syllabus" : "syllabi"}
+      <div className="flex items-center gap-2 mb-6 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/80">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <Input
+            placeholder="Search syllabi..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-10 pl-10 bg-white border-slate-200 rounded-xl shadow-none focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500 transition-all border-none"
+          />
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+
+        <div className="h-6 w-px bg-slate-200 mx-1" />
+
+        <Dialog 
+          open={isAddDialogOpen} 
+          onOpenChange={(open) => {
+            setIsAddDialogOpen(open);
+            if (!open) {
+              resetForm();
+            }
+          }}
+        >
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="bg-indigo-600 hover:bg-indigo-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Syllabus
+            <Button 
+              onClick={resetForm} 
+              className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] whitespace-nowrap font-semibold border-none"
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add New
             </Button>
           </DialogTrigger>
           <DialogContent
@@ -263,19 +295,64 @@ export default function SyllabusConfig() {
                         />
                       </div>
 
-                      <div>
-                        <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          NUMBER OF EXAMS
-                        </label>
-                        <Input
-                          id="number_of_exams"
-                          type="number"
-                          min="0"
-                          value={formData.number_of_exams}
-                          onChange={(e) => setFormData({ ...formData, number_of_exams: parseInt(e.target.value) || 0 })}
-                          placeholder="0"
-                          className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                        <Switch
+                          id="has_exams"
+                          checked={hasExams}
+                          onCheckedChange={(checked) => {
+                            setHasExams(checked);
+                            if (!checked) {
+                              setFormData({ ...formData, number_of_exams: 0 });
+                            }
+                          }}
                         />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Label htmlFor="has_exams" className="text-xs font-semibold text-slate-900 leading-none cursor-pointer">
+                              Has Exams
+                            </Label>
+                            {hasExams && (
+                              <div className="flex items-center gap-2">
+                                <label className="text-[10px] font-medium text-slate-500">
+                                  Number:
+                                </label>
+                                <Input
+                                  id="number_of_exams"
+                                  type="number"
+                                  min="1"
+                                  max="99"
+                                  value={formData.number_of_exams || ""}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    // Allow empty string for better UX
+                                    if (value === "") {
+                                      setFormData({ ...formData, number_of_exams: 0 });
+                                    } else {
+                                      const numValue = parseInt(value, 10);
+                                      if (!isNaN(numValue) && numValue > 0) {
+                                        setFormData({ ...formData, number_of_exams: numValue });
+                                      }
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    // Ensure at least 1 if hasExams is true and field is empty
+                                    if (hasExams && (!e.target.value || parseInt(e.target.value, 10) < 1)) {
+                                      setFormData({ ...formData, number_of_exams: 1 });
+                                    }
+                                  }}
+                                  placeholder="1"
+                                  className="h-8 w-20 rounded-lg border-slate-200 bg-white px-2 text-sm font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-snug">
+                            {hasExams 
+                              ? "Specify how many exams are required for this training program."
+                              : "This training program does not include any exams."
+                            }
+                          </p>
+                        </div>
                       </div>
 
                       <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
@@ -323,12 +400,14 @@ export default function SyllabusConfig() {
       </div>
 
       {/* Table */}
-      {syllabi.length === 0 ? (
+      {filteredSyllabi.length === 0 ? (
         <div className="text-center py-16 bg-slate-50 rounded-xl border border-dashed border-slate-300">
           <GraduationCap className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-          <p className="text-slate-900 font-semibold mb-2">No syllabi configured</p>
+          <p className="text-slate-900 font-semibold mb-2">
+            {searchTerm ? "No matching syllabi" : "No syllabi configured"}
+          </p>
           <p className="text-sm text-slate-500 mb-4">
-            Click &quot;Add Syllabus&quot; to get started.
+            {searchTerm ? "Try a different search term" : "Click \"Add New\" to get started."}
           </p>
         </div>
       ) : (
@@ -343,7 +422,7 @@ export default function SyllabusConfig() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {syllabi.map((syllabus) => (
+              {filteredSyllabi.map((syllabus) => (
                 <TableRow key={syllabus.id} className="hover:bg-slate-50">
                   <TableCell className="font-medium text-slate-900">
                     <div>
@@ -356,9 +435,15 @@ export default function SyllabusConfig() {
                     </div>
                   </TableCell>
                   <TableCell className="text-center text-slate-600">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                      {syllabus.number_of_exams}
-                    </span>
+                    {syllabus.number_of_exams > 0 ? (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                        {syllabus.number_of_exams}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-50 text-slate-500 border border-slate-200 italic">
+                        No exams
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <span
@@ -402,7 +487,16 @@ export default function SyllabusConfig() {
       )}
 
       {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog 
+        open={isEditDialogOpen} 
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open);
+          if (!open) {
+            setEditingSyllabus(null);
+            resetForm();
+          }
+        }}
+      >
         <DialogContent
           className={cn(
             "p-0 border-none shadow-2xl rounded-[24px] overflow-hidden",
@@ -467,19 +561,64 @@ export default function SyllabusConfig() {
                       />
                     </div>
 
-                    <div>
-                      <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                        NUMBER OF EXAMS
-                      </label>
-                      <Input
-                        id="edit-number_of_exams"
-                        type="number"
-                        min="0"
-                        value={formData.number_of_exams}
-                        onChange={(e) => setFormData({ ...formData, number_of_exams: parseInt(e.target.value) || 0 })}
-                        placeholder="0"
-                        className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                    <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                      <Switch
+                        id="edit-has_exams"
+                        checked={hasExams}
+                        onCheckedChange={(checked) => {
+                          setHasExams(checked);
+                          if (!checked) {
+                            setFormData({ ...formData, number_of_exams: 0 });
+                          }
+                        }}
                       />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Label htmlFor="edit-has_exams" className="text-xs font-semibold text-slate-900 leading-none cursor-pointer">
+                            Has Exams
+                          </Label>
+                          {hasExams && (
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] font-medium text-slate-500">
+                                Number:
+                              </label>
+                              <Input
+                                id="edit-number_of_exams"
+                                type="number"
+                                min="1"
+                                max="99"
+                                value={formData.number_of_exams || ""}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  // Allow empty string for better UX
+                                  if (value === "") {
+                                    setFormData({ ...formData, number_of_exams: 0 });
+                                  } else {
+                                    const numValue = parseInt(value, 10);
+                                    if (!isNaN(numValue) && numValue > 0) {
+                                      setFormData({ ...formData, number_of_exams: numValue });
+                                    }
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  // Ensure at least 1 if hasExams is true and field is empty
+                                  if (hasExams && (!e.target.value || parseInt(e.target.value, 10) < 1)) {
+                                    setFormData({ ...formData, number_of_exams: 1 });
+                                  }
+                                }}
+                                placeholder="1"
+                                className="h-8 w-20 rounded-lg border-slate-200 bg-white px-2 text-sm font-medium shadow-none hover:bg-slate-50 focus-visible:ring-0"
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          {hasExams 
+                            ? "Specify how many exams are required for this training program."
+                            : "This training program does not include any exams."
+                          }
+                        </p>
+                      </div>
                     </div>
 
                     <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">

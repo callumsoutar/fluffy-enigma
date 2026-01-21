@@ -3,14 +3,17 @@ import type { Chargeable } from "@/lib/types/database"
 /**
  * Chargeable types classify chargeables (e.g. membership_fee, aircraft_hire, instruction, etc.)
  *
- * NOTE: We keep this intentionally flexible because the `chargeable_types` table
- * isn't currently represented in `lib/types/database.ts`.
+ * Supports hybrid model:
+ * - Global types (is_global=true, tenant_id=null): Available to all tenants
+ * - Tenant-specific types (is_global=false, tenant_id set): Custom types per tenant
  */
 export interface ChargeableType {
   id: string
   code: string
   name?: string | null
   description?: string | null
+  is_global?: boolean
+  tenant_id?: string | null
   is_active?: boolean
   created_at?: string
   updated_at?: string

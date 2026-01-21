@@ -222,29 +222,40 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [effectiveRole, localCachedRole, mounted])
 
   const userData = React.useMemo(() => {
-    if (!user) {
+    // Priority 1: Use profile from auth context (cached and persisted across navigations)
+    // This prevents the "Guest" flicker on refresh since profile is cached in localStorage
+    if (profile) {
       return {
-        name: "Guest",
-        email: "",
-        avatar: "",
-        initials: "GU",
+        name: profile.displayName,
+        email: profile.email,
+        avatar: profile.avatarUrl || user?.user_metadata?.avatar_url || "",
+        initials: getInitialsFromName(profile.displayName, profile.email),
       }
     }
 
-    // Use profile from auth context (cached and persisted across navigations)
-    const name = profile?.displayName ||
-      user.user_metadata?.full_name ||
-      user.user_metadata?.name ||
-      user.email?.split("@")[0] ||
-      "User"
-    const email = profile?.email || user.email || ""
-    const initials = getInitialsFromName(name, email)
+    // Priority 2: Fallback to user metadata if session is active but profile query hasn't finished
+    if (user) {
+      const name = user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.email?.split("@")[0] ||
+        "User"
+      const email = user.email || ""
+      const initials = getInitialsFromName(name, email)
 
+      return {
+        name,
+        email,
+        avatar: user.user_metadata?.avatar_url || "",
+        initials,
+      }
+    }
+
+    // Priority 3: Only show Guest if we are not loading and have no data
     return {
-      name,
-      email,
-      avatar: profile?.avatarUrl || user.user_metadata?.avatar_url || "",
-      initials,
+      name: "Guest",
+      email: "",
+      avatar: "",
+      initials: "GU",
     }
   }, [user, profile])
 

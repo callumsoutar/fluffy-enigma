@@ -69,6 +69,7 @@ export type RecordPaymentModalProps = {
   totalAmount?: number | null
   totalPaid?: number | null
   balanceDue?: number | null
+  onSuccess?: () => void
 }
 
 export default function RecordPaymentModal({
@@ -79,6 +80,7 @@ export default function RecordPaymentModal({
   totalAmount,
   totalPaid,
   balanceDue,
+  onSuccess,
 }: RecordPaymentModalProps) {
   const router = useRouter()
 
@@ -177,6 +179,7 @@ export default function RecordPaymentModal({
         reset()
         onOpenChange(false)
         router.refresh()
+        onSuccess?.()
       }, 1600)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to record payment.")

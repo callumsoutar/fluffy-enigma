@@ -24,6 +24,7 @@ export type InvoiceViewActionsProps = {
   status?: string | null
   billToEmail?: string | null
   bookingId?: string | null
+  onPaymentSuccess?: () => void
 }
 
 export default function InvoiceViewActions({
@@ -34,6 +35,7 @@ export default function InvoiceViewActions({
   status,
   billToEmail,
   bookingId,
+  onPaymentSuccess,
 }: InvoiceViewActionsProps) {
   const router = useRouter()
   const [paymentOpen, setPaymentOpen] = React.useState(false)
@@ -174,6 +176,7 @@ export default function InvoiceViewActions({
         totalAmount={invoice.totalAmount ?? null}
         totalPaid={invoice.totalPaid ?? null}
         balanceDue={invoice.balanceDue ?? null}
+        onSuccess={onPaymentSuccess}
       />
     </>
   )

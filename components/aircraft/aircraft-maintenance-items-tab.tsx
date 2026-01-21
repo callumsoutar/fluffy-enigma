@@ -117,7 +117,7 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
   const [components, setComponents] = useState<AircraftComponent[]>(initialComponents || [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [currentHours, setCurrentHours] = useState<number | null>(aircraft.total_hours || null)
+  const [currentHours, setCurrentHours] = useState<number | null>(aircraft.total_time_in_service || null)
   
   // Modal state
   const [logMaintenanceModalOpen, setLogMaintenanceModalOpen] = useState(false)
@@ -148,8 +148,8 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
       .then(([componentsData, aircraftData]) => {
         if (!cancelled) {
           setComponents(Array.isArray(componentsData) ? componentsData : [])
-          if (aircraftData.aircraft && aircraftData.aircraft.total_hours) {
-            setCurrentHours(Number(aircraftData.aircraft.total_hours))
+          if (aircraftData.aircraft && aircraftData.aircraft.total_time_in_service) {
+            setCurrentHours(Number(aircraftData.aircraft.total_time_in_service))
           }
         }
       })
@@ -184,8 +184,8 @@ export function AircraftMaintenanceItemsTab({ components: initialComponents, air
       ])
         .then(([componentsData, aircraftData]) => {
           setComponents(Array.isArray(componentsData) ? componentsData : [])
-          if (aircraftData.aircraft && aircraftData.aircraft.total_hours) {
-            setCurrentHours(Number(aircraftData.aircraft.total_hours))
+          if (aircraftData.aircraft && aircraftData.aircraft.total_time_in_service) {
+            setCurrentHours(Number(aircraftData.aircraft.total_time_in_service))
           }
         })
         .catch(() => {

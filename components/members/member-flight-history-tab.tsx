@@ -101,8 +101,6 @@ export function MemberFlightHistoryTab({ memberId }: MemberFlightHistoryTabProps
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
-        <h3 className="text-lg font-semibold">Flight History</h3>
-
         {/* Date Range Controls */}
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           {/* Quick shortcuts */}

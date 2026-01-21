@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, AlertCircle, DollarSign, Trash2 } from "lucide-react";
+import { Search, Plus, AlertCircle, DollarSign, Trash2, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChargeableWithAircraftRates } from "@/lib/types/chargeables";
 import type { ChargeableType } from "@/lib/types/chargeables";
@@ -335,20 +335,43 @@ export function ChargeablesConfig() {
       <div className="h-[600px] flex gap-6">
         {/* Left side - List of chargeables */}
         <div className="w-1/2 flex flex-col">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-2 mb-6 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/80">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
               <Input
                 placeholder="Search chargeables..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="h-10 pl-10 bg-white border-slate-200 rounded-xl shadow-none focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500 transition-all border-none"
               />
             </div>
+            
+            <Select value={filterTypeId} onValueChange={setFilterTypeId}>
+              <SelectTrigger className="h-10 w-[160px] bg-white border-none rounded-xl shadow-none focus:ring-indigo-500/20 transition-all text-slate-600 font-medium">
+                <div className="flex items-center gap-2">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
+                  <SelectValue placeholder="Filter" />
+                </div>
+              </SelectTrigger>
+              <SelectContent position="popper" className="rounded-xl border-slate-200 shadow-xl min-w-[180px]">
+                <SelectItem value="all" className="text-slate-600">All Types</SelectItem>
+                {chargeableTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.id} className="text-slate-600">
+                    {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="h-6 w-px bg-slate-200 mx-1" />
+
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={resetAddForm} className="bg-indigo-600 hover:bg-indigo-700">
-                  <Plus className="w-4 h-4 mr-2" />
+                <Button 
+                  onClick={resetAddForm} 
+                  className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] whitespace-nowrap font-semibold border-none"
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
                   Add New
                 </Button>
               </DialogTrigger>
@@ -412,10 +435,10 @@ export function ChargeablesConfig() {
                                 setAddFormData({ ...addFormData, chargeable_type_id: value })
                               }
                             >
-                              <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                              <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                                 <SelectValue placeholder="Select type" />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent position="popper" className="max-h-[300px] w-[var(--radix-select-trigger-width)]">
                                 {chargeableTypes.map((type) => (
                                   <SelectItem key={type.id} value={type.id}>
                                     {type.name}
@@ -541,25 +564,6 @@ export function ChargeablesConfig() {
             </Dialog>
           </div>
 
-          <div className="mb-4">
-            <Label htmlFor="filter-type" className="text-sm mb-2 block font-medium text-slate-700">
-              Filter by Type
-            </Label>
-            <Select value={filterTypeId} onValueChange={(value) => setFilterTypeId(value)}>
-              <SelectTrigger id="filter-type" className="w-full">
-                <SelectValue placeholder="All Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {chargeableTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl">
             {filteredChargeables.length === 0 ? (
               <div className="text-center py-12 text-slate-500">
@@ -668,10 +672,10 @@ export function ChargeablesConfig() {
                       setEditFormData({ ...editFormData, chargeable_type_id: value })
                     }
                   >
-                    <SelectTrigger className="mt-1.5">
+                    <SelectTrigger className="mt-1.5 w-full">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" className="max-h-[300px] w-[var(--radix-select-trigger-width)]">
                       {chargeableTypes.map((type) => (
                         <SelectItem key={type.id} value={type.id}>
                           {type.name}

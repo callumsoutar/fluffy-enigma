@@ -193,7 +193,11 @@ export async function POST(request: NextRequest) {
     for_ato: v.for_ato ?? false,
     prioritise_scheduling: v.prioritise_scheduling ?? false,
     aircraft_image_url: v.aircraft_image_url && v.aircraft_image_url.trim() ? v.aircraft_image_url.trim() : null,
-    total_hours: v.total_hours ?? null,
+    // CRITICAL: Initialize total_time_in_service for new aircraft
+    // This prevents the "first flight overwrites baseline" bug where new aircraft
+    // would default to 0 instead of their actual baseline total time.
+    // If total_hours is provided (for backward compatibility), use it; otherwise default to 0
+    total_time_in_service: v.total_hours ?? v.total_time_in_service ?? 0,
     current_tach: v.current_tach ?? 0,
     current_hobbs: v.current_hobbs ?? 0,
     record_tacho: v.record_tacho ?? false,

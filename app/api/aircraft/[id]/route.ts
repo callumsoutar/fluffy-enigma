@@ -245,8 +245,26 @@ export async function PATCH(
   const { id: aircraftId } = await params
   const body = await request.json()
 
-  // Remove id from body if present (shouldn't be updated)
-  const { id: bodyId, ...updateData } = body
+  // Remove id, total_time_in_service, and total_hours from body (shouldn't be updated via PATCH)
+  // total_time_in_service is managed exclusively by server-side atomic RPC functions
+  // total_hours is deprecated in favor of total_time_in_service
+  const { id: bodyId, total_time_in_service, total_hours, ...updateData } = body
+  
+  // Block total_time_in_service updates to prevent accidental overwrites
+  if (total_time_in_service !== undefined) {
+    return NextResponse.json(
+      { error: 'total_time_in_service cannot be updated via PATCH. It is managed exclusively by server-side booking check-in functions.' },
+      { status: 400 }
+    )
+  }
+
+  // Block total_hours updates (deprecated field)
+  if (total_hours !== undefined) {
+    return NextResponse.json(
+      { error: 'total_hours is deprecated. Use total_time_in_service which is managed exclusively by server-side booking check-in functions.' },
+      { status: 400 }
+    )
+  }
   
   // Ensure we're updating the correct aircraft (if id is provided in body)
   if (bodyId && bodyId !== aircraftId) {

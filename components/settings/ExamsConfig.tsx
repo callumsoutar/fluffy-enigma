@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Edit, Archive, AlertCircle, FileText, ChevronDown, ChevronRight, GraduationCap } from "lucide-react";
+import { Plus, Edit, Archive, AlertCircle, FileText, ChevronDown, ChevronRight, GraduationCap, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Exam, ExamFormData } from "@/lib/types/exam";
 import type { Syllabus } from "@/lib/types/syllabus";
@@ -39,6 +39,7 @@ export default function ExamsConfig() {
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
@@ -204,7 +205,14 @@ export default function ExamsConfig() {
     }));
   };
 
-  const groupedExams = exams.reduce((groups, exam) => {
+  const filteredExams = exams.filter((exam) => {
+    return (
+      exam.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      exam.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
+
+  const groupedExams = filteredExams.reduce((groups, exam) => {
     const key = exam.syllabus_id || "no-syllabus";
     if (!groups[key]) {
       groups[key] = [];
@@ -243,15 +251,27 @@ export default function ExamsConfig() {
       )}
 
       {/* Actions Bar */}
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-slate-500">
-          {exams.length} {exams.length === 1 ? "exam" : "exams"} total
+      <div className="flex items-center gap-2 mb-6 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/80">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <Input
+            placeholder="Search exams..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-10 pl-10 bg-white border-slate-200 rounded-xl shadow-none focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500 transition-all border-none"
+          />
         </div>
+
+        <div className="h-6 w-px bg-slate-200 mx-1" />
+
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="bg-indigo-600 hover:bg-indigo-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Exam
+            <Button 
+              onClick={resetForm} 
+              className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] whitespace-nowrap font-semibold border-none"
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add New
             </Button>
           </DialogTrigger>
           <DialogContent

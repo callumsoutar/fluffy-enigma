@@ -156,7 +156,9 @@ export async function GET(request: NextRequest) {
   for (const inv of invoices ?? []) {
     const totalAmount = toNumber(inv.total_amount)
     const invoiceNumber = inv.invoice_number ?? inv.id.slice(0, 8)
-    const reference = inv.reference ? `${invoiceNumber} · ${inv.reference}` : invoiceNumber
+    // Clean up auto-generated booking references that look bad (Booking <uuid> check-in)
+    const isBookingRef = inv.reference?.startsWith('Booking ') && inv.reference?.includes(' check-in')
+    const reference = (inv.reference && !isBookingRef) ? `${invoiceNumber} · ${inv.reference}` : invoiceNumber
     statementEntries.push({
       date: inv.issue_date,
       reference,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { GraduationCap, Award, FileText, Target, Trophy, BookOpen } from "lucide-react";
+import { GraduationCap, Award, FileText, Trophy, BookOpen } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import ExperienceTypesConfig from "./ExperienceTypesConfig";
 import SyllabusConfig from "./SyllabusConfig";
@@ -15,7 +15,6 @@ const trainingTabs = [
   { id: "lessons", label: "Lessons", icon: BookOpen },
   { id: "exams", label: "Exams", icon: FileText },
   { id: "certifications", label: "Certifications", icon: Award },
-  { id: "progress", label: "Progress Tracking", icon: Target },
 ];
 
 export function TrainingTab() {
@@ -66,16 +65,6 @@ export function TrainingTab() {
 
           <Tabs.Content value="certifications" className="outline-none">
             <EndorsementsConfig />
-          </Tabs.Content>
-
-          <Tabs.Content value="progress" className="outline-none">
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Target className="w-12 h-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Progress Tracking</h3>
-              <p className="text-sm text-gray-500 max-w-md">
-                Configure how student progress is tracked and reported. This feature is coming soon.
-              </p>
-            </div>
           </Tabs.Content>
         </div>
       </Tabs.Root>

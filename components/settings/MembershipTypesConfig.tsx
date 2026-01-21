@@ -339,20 +339,26 @@ export function MembershipTypesConfig() {
       <div className="h-[650px] flex gap-6">
         {/* Left side - List */}
         <div className="w-1/2 flex flex-col">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-2 mb-6 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/80">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
               <Input
                 placeholder="Search membership types..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="h-10 pl-10 bg-white border-slate-200 rounded-xl shadow-none focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500 transition-all border-none"
               />
             </div>
+
+            <div className="h-6 w-px bg-slate-200 mx-1" />
+
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={resetAddForm} className="bg-indigo-600 hover:bg-indigo-700">
-                  <Plus className="w-4 h-4 mr-2" />
+                <Button 
+                  onClick={resetAddForm} 
+                  className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] whitespace-nowrap font-semibold border-none"
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
                   Add New
                 </Button>
               </DialogTrigger>
@@ -721,7 +727,7 @@ export function MembershipTypesConfig() {
                 <Button
                   onClick={handleEdit}
                   disabled={saving || !editFormData.name.trim() || !editFormData.code.trim() || !editFormData.duration_months}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700"
+                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] font-semibold border-none"
                 >
                   {saving ? "Saving..." : "Save Changes"}
                 </Button>

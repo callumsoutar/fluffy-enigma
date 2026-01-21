@@ -1,10 +1,12 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { DollarSign, Loader2 } from "lucide-react"
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
 import type { MemberWithRelations } from "@/lib/types/members"
 import type { AccountStatementEntry, AccountStatementResponse } from "@/lib/types/account-statement"
 
@@ -51,6 +53,7 @@ async function fetchAccountStatement(memberId: string): Promise<AccountStatement
 }
 
 export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
+  const router = useRouter()
   const statementQuery = useQuery({
     queryKey: ["account-statement", memberId],
     queryFn: () => fetchAccountStatement(memberId),
@@ -134,11 +137,20 @@ export function MemberAccountTab({ memberId, member }: MemberAccountTabProps) {
                 <TableBody>
                   {paginated.map((entry, idx) => {
                     const isOpening = entry.entry_type === "opening_balance"
+                    const isInvoice = entry.entry_type === "invoice"
                     const isDebit = entry.amount > 0
                     return (
                       <TableRow
                         key={`${entry.entry_id}-${idx}`}
-                        className={isOpening ? "bg-blue-50 font-semibold" : "hover:bg-gray-50"}
+                        className={cn(
+                          isOpening ? "bg-blue-50 font-semibold" : "hover:bg-gray-50",
+                          isInvoice && "cursor-pointer"
+                        )}
+                        onClick={() => {
+                          if (isInvoice) {
+                            router.push(`/invoices/${entry.entry_id}`)
+                          }
+                        }}
                       >
                         <TableCell className="whitespace-nowrap">{formatDate(entry.date)}</TableCell>
                         <TableCell className="whitespace-nowrap font-medium">

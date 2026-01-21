@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Edit, Trash2, AlertCircle, Plane } from "lucide-react";
+import { Plus, Edit, Trash2, AlertCircle, Plane, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AircraftType } from "@/lib/types/aircraft";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ export function AircraftTypesConfig() {
   const [aircraftTypes, setAircraftTypes] = useState<AircraftType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingAircraftType, setEditingAircraftType] = useState<AircraftType | null>(null);
@@ -160,6 +161,14 @@ export function AircraftTypesConfig() {
     setIsEditDialogOpen(true);
   };
 
+  const filteredTypes = aircraftTypes.filter((type) => {
+    return (
+      type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      type.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      type.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
+
   if (loading) {
     return (
       <div className="space-y-6 max-w-4xl">
@@ -190,15 +199,27 @@ export function AircraftTypesConfig() {
       )}
 
       {/* Actions Bar */}
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-slate-500">
-          {aircraftTypes.length} aircraft {aircraftTypes.length === 1 ? "type" : "types"}
+      <div className="flex items-center gap-2 mb-6 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/80">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <Input
+            placeholder="Search aircraft types..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-10 pl-10 bg-white border-slate-200 rounded-xl shadow-none focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500 transition-all border-none"
+          />
         </div>
+
+        <div className="h-6 w-px bg-slate-200 mx-1" />
+
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="bg-indigo-600 hover:bg-indigo-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Aircraft Type
+            <Button 
+              onClick={resetForm} 
+              className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] whitespace-nowrap font-semibold border-none"
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add New
             </Button>
           </DialogTrigger>
           <DialogContent
@@ -307,12 +328,14 @@ export function AircraftTypesConfig() {
       </div>
 
       {/* Table */}
-      {aircraftTypes.length === 0 ? (
+      {filteredTypes.length === 0 ? (
         <div className="text-center py-16 bg-slate-50 rounded-xl border border-dashed border-slate-300">
           <Plane className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-          <p className="text-slate-900 font-semibold mb-2">No aircraft types configured</p>
+          <p className="text-slate-900 font-semibold mb-2">
+            {searchTerm ? "No matching aircraft types" : "No aircraft types configured"}
+          </p>
           <p className="text-sm text-slate-500 mb-4">
-            Click &quot;Add Aircraft Type&quot; to get started.
+            {searchTerm ? "Try a different search term" : "Click \"Add New\" to get started."}
           </p>
         </div>
       ) : (
@@ -326,7 +349,7 @@ export function AircraftTypesConfig() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {aircraftTypes.map((type) => (
+              {filteredTypes.map((type) => (
                 <TableRow key={type.id} className="hover:bg-slate-50">
                   <TableCell className="font-medium text-slate-900">
                     <div>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantContext } from '@/lib/auth/tenant'
+import { getEffectiveSettings } from '@/lib/settings'
 
 type InvoicingSettingsResponse = {
   schoolName: string
@@ -12,33 +13,20 @@ type InvoicingSettingsResponse = {
   paymentTerms: string
 }
 
-function coerceSettingValue(v: unknown): string {
-  if (v === null || v === undefined) return ''
-  if (typeof v === 'string') {
-    // Some settings may be stored as JSON-encoded strings (e.g. "\"Line 1\\nLine 2\"")
-    try {
-      const parsed = JSON.parse(v)
-      if (typeof parsed === 'string') return parsed
-      return String(parsed)
-    } catch {
-      return v
-    }
-  }
-  return String(v)
-}
-
 /**
  * GET /api/settings/invoicing
  *
  * Fetch commonly-used settings for invoice rendering (billing header + terms/footer).
+ * Combines tenant profile data (name, address, etc.) with invoice-specific settings.
  * Requires authentication and tenant membership.
  */
 export async function GET() {
   const supabase = await createClient()
   
-  // Get tenant context (includes auth check)
+  // Get tenant context (includes auth check and tenant_id)
+  let tenantContext
   try {
-    await getTenantContext(supabase)
+    tenantContext = await getTenantContext(supabase)
   } catch (err) {
     const error = err as { code?: string }
     if (error.code === 'UNAUTHORIZED') {
@@ -50,43 +38,39 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to resolve tenant' }, { status: 500 })
   }
 
-  // NOTE: we keep this intentionally narrow (only what invoice rendering needs)
-  const keys = [
-    'school_name',
-    'billing_address',
-    'gst_number',
-    'contact_phone',
-    'contact_email',
-    'invoice_footer_message',
-    'payment_terms_message',
-  ]
+  const { tenantId } = tenantContext
 
-  const { data: settings, error } = await supabase
-    .from('settings')
-    .select('category, setting_key, setting_value, data_type')
-    .in('category', ['general', 'invoicing'])
-    .in('setting_key', keys)
+  // Fetch tenant profile (contains school name, billing address, GST number, contact info)
+  const { data: tenant, error: tenantError } = await supabase
+    .from('tenants')
+    .select('name, billing_address, gst_number, contact_phone, contact_email')
+    .eq('id', tenantId)
+    .single()
 
-  if (error) {
-    console.error('Error fetching invoice settings:', error)
-    return NextResponse.json({ error: 'Failed to fetch invoice settings' }, { status: 500 })
+  if (tenantError) {
+    console.error('Error fetching tenant profile:', tenantError)
+    return NextResponse.json({ error: 'Failed to fetch tenant profile' }, { status: 500 })
   }
 
-  const map: Record<string, string> = {}
-  for (const row of settings || []) {
-    const r = row as unknown as { setting_key?: string; setting_value?: unknown }
-    if (!r.setting_key) continue
-    map[r.setting_key] = coerceSettingValue(r.setting_value)
-  }
+  // Fetch tenant settings (contains invoice footer and payment terms messages)
+  const { data: tenantSettings } = await supabase
+    .from('tenant_settings')
+    .select('settings')
+    .eq('tenant_id', tenantId)
+    .single()
 
+  // Get effective settings (defaults + overrides)
+  const settings = getEffectiveSettings(tenantSettings?.settings)
+
+  // Combine tenant profile + settings for invoice rendering
   const response: InvoicingSettingsResponse = {
-    schoolName: map.school_name || 'Flight School',
-    billingAddress: map.billing_address || '',
-    gstNumber: map.gst_number || '',
-    contactPhone: map.contact_phone || '',
-    contactEmail: map.contact_email || '',
-    invoiceFooter: map.invoice_footer_message || 'Thank you for your business.',
-    paymentTerms: map.payment_terms_message || 'Payment terms: Net 30 days.',
+    schoolName: tenant?.name || 'Flight School',
+    billingAddress: tenant?.billing_address || '',
+    gstNumber: tenant?.gst_number || '',
+    contactPhone: tenant?.contact_phone || '',
+    contactEmail: tenant?.contact_email || '',
+    invoiceFooter: settings.invoice_footer_message || 'Thank you for your business.',
+    paymentTerms: settings.payment_terms_message || 'Payment is due within 7 days of receipt.',
   }
 
   return NextResponse.json({ settings: response })

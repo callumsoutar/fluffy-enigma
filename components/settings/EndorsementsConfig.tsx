@@ -22,7 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Edit, Archive, AlertCircle, Award } from "lucide-react";
+import { Plus, Edit, Archive, AlertCircle, Award, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Endorsement } from "@/lib/types/database";
 
@@ -36,6 +36,7 @@ export default function EndorsementsConfig() {
   const [endorsements, setEndorsements] = useState<Endorsement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingEndorsement, setEditingEndorsement] = useState<Endorsement | null>(null);
@@ -161,6 +162,13 @@ export default function EndorsementsConfig() {
     setIsEditDialogOpen(true);
   };
 
+  const filteredEndorsements = endorsements.filter((endorsement) => {
+    return (
+      endorsement.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      endorsement.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
+
   if (loading) {
     return (
       <div className="space-y-6 max-w-4xl">
@@ -191,15 +199,27 @@ export default function EndorsementsConfig() {
       )}
 
       {/* Actions Bar */}
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-slate-500">
-          {endorsements.length} endorsement{endorsements.length === 1 ? "" : "s"}
+      <div className="flex items-center gap-2 mb-6 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/80">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <Input
+            placeholder="Search endorsements..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-10 pl-10 bg-white border-slate-200 rounded-xl shadow-none focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500 transition-all border-none"
+          />
         </div>
+
+        <div className="h-6 w-px bg-slate-200 mx-1" />
+
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="bg-indigo-600 hover:bg-indigo-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Endorsement
+            <Button 
+              onClick={resetForm} 
+              className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] whitespace-nowrap font-semibold border-none"
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add New
             </Button>
           </DialogTrigger>
           <DialogContent
@@ -311,12 +331,14 @@ export default function EndorsementsConfig() {
       </div>
 
       {/* Table */}
-      {endorsements.length === 0 ? (
+      {filteredEndorsements.length === 0 ? (
         <div className="text-center py-16 bg-slate-50 rounded-xl border border-dashed border-slate-300">
           <Award className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-          <p className="text-slate-900 font-semibold mb-2">No endorsements configured</p>
+          <p className="text-slate-900 font-semibold mb-2">
+            {searchTerm ? "No matching endorsements" : "No endorsements configured"}
+          </p>
           <p className="text-sm text-slate-500 mb-4">
-            Click &quot;Add Endorsement&quot; to get started.
+            {searchTerm ? "Try a different search term" : "Click \"Add New\" to get started."}
           </p>
         </div>
       ) : (
@@ -330,7 +352,7 @@ export default function EndorsementsConfig() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {endorsements.map((endorsement) => (
+              {filteredEndorsements.map((endorsement) => (
                 <TableRow key={endorsement.id} className="hover:bg-slate-50">
                   <TableCell className="font-medium text-slate-900">
                     <div>

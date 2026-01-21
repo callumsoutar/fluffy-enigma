@@ -246,7 +246,7 @@ export default function AircraftDetailPage() {
   const imageUrl = aircraft.aircraft_image_url
   const status = aircraft.status || "active"
   const isActive = status.toLowerCase() === "active"
-  const totalHours = aircraft.total_hours || 0
+  const totalHours = aircraft.total_time_in_service || 0
 
   // Calculate statistics
   const activeObservations = observations.filter((o) => !o.resolved_at).length
@@ -255,8 +255,8 @@ export default function AircraftDetailPage() {
     if (c.current_due_date) {
       return new Date(c.current_due_date) < new Date()
     }
-    if (c.current_due_hours && aircraft.total_hours) {
-      return aircraft.total_hours >= c.current_due_hours
+    if (c.current_due_hours && aircraft.total_time_in_service) {
+      return aircraft.total_time_in_service >= c.current_due_hours
     }
     return false
   }).length

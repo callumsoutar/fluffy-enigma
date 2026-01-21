@@ -16,6 +16,10 @@ import {
   IconReceipt,
   IconUserPlus,
   IconKey,
+  IconShieldCheck,
+  IconRefresh,
+  IconCheck,
+  IconHistory,
 } from "@tabler/icons-react"
 import Link from "next/link"
 
@@ -56,6 +60,7 @@ import { MemberPilotDetails } from "@/components/members/member-pilot-details"
 import { MemberContactDetails } from "@/components/members/member-contact-details"
 import { MemberMemberships } from "@/components/members/member-memberships"
 import { MemberAccountTab } from "@/components/members/member-account-tab"
+import { MemberUpcomingBookingsTable } from "@/components/members/member-upcoming-bookings-table"
 import { MemberFlightHistoryTab } from "@/components/members/member-flight-history-tab"
 import { MemberTrainingTab } from "@/components/members/member-training-tab"
 import { MemberHistoryTab } from "@/components/members/member-history-tab"
@@ -124,6 +129,9 @@ export default function MemberDetailPage() {
   const [isPilotSaving, setIsPilotSaving] = React.useState(false)
   const pilotUndoRef = React.useRef<(() => void) | null>(null)
 
+  const [isConfirming, setIsConfirming] = React.useState(false)
+  const [isResettingPassword, setIsResettingPassword] = React.useState(false)
+
   const {
     data: member,
     isLoading,
@@ -134,6 +142,53 @@ export default function MemberDetailPage() {
     queryFn: () => fetchMember(memberId),
     enabled: !!memberId,
   })
+
+  // ... (rest of the code)
+
+  async function confirmUser() {
+    if (!isStaffViewer || isConfirming || !member?.is_auth_user) return
+    setIsConfirming(true)
+    const toastId = toast.loading("Confirming user...")
+    try {
+      const res = await fetch(`/api/members/${memberId}/confirm`, {
+        method: "POST",
+      })
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error || "Failed to confirm user")
+      }
+
+      toast.success("User confirmed successfully", { id: toastId })
+      await queryClient.invalidateQueries({ queryKey: ["member", memberId] })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to confirm user", { id: toastId })
+    } finally {
+      setIsConfirming(false)
+    }
+  }
+
+  async function resetPassword() {
+    if (!isStaffViewer || isResettingPassword || !member?.is_auth_user) return
+    setIsResettingPassword(true)
+    const toastId = toast.loading("Sending reset email...")
+    try {
+      const res = await fetch(`/api/members/${memberId}/reset-password`, {
+        method: "POST",
+      })
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error || "Failed to send reset email")
+      }
+
+      toast.success("Password reset email sent", { id: toastId })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send reset email", { id: toastId })
+    } finally {
+      setIsResettingPassword(false)
+    }
+  }
 
   // Update underline position when tab changes and scroll active tab into view
   React.useEffect(() => {
@@ -212,10 +267,11 @@ export default function MemberDetailPage() {
     { id: "contact", label: "Contact", icon: IconMail },
     { id: "pilot", label: "Pilot Details", icon: IconUser },
     { id: "memberships", label: "Memberships", icon: IconUsers },
-    { id: "account", label: "Account", icon: IconCreditCard },
-    { id: "flights", label: "Flight Management", icon: IconPlane },
+    { id: "finances", label: "Finances", icon: IconCreditCard },
+    { id: "flights", label: "Bookings", icon: IconCalendar },
+    { id: "logbook", label: "Logbook", icon: IconHistory },
     { id: "training", label: "Training", icon: IconChartBar },
-    { id: "permissions", label: "Permissions", icon: IconUser },
+    { id: "account", label: "Account", icon: IconUser },
   ]
 
   if (isLoading) {
@@ -360,31 +416,15 @@ export default function MemberDetailPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                         <h1 className="text-2xl font-bold text-gray-900 break-words">{fullName}</h1>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge
-                            className={`rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ${
-                              isActive 
-                                ? "bg-green-100 text-green-700 border-0" 
-                                : "bg-red-100 text-red-700 border-0"
-                            }`}
-                          >
-                            {isActive ? "Active" : "Inactive"}
-                          </Badge>
-                          <Badge
-                            className={`rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ${
-                              member.is_auth_user 
-                                ? "bg-blue-100 text-blue-700 border-0" 
-                                : "bg-orange-100 text-orange-700 border-0"
-                            }`}
-                          >
-                            {member.is_auth_user ? "Portal Access" : "No Portal Access"}
-                          </Badge>
-                          {memberRole && (
-                            <Badge className="rounded-md px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border-0 whitespace-nowrap">
-                              {memberRole}
-                            </Badge>
-                          )}
-                        </div>
+                        <Badge
+                          className={`rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ${
+                            isActive 
+                              ? "bg-green-100 text-green-700 border-0" 
+                              : "bg-red-100 text-red-700 border-0"
+                          }`}
+                        >
+                          {isActive ? "Active" : "Inactive"}
+                        </Badge>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                         {member.email && (
@@ -419,48 +459,6 @@ export default function MemberDetailPage() {
                           <IconReceipt className="h-4 w-4 mr-2" />
                           New Invoice
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {isMobile ? (
-                          <>
-                            <DropdownMenuLabel className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                              <IconUser className="h-3.5 w-3.5" />
-                              Account
-                            </DropdownMenuLabel>
-                            <DropdownMenuItem 
-                              onClick={inviteUser} 
-                              disabled={isInviting || member.is_auth_user}
-                            >
-                              <IconUserPlus className="h-4 w-4 mr-2" />
-                              {member.is_auth_user ? "Already Invited" : "Invite User"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem disabled={!member.is_auth_user}>
-                              <IconKey className="h-4 w-4 mr-2" />
-                              Reset Password
-                            </DropdownMenuItem>
-                          </>
-                        ) : (
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>
-                              <IconUser className="h-4 w-4 mr-2" />
-                              Account
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuPortal>
-                              <DropdownMenuSubContent>
-                                <DropdownMenuItem 
-                                  onClick={inviteUser} 
-                                  disabled={isInviting || member.is_auth_user}
-                                >
-                                  <IconUserPlus className="h-4 w-4 mr-2" />
-                                  {member.is_auth_user ? "Already Invited" : "Invite User"}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled={!member.is_auth_user}>
-                                  <IconKey className="h-4 w-4 mr-2" />
-                                  Reset Password
-                                </DropdownMenuItem>
-                              </DropdownMenuSubContent>
-                            </DropdownMenuPortal>
-                          </DropdownMenuSub>
-                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <Button
@@ -600,119 +598,185 @@ export default function MemberDetailPage() {
 
                       {/* Tab Content */}
                       <div className="w-full p-4 sm:p-6">
-                        <Tabs.Content value="permissions">
+                        <Tabs.Content value="account">
                           <div className="space-y-6">
+                            {/* Account Information */}
                             <Card className="shadow-sm border border-border/50 bg-card">
                               <CardContent className="p-4 sm:p-6">
-                                <div className="mb-5">
-                                  <h2 className="text-lg font-semibold text-gray-900">
-                                    Permissions & Instructor Profile
-                                  </h2>
+                                <div className="mb-6">
+                                  <h2 className="text-lg font-semibold text-gray-900">Account Information</h2>
                                   <p className="text-sm text-muted-foreground">
-                                    Keep roles and staff profiles explicit and intentional.
+                                    Manage portal access and system roles.
                                   </p>
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                  {/* Role */}
+                                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                                  {/* Portal Access Status */}
                                   <div className="rounded-xl border border-border/60 bg-white p-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div>
-                                        <div className="text-sm font-semibold text-gray-900">Primary role</div>
-                                        <div className="mt-1 text-sm text-muted-foreground">
-                                          Controls system access. Changing role has no side effects.
-                                        </div>
-                                      </div>
+                                    <div className="text-sm font-semibold text-gray-900 mb-4">Portal Access</div>
+                                    <div className="flex items-center gap-3">
+                                      <Badge
+                                        className={`rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ${
+                                          member.is_auth_user 
+                                            ? "bg-blue-100 text-blue-700 border-0" 
+                                            : "bg-orange-100 text-orange-700 border-0"
+                                        }`}
+                                      >
+                                        {member.is_auth_user ? "Active Access" : "No Access"}
+                                      </Badge>
+                                      <span className="text-sm text-muted-foreground">
+                                        {member.is_auth_user 
+                                          ? (member.auth_user_confirmed_at 
+                                              ? `Confirmed on ${formatDate(member.auth_user_confirmed_at)}`
+                                              : "Waiting for confirmation")
+                                          : "User has not been invited to the portal."}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Role Selection */}
+                                  <div className="rounded-xl border border-border/60 bg-white p-4">
+                                    <div className="flex items-start justify-between gap-3 mb-4">
+                                      <div className="text-sm font-semibold text-gray-900">System Role</div>
                                       {memberRole && (
-                                        <Badge className="rounded-md px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border-0">
+                                        <Badge className="rounded-md px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border-0 whitespace-nowrap">
                                           {memberRole}
                                         </Badge>
                                       )}
                                     </div>
-
-                                    <div className="mt-4">
-                                      <Select
-                                        value={memberRole ?? "member"}
-                                        onValueChange={(value) => updateMemberRole(value as UserRole)}
-                                        disabled={!isStaffViewer || isUpdatingRole}
-                                      >
-                                        <SelectTrigger className="w-full h-10 bg-white border-gray-300">
-                                          <SelectValue placeholder="Select role" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {ROLE_OPTIONS.map((opt) => (
-                                            <SelectItem key={opt.value} value={opt.value}>
-                                              {opt.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                      {!isStaffViewer && (
-                                        <div className="mt-2 text-xs text-muted-foreground">
-                                          Only admins/owners can change roles.
-                                        </div>
-                                      )}
-                                      {roleUpdateError && (
-                                        <div className="mt-2 text-xs text-red-700">{roleUpdateError}</div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Instructor */}
-                                  <div className="rounded-xl border border-border/60 bg-white p-4">
-                                    <div className="text-sm font-semibold text-gray-900">
-                                      Instructor profile
-                                    </div>
-                                    <div className="mt-1 text-sm text-muted-foreground">
-                                      Domain profile for rostering and instructor operational data.
-                                    </div>
-
-                                    <div className="mt-4">
-                                      {hasInstructorProfile ? (
-                                        <div className="text-sm text-green-800">
-                                          Instructor profile configured
-                                          {memberRole && (
-                                            <span className="text-gray-600"> (primary role: {memberRole})</span>
-                                          )}
-                                        </div>
-                                      ) : isInstructorRole ? (
-                                        <div className="text-sm text-amber-800">
-                                          This user is marked as an Instructor but does not yet have an Instructor profile.
-                                        </div>
-                                      ) : (
-                                        <div className="text-sm text-gray-700">
-                                          No instructor profile configured yet.
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                                      {!hasInstructorProfile ? (
-                                        <Button
-                                          onClick={() => setShowCreateInstructorDialog(true)}
-                                          disabled={!isStaffViewer}
-                                          className="bg-amber-600 hover:bg-amber-700 text-white"
-                                        >
-                                          Create Instructor Profile
-                                        </Button>
-                                      ) : (
-                                        <Button
-                                          variant="outline"
-                                          onClick={() => router.push(`/staff/instructors/${member.instructor!.id}`)}
-                                        >
-                                          Edit Instructor Profile
-                                        </Button>
-                                      )}
-                                      {!isStaffViewer && (
-                                        <div className="text-xs text-muted-foreground">
-                                          Only admins/owners can create instructor profiles.
-                                        </div>
-                                      )}
-                                    </div>
+                                    <Select
+                                      value={memberRole ?? "member"}
+                                      onValueChange={(value) => updateMemberRole(value as UserRole)}
+                                      disabled={!isStaffViewer || isUpdatingRole}
+                                    >
+                                      <SelectTrigger className="w-full h-10 bg-white border-gray-300">
+                                        <SelectValue placeholder="Select role" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {ROLE_OPTIONS.map((opt) => (
+                                          <SelectItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {!isStaffViewer && (
+                                      <p className="mt-2 text-xs text-muted-foreground">
+                                        Only admins/owners can change roles.
+                                      </p>
+                                    )}
+                                    {roleUpdateError && (
+                                      <p className="mt-2 text-xs text-red-700">{roleUpdateError}</p>
+                                    )}
                                   </div>
                                 </div>
                               </CardContent>
                             </Card>
+
+                            {/* Account Actions */}
+                            {isStaffViewer && (
+                              <Card className="shadow-sm border border-border/50 bg-card">
+                                <CardContent className="p-4 sm:p-6">
+                                  <div className="mb-6">
+                                    <h2 className="text-lg font-semibold text-gray-900">Account Actions</h2>
+                                    <p className="text-sm text-muted-foreground">
+                                      Administrative actions for user account management.
+                                    </p>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-3">
+                                    <Button
+                                      variant="outline"
+                                      className="gap-2"
+                                      onClick={inviteUser}
+                                      disabled={isInviting || member.is_auth_user}
+                                    >
+                                      <IconUserPlus className="h-4 w-4" />
+                                      {member.is_auth_user ? "Already Invited" : "Send Invitation"}
+                                    </Button>
+
+                                    <Button
+                                      variant="outline"
+                                      className="gap-2"
+                                      onClick={resetPassword}
+                                      disabled={isResettingPassword || !member.is_auth_user}
+                                    >
+                                      <IconKey className="h-4 w-4" />
+                                      Reset Password
+                                    </Button>
+
+                                    {!member.auth_user_confirmed_at && member.is_auth_user && (
+                                      <Button
+                                        variant="outline"
+                                        className="gap-2 border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300"
+                                        onClick={confirmUser}
+                                        disabled={isConfirming}
+                                      >
+                                        <IconShieldCheck className="h-4 w-4" />
+                                        Confirm User Manually
+                                      </Button>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+
+                            {/* Instructor Profile Configuration */}
+                            {memberRole && ["instructor", "admin", "owner"].includes(memberRole) && (
+                              <Card className="shadow-sm border border-border/50 bg-card">
+                                <CardContent className="p-4 sm:p-6">
+                                  <div className="mb-6">
+                                    <h2 className="text-lg font-semibold text-gray-900">Instructor Profile</h2>
+                                    <p className="text-sm text-muted-foreground">
+                                      Domain profile for rostering and operational data.
+                                    </p>
+                                  </div>
+
+                                  <div className="rounded-xl border border-border/60 bg-white p-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                      <div>
+                                        {hasInstructorProfile ? (
+                                          <div className="text-sm font-medium text-green-800 flex items-center gap-2">
+                                            <IconCheck className="h-4 w-4" />
+                                            Instructor profile configured
+                                          </div>
+                                        ) : (
+                                          <div className="text-sm font-medium text-amber-800">
+                                            No instructor profile found.
+                                          </div>
+                                        )}
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                          {hasInstructorProfile 
+                                            ? "All operational details are managed in the staff directory."
+                                            : "This user has a staff role but needs a profile for operational use."}
+                                        </p>
+                                      </div>
+
+                                      <div className="flex-shrink-0">
+                                        {!hasInstructorProfile ? (
+                                          <Button
+                                            onClick={() => setShowCreateInstructorDialog(true)}
+                                            disabled={!isStaffViewer}
+                                            className="bg-amber-600 hover:bg-amber-700 text-white w-full sm:w-auto"
+                                          >
+                                            Create Instructor Profile
+                                          </Button>
+                                        ) : (
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => router.push(`/staff/instructors/${member.instructor!.id}`)}
+                                            className="w-full sm:w-auto gap-2"
+                                          >
+                                            <IconRefresh className="h-4 w-4" />
+                                            Edit Operational Profile
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
                           </div>
                         </Tabs.Content>
 
@@ -741,12 +805,26 @@ export default function MemberDetailPage() {
                           <MemberMemberships memberId={memberId} />
                         </Tabs.Content>
 
-                        <Tabs.Content value="account">
+                        <Tabs.Content value="finances">
                           <MemberAccountTab memberId={memberId} member={member} />
                         </Tabs.Content>
 
                         <Tabs.Content value="flights">
-                          <MemberFlightHistoryTab memberId={memberId} />
+                          <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-lg font-semibold text-slate-900">Upcoming Bookings</h3>
+                            </div>
+                            <MemberUpcomingBookingsTable memberId={memberId} />
+                          </div>
+                        </Tabs.Content>
+
+                        <Tabs.Content value="logbook">
+                          <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-lg font-semibold text-slate-900">Flight History</h3>
+                            </div>
+                            <MemberFlightHistoryTab memberId={memberId} />
+                          </div>
                         </Tabs.Content>
 
                         <Tabs.Content value="training">

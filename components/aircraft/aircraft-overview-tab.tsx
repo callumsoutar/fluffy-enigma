@@ -75,7 +75,7 @@ export function AircraftOverviewTab({
   activeObservations,
   overdueComponents,
 }: OverviewTabProps) {
-  const totalHours = aircraft.total_hours || 0
+  const totalHours = aircraft.total_time_in_service || 0
   const currentHobbs = aircraft.current_hobbs || 0
   const currentTach = aircraft.current_tach || 0
   const recentFlights = flights.slice(0, 5)

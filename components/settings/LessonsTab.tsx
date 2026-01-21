@@ -340,12 +340,12 @@ function LessonModal({
                   </div>
 
                   <div className="grid gap-5 sm:grid-cols-2">
-                    <div>
+                    <div className="flex flex-col">
                       <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
                         SYLLABUS STAGE
                       </label>
                       <Select value={formValues.syllabusStage} onValueChange={(value) => updateField('syllabusStage', value as SyllabusStage | "none")}>
-                        <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                        <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
                           <SelectValue placeholder="Select a stage" />
                         </SelectTrigger>
                         <SelectContent>
@@ -359,34 +359,40 @@ function LessonModal({
                       </Select>
                     </div>
 
-                    <div className="flex items-center h-full pt-5">
-                      <div className="flex h-full items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 w-full">
-                        <Switch
-                          checked={formValues.isRequired}
-                          onCheckedChange={(checked) => updateField('isRequired', checked)}
-                          id="required"
-                        />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <Label htmlFor="required" className="text-xs font-semibold text-slate-900 leading-none cursor-pointer">
-                              Required
-                            </Label>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger type="button">
-                                  <HelpCircle className="w-3 h-3 text-slate-400" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="text-[11px] max-w-[200px]">
-                                    Required lessons must be completed before progressing.
-                                  </p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                    <div className="flex flex-col">
+                      <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400 opacity-0 pointer-events-none">
+                        Required
+                      </label>
+                      <div className="flex items-center min-h-[40px]">
+                        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 w-full">
+                          <Switch
+                            checked={formValues.isRequired}
+                            onCheckedChange={(checked) => updateField('isRequired', checked)}
+                            id="required"
+                            className="flex-shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <Label htmlFor="required" className="text-xs font-semibold text-slate-900 leading-none cursor-pointer">
+                                Required
+                              </Label>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger type="button">
+                                    <HelpCircle className="w-3 h-3 text-slate-400" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-[11px] max-w-[200px]">
+                                      Required lessons must be completed before progressing.
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                              Mandatory for completion.
+                            </p>
                           </div>
-                          <p className="text-[10px] text-slate-500 mt-1 leading-snug">
-                            Mandatory for completion.
-                          </p>
                         </div>
                       </div>
                     </div>
@@ -610,8 +616,14 @@ export default function LessonsTab() {
             {syllabusLoading ? (
               <div className="text-center py-8 text-slate-400 text-xs">Loading syllabi...</div>
             ) : syllabi.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-xs border border-dashed rounded-xl">
-                No syllabi found.
+              <div className="flex flex-col items-center justify-center py-12 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/30">
+                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                  <GraduationCap className="w-5 h-5 text-slate-400" />
+                </div>
+                <h4 className="text-sm font-semibold text-slate-900 mb-1">No Syllabi Found</h4>
+                <p className="text-xs text-slate-500 max-w-[200px] leading-relaxed">
+                  Create a training program (syllabus) first to start adding lessons.
+                </p>
               </div>
             ) : (
               syllabi.map((syllabus) => (
@@ -672,7 +684,7 @@ export default function LessonsTab() {
                   setEditingLesson(null);
                   setLessonModalOpen(true);
                 }} 
-                className="bg-indigo-600 hover:bg-indigo-700"
+                className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] whitespace-nowrap font-semibold border-none"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Lesson
@@ -683,13 +695,27 @@ export default function LessonsTab() {
           <div className="flex-1">
             {!selectedSyllabus ? (
               <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-[24px] bg-slate-50/30">
-                <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                  <GraduationCap className="w-6 h-6 text-slate-400" />
-                </div>
-                <h4 className="text-sm font-bold text-slate-900 mb-1">Select a Syllabus</h4>
-                <p className="text-xs text-slate-500 max-w-[240px]">
-                  Choose a syllabus from the left to manage its training lessons.
-                </p>
+                {syllabi.length === 0 ? (
+                  <>
+                    <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                      <BookOpen className="w-6 h-6 text-slate-400" />
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">Create a Syllabus First</h4>
+                    <p className="text-xs text-slate-500 max-w-[280px] leading-relaxed">
+                      To create lessons, you'll need to add a training program (syllabus) first. Navigate to the "Training Programs" tab to get started.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                      <GraduationCap className="w-6 h-6 text-slate-400" />
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">Select a Syllabus</h4>
+                    <p className="text-xs text-slate-500 max-w-[240px]">
+                      Choose a syllabus from the left to manage its training lessons.
+                    </p>
+                  </>
+                )}
               </div>
             ) : lessonsLoading ? (
               <div className="text-center py-20 text-slate-400 text-xs">Loading lessons...</div>
@@ -704,7 +730,7 @@ export default function LessonsTab() {
                 </p>
                 <Button 
                   onClick={() => setLessonModalOpen(true)} 
-                  className="bg-indigo-600 hover:bg-indigo-700"
+                  className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] whitespace-nowrap font-semibold border-none"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Lesson

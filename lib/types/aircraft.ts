@@ -25,12 +25,16 @@ export interface Aircraft {
   type: string
   model: string | null
   year_manufactured: number | null
-  total_hours: number | null
+  /**
+   * @deprecated Use total_time_in_service instead. This field has been removed from the database.
+   */
+  total_hours?: number | null
   /**
    * Authoritative persisted aircraft total time in service (TTIS).
    * Mutated only server-side via transactional deltas.
+   * Replaces the deprecated total_hours field.
    */
-  total_time_in_service?: number | null
+  total_time_in_service: number | null
   status: string | null
   notes: string | null
   created_at: string

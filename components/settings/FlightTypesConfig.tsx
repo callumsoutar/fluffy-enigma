@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Edit, Archive, AlertCircle, Plane } from "lucide-react";
+import { Plus, Edit, Archive, AlertCircle, Plane, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FlightType, InstructionType, FlightTypeFormData } from "@/lib/types/flight-types";
 
@@ -37,6 +37,7 @@ export function FlightTypesConfig() {
   const [flightTypes, setFlightTypes] = useState<FlightType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingFlightType, setEditingFlightType] = useState<FlightType | null>(null);
@@ -165,6 +166,14 @@ export function FlightTypesConfig() {
     setIsEditDialogOpen(true);
   };
 
+  const filteredTypes = flightTypes.filter((type) => {
+    return (
+      type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      type.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      type.instruction_type?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
+
   const instructionTypeOptions: { value: InstructionType; label: string }[] = [
     { value: "dual", label: "Dual" },
     { value: "solo", label: "Solo" },
@@ -201,15 +210,27 @@ export function FlightTypesConfig() {
       )}
 
       {/* Actions Bar */}
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-slate-500">
-          {flightTypes.length} flight {flightTypes.length === 1 ? "type" : "types"}
+      <div className="flex items-center gap-2 mb-6 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/80">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <Input
+            placeholder="Search flight types..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-10 pl-10 bg-white border-slate-200 rounded-xl shadow-none focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500 transition-all border-none"
+          />
         </div>
+
+        <div className="h-6 w-px bg-slate-200 mx-1" />
+
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="bg-indigo-600 hover:bg-indigo-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Flight Type
+            <Button 
+              onClick={resetForm} 
+              className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] whitespace-nowrap font-semibold border-none"
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add New
             </Button>
           </DialogTrigger>
           <DialogContent
@@ -348,12 +369,14 @@ export function FlightTypesConfig() {
       </div>
 
       {/* Table */}
-      {flightTypes.length === 0 ? (
+      {filteredTypes.length === 0 ? (
         <div className="text-center py-16 bg-slate-50 rounded-xl border border-dashed border-slate-300">
           <Plane className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-          <p className="text-slate-900 font-semibold mb-2">No flight types configured</p>
+          <p className="text-slate-900 font-semibold mb-2">
+            {searchTerm ? "No matching flight types" : "No flight types configured"}
+          </p>
           <p className="text-sm text-slate-500 mb-4">
-            Click &quot;Add Flight Type&quot; to get started.
+            {searchTerm ? "Try a different search term" : "Click \"Add New\" to get started."}
           </p>
         </div>
       ) : (
@@ -368,7 +391,7 @@ export function FlightTypesConfig() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {flightTypes.map((flightType) => (
+              {filteredTypes.map((flightType) => (
                 <TableRow key={flightType.id} className="hover:bg-slate-50">
                   <TableCell className="font-medium text-slate-900">
                     <div>

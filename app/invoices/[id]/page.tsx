@@ -120,8 +120,7 @@ export default function InvoiceDetailPage() {
     }))
   }, [isNewInvoice])
 
-  // Fetch invoice if editing
-  useEffect(() => {
+  const fetchInvoice = React.useCallback(() => {
     if (!invoiceId || isNewInvoice) return
     setLoading(true)
     fetch(`/api/invoices/${invoiceId}`)
@@ -139,6 +138,11 @@ export default function InvoiceDetailPage() {
         setLoading(false)
       })
   }, [invoiceId, isNewInvoice])
+
+  // Fetch invoice if editing
+  useEffect(() => {
+    fetchInvoice()
+  }, [fetchInvoice])
 
   // Fetch invoicing settings for invoice rendering (billing header + terms/footer)
   useEffect(() => {
@@ -963,6 +967,11 @@ export default function InvoiceDetailPage() {
           : invoice.user_id)
     ) || invoice.user_id
 
+  const refreshData = React.useCallback(() => {
+    fetchInvoice()
+    fetchItems()
+  }, [fetchInvoice, fetchItems])
+
   return (
     <SidebarProvider>
       <AppSidebar variant="inset" />
@@ -985,6 +994,7 @@ export default function InvoiceDetailPage() {
                       status={invoice.status}
                       settings={invoiceSettings}
                       bookingId={invoice.booking_id}
+                      onPaymentSuccess={refreshData}
                       invoice={{
                         invoiceNumber: invoice.invoice_number || `#${invoice.id.slice(0, 8)}`,
                         issueDate: invoice.issue_date,

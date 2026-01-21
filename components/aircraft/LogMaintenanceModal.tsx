@@ -103,8 +103,8 @@ const LogMaintenanceModal: React.FC<LogMaintenanceModalProps> = ({
             const { aircraft } = await res.json()
 
             // Set initial hours at visit to aircraft's current total hours
-            if (aircraft.total_hours) {
-              setHoursAtVisit(String(aircraft.total_hours))
+            if (aircraft.total_time_in_service) {
+              setHoursAtVisit(String(aircraft.total_time_in_service))
             }
           }
         } catch (err) {

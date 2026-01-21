@@ -44,7 +44,7 @@ const aircraftSchema = z.object({
   for_ato: z.boolean().optional(),
   prioritise_scheduling: z.boolean().optional(),
   aircraft_image_url: z.string().url("Invalid url").or(z.literal("")).or(z.null()).optional(),
-  total_hours: z.coerce.number().nullable().optional(),
+  // total_hours deprecated - now using server-managed total_time_in_service
   current_tach: z.coerce.number().nullable().optional(),
   current_hobbs: z.coerce.number().nullable().optional(),
   record_tacho: z.boolean().optional(),
@@ -67,7 +67,7 @@ type AircraftFormValues = {
   for_ato?: boolean
   prioritise_scheduling?: boolean
   aircraft_image_url?: string | null
-  total_hours?: number | null
+  // total_hours deprecated - now using server-managed total_time_in_service
   current_tach?: number | null
   current_hobbs?: number | null
   record_tacho?: boolean
@@ -198,7 +198,7 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
       for_ato: aircraft.for_ato ?? false,
       prioritise_scheduling: aircraft.prioritise_scheduling ?? false,
       aircraft_image_url: aircraft.aircraft_image_url || "",
-      total_hours: aircraft.total_hours ?? undefined,
+      // total_hours deprecated - now using server-managed total_time_in_service
       current_tach: aircraft.current_tach ?? undefined,
       current_hobbs: aircraft.current_hobbs ?? undefined,
       record_tacho: aircraft.record_tacho ?? false,
@@ -501,9 +501,18 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
             <div>
-              <Label className="block text-sm font-medium mb-1 text-gray-800">Total Hours</Label>
-              <Input type="number" step="0.1" {...register("total_hours")} className="bg-white w-full" />
-              {errors.total_hours && <p className="text-xs text-red-500 mt-1">{errors.total_hours.message}</p>}
+              <Label className="block text-sm font-medium mb-1 text-gray-800">
+                Total Time in Service (TTIS)
+                <span className="ml-2 text-xs text-gray-500">(Server-managed)</span>
+              </Label>
+              <Input 
+                type="number" 
+                step="0.1" 
+                value={aircraft.total_time_in_service?.toFixed(1) || "0.0"} 
+                disabled 
+                className="bg-gray-50 w-full cursor-not-allowed" 
+              />
+              <p className="text-xs text-gray-500 mt-1">Updated automatically via flight check-ins</p>
             </div>
             <div>
               <Label className="block text-sm font-medium mb-1 text-gray-800">Current Tach</Label>

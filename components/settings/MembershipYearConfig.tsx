@@ -224,7 +224,7 @@ export function MembershipYearConfig() {
           <Button
             onClick={handleSave}
             disabled={isUpdating}
-            className="bg-slate-900 text-white font-bold rounded-xl h-11 px-6 shadow-lg shadow-slate-900/10 hover:bg-slate-800 flex items-center gap-2"
+            className="h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm shadow-indigo-100 transition-all active:scale-[0.98] font-semibold border-none flex items-center gap-2 px-6"
           >
             {isUpdating ? (
               <IconLoader2 className="w-4 h-4 animate-spin" />

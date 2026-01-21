@@ -54,10 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
   // === Booking Settings ===
   allow_past_bookings: false,
-  auto_cancel_unpaid_hours: 72,
-  booking_buffer_minutes: 15,
   default_booking_duration_hours: 2,
-  maximum_booking_duration_hours: 8,
   minimum_booking_duration_minutes: 30,
   require_instructor_for_solo: true,
   require_flight_authorization_for_solo: false,

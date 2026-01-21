@@ -71,12 +71,13 @@ export async function GET(request: Request) {
         id,
         first_name,
         last_name,
+        is_actively_instructing,
         user:user_id (
           id,
-          email
+          email,
+          is_active
         )
       `)
-      .eq('is_actively_instructing', true)
       .order('first_name, last_name'),
     
     // Flight Types

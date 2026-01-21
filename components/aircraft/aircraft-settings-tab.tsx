@@ -44,7 +44,6 @@ const aircraftSchema = z.object({
   for_ato: z.boolean().optional(),
   prioritise_scheduling: z.boolean().optional(),
   aircraft_image_url: z.string().url("Invalid url").or(z.literal("")).or(z.null()).optional(),
-  // total_hours deprecated - now using server-managed total_time_in_service
   current_tach: z.coerce.number().nullable().optional(),
   current_hobbs: z.coerce.number().nullable().optional(),
   record_tacho: z.boolean().optional(),
@@ -198,7 +197,6 @@ export function AircraftSettingsTab({ aircraft }: SettingsTabProps) {
       for_ato: aircraft.for_ato ?? false,
       prioritise_scheduling: aircraft.prioritise_scheduling ?? false,
       aircraft_image_url: aircraft.aircraft_image_url || "",
-      // total_hours deprecated - now using server-managed total_time_in_service
       current_tach: aircraft.current_tach ?? undefined,
       current_hobbs: aircraft.current_hobbs ?? undefined,
       record_tacho: aircraft.record_tacho ?? false,

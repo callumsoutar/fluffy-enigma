@@ -45,8 +45,6 @@ export const aircraftCreateSchema = z.object({
     .optional()
     .nullable(),
 
-  // Deprecated: total_hours - use total_time_in_service instead (server-managed)
-  total_hours: z.coerce.number().min(0, "Total hours must be >= 0").optional().nullable(),
   total_time_in_service: z.coerce.number().min(0, "Total time in service must be >= 0").optional().nullable(),
   current_tach: z.coerce.number().min(0, "Current tach must be >= 0").optional().nullable(),
   current_hobbs: z.coerce.number().min(0, "Current hobbs must be >= 0").optional().nullable(),

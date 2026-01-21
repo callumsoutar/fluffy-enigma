@@ -196,8 +196,7 @@ export async function POST(request: NextRequest) {
     // CRITICAL: Initialize total_time_in_service for new aircraft
     // This prevents the "first flight overwrites baseline" bug where new aircraft
     // would default to 0 instead of their actual baseline total time.
-    // If total_hours is provided (for backward compatibility), use it; otherwise default to 0
-    total_time_in_service: v.total_hours ?? v.total_time_in_service ?? 0,
+    total_time_in_service: v.total_time_in_service ?? 0,
     current_tach: v.current_tach ?? 0,
     current_hobbs: v.current_hobbs ?? 0,
     record_tacho: v.record_tacho ?? false,

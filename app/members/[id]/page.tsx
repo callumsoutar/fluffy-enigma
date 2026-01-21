@@ -9,8 +9,6 @@ import {
   IconUser,
   IconUsers,
   IconCreditCard,
-  IconPlane,
-  IconChartBar,
   IconMail,
   IconChevronDown,
   IconReceipt,
@@ -20,6 +18,7 @@ import {
   IconRefresh,
   IconCheck,
   IconHistory,
+  IconChartBar,
 } from "@tabler/icons-react"
 import Link from "next/link"
 
@@ -37,12 +36,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu"
 import {
   Select,
@@ -65,7 +58,6 @@ import { MemberFlightHistoryTab } from "@/components/members/member-flight-histo
 import { MemberTrainingTab } from "@/components/members/member-training-tab"
 import { MemberHistoryTab } from "@/components/members/member-history-tab"
 import { useAuth } from "@/contexts/auth-context"
-import { useIsMobile } from "@/hooks/use-mobile"
 import { isValidRole, type UserRole } from "@/lib/types/roles"
 import { CreateInstructorProfileDialog } from "@/components/members/CreateInstructorProfileDialog"
 import { StickyFormActions } from "@/components/ui/sticky-form-actions"
@@ -106,7 +98,6 @@ export default function MemberDetailPage() {
   const memberId = params.id as string
   const queryClient = useQueryClient()
   const { role: viewerRole } = useAuth()
-  const isMobile = useIsMobile()
   const isStaffViewer = viewerRole === "admin" || viewerRole === "owner"
   const [activeTab, setActiveTab] = React.useState("contact")
   const [underlineStyle, setUnderlineStyle] = React.useState({ left: 0, width: 0 })
@@ -315,7 +306,6 @@ export default function MemberDetailPage() {
 
   const memberRole: UserRole | null =
     member.role?.role && isValidRole(member.role.role) ? member.role.role : null
-  const isInstructorRole = memberRole === "instructor"
   const hasInstructorProfile = Boolean(member.instructor?.id)
 
   const ROLE_OPTIONS: { value: UserRole; label: string }[] = [

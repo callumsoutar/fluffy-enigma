@@ -4,7 +4,7 @@ import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { Loader2 } from "lucide-react"
-import { IconCalendar, IconPlane, IconSchool, IconClock, IconChevronRight } from "@tabler/icons-react"
+import { IconCalendar, IconPlane, IconSchool, IconChevronRight } from "@tabler/icons-react"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"

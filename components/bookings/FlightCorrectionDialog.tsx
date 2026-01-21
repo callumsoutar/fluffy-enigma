@@ -22,9 +22,9 @@ import { IconAlertTriangle, IconInfoCircle, IconPlane } from "@tabler/icons-reac
 import type { BookingWithRelations } from "@/lib/types/bookings"
 
 const correctionSchema = z.object({
-  hobbs_end: z.coerce.number().min(0).optional().nullable(),
-  tach_end: z.coerce.number().min(0).optional().nullable(),
-  airswitch_end: z.coerce.number().min(0).optional().nullable(),
+  hobbs_end: z.number().min(0).nullable().optional(),
+  tach_end: z.number().min(0).nullable().optional(),
+  airswitch_end: z.number().min(0).nullable().optional(),
   correction_reason: z.string().min(10, "Correction reason must be at least 10 characters").max(1000),
 })
 

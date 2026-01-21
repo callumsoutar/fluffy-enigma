@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, AlertCircle, PlaneLanding, Trash2, Filter } from "lucide-react";
+import { Search, Plus, AlertCircle, PlaneLanding, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChargeableWithAircraftRates } from "@/lib/types/chargeables";
 import type { AircraftType } from "@/lib/types/aircraft";

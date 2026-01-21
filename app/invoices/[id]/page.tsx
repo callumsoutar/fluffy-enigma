@@ -176,6 +176,11 @@ export default function InvoiceDetailPage() {
     fetchItems()
   }, [fetchItems])
 
+  const refreshData = React.useCallback(() => {
+    fetchInvoice()
+    fetchItems()
+  }, [fetchInvoice, fetchItems])
+
   useEffect(() => {
     if (invoice && invoice.user_id) {
       fetch(`/api/users?id=${invoice.user_id}`)
@@ -937,6 +942,10 @@ export default function InvoiceDetailPage() {
     )
   }
 
+  const subtotal = roundToTwoDecimals(items.reduce((sum, item) => sum + (item.amount || 0), 0))
+  const totalTax = roundToTwoDecimals(items.reduce((sum, item) => sum + (item.tax_amount || 0), 0))
+  const total = roundToTwoDecimals(items.reduce((sum, item) => sum + (item.line_total || 0), 0))
+
   // Error handling for edit mode
   if (error || !invoice) return (
     <SidebarProvider>
@@ -954,11 +963,6 @@ export default function InvoiceDetailPage() {
     </SidebarProvider>
   )
 
-  // Existing edit mode UI
-  const subtotal = roundToTwoDecimals(items.reduce((sum, item) => sum + (item.amount || 0), 0))
-  const totalTax = roundToTwoDecimals(items.reduce((sum, item) => sum + (item.tax_amount || 0), 0))
-  const total = roundToTwoDecimals(items.reduce((sum, item) => sum + (item.line_total || 0), 0))
-
   const billToName =
     (selectedMember
       ? `${selectedMember.first_name || ""} ${selectedMember.last_name || ""}`.trim() || selectedMember.email
@@ -966,11 +970,6 @@ export default function InvoiceDetailPage() {
           ? `${invoice.user.first_name || ""} ${invoice.user.last_name || ""}`.trim() || invoice.user.email
           : invoice.user_id)
     ) || invoice.user_id
-
-  const refreshData = React.useCallback(() => {
-    fetchInvoice()
-    fetchItems()
-  }, [fetchInvoice, fetchItems])
 
   return (
     <SidebarProvider>

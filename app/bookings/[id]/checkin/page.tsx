@@ -25,7 +25,6 @@ import {
   IconLoader2,
   IconChevronDown,
   IconEdit,
-  IconInfoCircle,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import Link from "next/link"

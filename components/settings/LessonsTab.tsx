@@ -702,7 +702,7 @@ export default function LessonsTab() {
                     </div>
                     <h4 className="text-sm font-bold text-slate-900 mb-1">Create a Syllabus First</h4>
                     <p className="text-xs text-slate-500 max-w-[280px] leading-relaxed">
-                      To create lessons, you'll need to add a training program (syllabus) first. Navigate to the "Training Programs" tab to get started.
+                      To create lessons, you&apos;ll need to add a training program (syllabus) first. Navigate to the &quot;Training Programs&quot; tab to get started.
                     </p>
                   </>
                 ) : (

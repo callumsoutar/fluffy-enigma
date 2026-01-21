@@ -26,20 +26,8 @@ export const equipmentCreateSchema = z.object({
   warranty_expiry: z.string().datetime().optional().nullable(),
   notes: z.string().optional().nullable(),
   location: z.string().max(255).optional().nullable(),
-  year_purchased: z.preprocess(
-    (val) => {
-      // Convert empty strings, null, undefined, or NaN to undefined
-      if (val === '' || val === null || val === undefined) return undefined;
-      if (typeof val === 'number' && isNaN(val)) return undefined;
-      if (typeof val === 'string') {
-        const num = Number(val);
-        return isNaN(num) ? undefined : num;
-      }
-      return val;
-    },
-    z.number().int().min(1900).max(2100).optional().nullable()
-  ),
-});
+  year_purchased: z.number().int().min(1900).max(2100).optional().nullable(),
+})
 
 /**
  * Validation schema for updating equipment

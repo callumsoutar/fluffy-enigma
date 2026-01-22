@@ -258,13 +258,23 @@ export default function CheckOutSheet({ booking }: CheckOutSheetProps) {
     : 'N/A';
   
   const instructorName = booking.checked_out_instructor
-    ? [booking.checked_out_instructor.first_name, booking.checked_out_instructor.last_name].filter(Boolean).join(' ') || 
-      booking.checked_out_instructor.user?.email || 
-      'N/A'
+    ? (() => {
+        // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+        const firstName = booking.checked_out_instructor.user?.first_name ?? booking.checked_out_instructor.first_name
+        const lastName = booking.checked_out_instructor.user?.last_name ?? booking.checked_out_instructor.last_name
+        return [firstName, lastName].filter(Boolean).join(' ') || 
+          booking.checked_out_instructor.user?.email || 
+          'N/A'
+      })()
     : booking.instructor
-    ? [booking.instructor.first_name, booking.instructor.last_name].filter(Boolean).join(' ') || 
-      booking.instructor.user?.email || 
-      'N/A'
+    ? (() => {
+        // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+        const firstName = booking.instructor.user?.first_name ?? booking.instructor.first_name
+        const lastName = booking.instructor.user?.last_name ?? booking.instructor.last_name
+        return [firstName, lastName].filter(Boolean).join(' ') || 
+          booking.instructor.user?.email || 
+          'N/A'
+      })()
     : null;
 
   const bookingType = booking.booking_type || 'Flight';

@@ -64,7 +64,7 @@ export async function GET(request: Request) {
       .eq('is_active', true)
       .order('first_name, last_name'),
     
-    // Instructors
+    // Instructors - use user names as the source of truth
     supabase
       .from('instructors')
       .select(`
@@ -75,10 +75,13 @@ export async function GET(request: Request) {
         user:user_id (
           id,
           email,
+          first_name,
+          last_name,
           is_active
         )
       `)
-      .order('first_name, last_name'),
+      .order('first_name', { ascending: true })
+      .order('last_name', { ascending: true }),
     
     // Flight Types
     supabase

@@ -106,8 +106,13 @@ export default function DebriefPreviewSheet({
 
     const instructorName = data.lessonProgress?.instructor?.user
       ? `${data.lessonProgress.instructor.user.first_name || ''} ${data.lessonProgress.instructor.user.last_name || ''}`.trim() || data.lessonProgress.instructor.user.email
-      : data.booking.instructor?.first_name 
-        ? `${data.booking.instructor.first_name} ${data.booking.instructor.last_name || ''}`.trim()
+      : data.booking.instructor
+        ? (() => {
+            // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+            const firstName = data.booking.instructor.user?.first_name ?? data.booking.instructor.first_name
+            const lastName = data.booking.instructor.user?.last_name ?? data.booking.instructor.last_name
+            return `${firstName} ${lastName || ''}`.trim() || data.booking.instructor.user?.email || 'Instructor'
+          })()
         : 'Instructor'
 
     const subject = `Flight Debrief - ${data.booking.lesson?.name || 'Training Flight'}`

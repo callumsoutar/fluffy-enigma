@@ -66,7 +66,12 @@ export function BookingHeader({
     : null
 
   const instructorName = booking.instructor
-    ? [booking.instructor.first_name, booking.instructor.last_name].filter(Boolean).join(" ") || booking.instructor.user?.email
+    ? (() => {
+        // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+        const firstName = booking.instructor.user?.first_name ?? booking.instructor.first_name
+        const lastName = booking.instructor.user?.last_name ?? booking.instructor.last_name
+        return [firstName, lastName].filter(Boolean).join(" ") || booking.instructor.user?.email
+      })()
     : null
 
   const aircraftLabel = booking.aircraft?.registration || "TBD"

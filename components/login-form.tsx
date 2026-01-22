@@ -139,20 +139,6 @@ export function LoginForm({
       // Show success state
       setLoginState("success")
       
-      // After server action sets cookies, we need to sync the client-side auth state.
-      // The server action has already set cookies in the response, but the client-side
-      // Supabase client needs to be made aware of them. We do this by:
-      // 1. Calling getSession() to force the client to read the new cookies
-      // 2. Using a small delay to ensure cookies are propagated
-      // 3. Using router.refresh() to update server components
-      // 4. Then navigating with a full page reload to ensure clean state
-      
-      // Force client-side Supabase to sync with the new session cookies
-      await supabase.auth.getSession()
-      
-      // Small delay to ensure session is fully established
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
       // Refresh server components to recognize the new session
       router.refresh()
       

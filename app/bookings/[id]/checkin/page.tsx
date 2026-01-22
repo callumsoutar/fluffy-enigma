@@ -120,7 +120,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 interface BookingOptions {
   aircraft: Array<{ id: string; registration: string; type: string; model: string | null; manufacturer: string | null }>
   members: Array<{ id: string; first_name: string | null; last_name: string | null; email: string }>
-  instructors: Array<{ id: string; first_name: string | null; last_name: string | null; user: { id: string; email: string } | null }>
+  instructors: Array<{ id: string; first_name: string | null; last_name: string | null; user: { id: string; email: string; first_name: string | null; last_name: string | null } | null }>
   flightTypes: Array<{ id: string; name: string; instruction_type: 'trial' | 'dual' | 'solo' | null }>
   lessons: Array<{ id: string; name: string; description: string | null }>
 }
@@ -716,9 +716,14 @@ export default function BookingCheckinPage() {
           const instructorFromOptions = options?.instructors?.find((i) => i.id === selectedInstructorId) ?? null
           const instructorDisplayName =
             (instructorFromOptions
-              ? [instructorFromOptions.first_name, instructorFromOptions.last_name].filter(Boolean).join(" ") ||
-                instructorFromOptions.user?.email ||
-                "Instructor"
+              ? (() => {
+                  // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+                  const firstName = instructorFromOptions.user?.first_name ?? instructorFromOptions.first_name
+                  const lastName = instructorFromOptions.user?.last_name ?? instructorFromOptions.last_name
+                  return [firstName, lastName].filter(Boolean).join(" ") ||
+                    instructorFromOptions.user?.email ||
+                    "Instructor"
+                })()
               : booking.checked_out_instructor?.user?.email || booking.instructor?.user?.email || "Instructor")
 
           items.push({
@@ -1317,7 +1322,12 @@ export default function BookingCheckinPage() {
     : "—"
   
   const instructorName = booking.instructor
-    ? [booking.instructor.first_name, booking.instructor.last_name].filter(Boolean).join(" ") || booking.instructor.user?.email || "—"
+    ? (() => {
+        // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+        const firstName = booking.instructor.user?.first_name ?? booking.instructor.first_name
+        const lastName = booking.instructor.user?.last_name ?? booking.instructor.last_name
+        return [firstName, lastName].filter(Boolean).join(" ") || booking.instructor.user?.email || "—"
+      })()
     : "—"
 
   const aircraftRateMissing = !!selectedAircraftId && !!selectedFlightTypeId && aircraftChargeRateQuery.isFetched && !aircraftChargeRate
@@ -1877,7 +1887,10 @@ export default function BookingCheckinPage() {
                                                 </SelectItem>
                                               )}
                                             {options.instructors.map((instructor) => {
-                                              const name = [instructor.first_name, instructor.last_name]
+                                              // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+                                              const firstName = instructor.user?.first_name ?? instructor.first_name
+                                              const lastName = instructor.user?.last_name ?? instructor.last_name
+                                              const name = [firstName, lastName]
                                                 .filter(Boolean)
                                                 .join(" ") || instructor.user?.email || "Unknown"
                                               return (

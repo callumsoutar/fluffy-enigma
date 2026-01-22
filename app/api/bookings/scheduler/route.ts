@@ -103,7 +103,9 @@ export async function GET(request: NextRequest) {
         last_name,
         user:user_id (
           id,
-          email
+          email,
+          first_name,
+          last_name
         )
       )
     `

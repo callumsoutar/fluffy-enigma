@@ -252,7 +252,12 @@ function bookingToSchedulerBooking(
   const aircraftLabel = b.aircraft ? `${b.aircraft.registration} (${b.aircraft.type})` : undefined
   const instructorLabel =
     b.instructor
-      ? [b.instructor.first_name, b.instructor.last_name].filter(Boolean).join(" ").trim() || undefined
+      ? (() => {
+          // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+          const firstName = b.instructor.user?.first_name ?? b.instructor.first_name
+          const lastName = b.instructor.user?.last_name ?? b.instructor.last_name
+          return [firstName, lastName].filter(Boolean).join(" ").trim() || undefined
+        })()
       : undefined
 
   const isOwn = !!viewer.userId && b.user_id === viewer.userId
@@ -815,21 +820,8 @@ export function ResourceTimelineScheduler() {
         open={newBookingOpen}
         onOpenChange={setNewBookingOpen}
         prefill={newBookingPrefill}
-        onCreated={(booking) => {
-          toast("Booking created", {
-            description: `${booking.aircraft?.registration || "Aircraft"} • ${formatDate(new Date(booking.start_time), "dd MMM")} ${formatTimeLabel(new Date(booking.start_time))}`,
-            action: {
-              label: "Open",
-              onClick: () => {
-                // Route directly to checkout if status is flying
-                if (booking.status === 'flying' && booking.booking_type === 'flight') {
-                  router.push(`/bookings/${booking.id}/checkout`)
-                } else {
-                  router.push(`/bookings/${booking.id}`)
-                }
-              },
-            },
-          })
+        onCreated={() => {
+          // Toast notification is handled by NewBookingModal, no need to show another one here
         }}
       />
       <CancelBookingModal
@@ -1007,6 +999,7 @@ function TimelineRow({
                           "group h-full w-full rounded-md px-2 text-left",
                           "shadow-sm ring-1 ring-black/5",
                           "transition-all hover:shadow-md hover:brightness-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-500/40",
+                          "cursor-pointer",
                           statusPillClasses(booking.status)
                         )}
                       >
@@ -1088,17 +1081,6 @@ function TimelineRow({
                   <Eye className="h-4 w-4" />
                   View Aircraft
                 </ContextMenuItem>
-                {booking.canCancel && (
-                  <ContextMenuItem
-                    onClick={() => {
-                      onCancelBooking(booking)
-                    }}
-                    variant="destructive"
-                  >
-                    <X className="h-4 w-4" />
-                    Cancel Booking
-                  </ContextMenuItem>
-                )}
                 {booking.userId && booking.canViewContact && (
                   <ContextMenuItem
                     onClick={() => router.push(`/members/${booking.userId}`)}
@@ -1107,17 +1089,31 @@ function TimelineRow({
                     View Contact Details
                   </ContextMenuItem>
                 )}
-                {booking.canConfirm && (
+                {(booking.canCancel || booking.canConfirm) && (
                   <>
                     <ContextMenuSeparator />
-                    <ContextMenuItem
-                      onClick={() => {
-                        onStatusUpdate({ bookingId: booking.id, status: 'confirmed' })
-                      }}
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      Confirm Booking
-                    </ContextMenuItem>
+                    {booking.canCancel && (
+                      <ContextMenuItem
+                        onClick={() => {
+                          onCancelBooking(booking)
+                        }}
+                        variant="destructive"
+                      >
+                        <X className="h-4 w-4" />
+                        Cancel Booking
+                      </ContextMenuItem>
+                    )}
+                    {booking.canConfirm && (
+                      <ContextMenuItem
+                        onClick={() => {
+                          onStatusUpdate({ bookingId: booking.id, status: 'confirmed' })
+                        }}
+                        className="text-green-600 dark:text-green-500 focus:text-green-600 dark:focus:text-green-500 [&_svg]:text-green-600 dark:[&_svg]:text-green-500"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        Confirm Booking
+                      </ContextMenuItem>
+                    )}
                   </>
                 )}
               </ContextMenuContent>

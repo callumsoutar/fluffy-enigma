@@ -33,8 +33,13 @@ export default function DebriefReportContent({
 
   const instructorName = lessonProgress?.instructor?.user
     ? `${lessonProgress.instructor.user.first_name || ''} ${lessonProgress.instructor.user.last_name || ''}`.trim() || lessonProgress.instructor.user.email
-    : booking.instructor?.first_name 
-      ? `${booking.instructor.first_name} ${booking.instructor.last_name || ''}`.trim()
+    : booking.instructor
+      ? (() => {
+          // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+          const firstName = booking.instructor.user?.first_name ?? booking.instructor.first_name
+          const lastName = booking.instructor.user?.last_name ?? booking.instructor.last_name
+          return `${firstName} ${lastName || ''}`.trim() || booking.instructor.user?.email || 'Not assigned'
+        })()
       : 'Not assigned'
 
   return (

@@ -137,7 +137,9 @@ export async function GET(request: NextRequest) {
         last_name,
         user:user_id (
           id,
-          email
+          email,
+          first_name,
+          last_name
         )
       ),
       flight_type:flight_type_id (
@@ -414,7 +416,9 @@ export async function POST(request: NextRequest) {
         last_name,
         user:user_id (
           id,
-          email
+          email,
+          first_name,
+          last_name
         )
       ),
       flight_type:flight_type_id (

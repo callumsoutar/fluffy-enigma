@@ -250,7 +250,12 @@ export function DashboardBookings() {
                         </TableCell>
                         <TableCell className="py-3 px-6">
                           <div className="text-sm text-slate-700 truncate max-w-[150px]">
-                            {booking.instructor ? `${booking.instructor.first_name} ${booking.instructor.last_name}` : ""}
+                            {booking.instructor ? (() => {
+                              // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+                              const firstName = booking.instructor.user?.first_name ?? booking.instructor.first_name
+                              const lastName = booking.instructor.user?.last_name ?? booking.instructor.last_name
+                              return `${firstName} ${lastName}`.trim()
+                            })() : ""}
                           </div>
                         </TableCell>
                         <TableCell className="py-3 px-6 text-right">
@@ -407,7 +412,12 @@ export function DashboardBookings() {
                             </TableCell>
                             <TableCell className="py-3 px-6">
                               <div className="text-sm text-slate-700 truncate max-w-[150px]">
-                                {booking.instructor ? `${booking.instructor.first_name} ${booking.instructor.last_name}` : ""}
+                                {booking.instructor ? (() => {
+                              // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+                              const firstName = booking.instructor.user?.first_name ?? booking.instructor.first_name
+                              const lastName = booking.instructor.user?.last_name ?? booking.instructor.last_name
+                              return `${firstName} ${lastName}`.trim()
+                            })() : ""}
                               </div>
                             </TableCell>
                             <TableCell className="py-3 px-6 text-right">

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useSettingsManager } from "@/hooks/use-settings";
 import { toast } from "sonner";
+import { CancellationCategoriesConfig } from "./CancellationCategoriesConfig";
 
 export function BookingsTab() {
   const {
@@ -72,9 +73,9 @@ export function BookingsTab() {
   }
 
   return (
-    <div className="space-y-12 max-w-4xl">
+    <div className="space-y-12">
       {/* Booking Duration */}
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-4xl">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
           <IconClock className="w-4 h-4 text-slate-400" />
           <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">
@@ -126,6 +127,10 @@ export function BookingsTab() {
             />
           </div>
         </div>
+      </div>
+
+      <div className="pt-8 border-t border-slate-100">
+        <CancellationCategoriesConfig />
       </div>
 
       {/* Save Button */}

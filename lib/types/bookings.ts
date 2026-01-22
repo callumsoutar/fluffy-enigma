@@ -107,6 +107,8 @@ export interface BookingWithRelations extends Booking {
     user?: {
       id: string
       email: string
+      first_name: string | null
+      last_name: string | null
     } | null
   } | null
   flight_type?: {
@@ -219,6 +221,8 @@ export interface SchedulerBookingWithRelations {
     user?: {
       id: string
       email: string | null
+      first_name: string | null
+      last_name: string | null
     } | null
   } | null
 }

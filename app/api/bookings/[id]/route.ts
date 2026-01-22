@@ -80,7 +80,9 @@ export async function GET(
         last_name,
         user:user_id (
           id,
-          email
+          email,
+          first_name,
+          last_name
         )
       ),
       flight_type:flight_type_id (

@@ -51,10 +51,16 @@ type BookingOptionsResponse = {
     first_name: string | null; 
     last_name: string | null; 
     is_actively_instructing: boolean;
-    user: { id: string; email: string; is_active: boolean } | null 
+    user: { id: string; email: string; first_name: string | null; last_name: string | null; is_active: boolean } | null 
   }[]
   flightTypes: { id: string; name: string; instruction_type: string | null }[]
-  lessons: { id: string; name: string; description: string | null }[]
+}
+
+type LessonOptionsResponse = {
+  syllabi: { id: string; name: string }[]
+  lessons: { id: string; name: string; description: string | null; order: number | null; syllabus_id: string | null }[]
+  suggested_lesson_id: string | null
+  selected_syllabus_id: string | null
 }
 
 const TIME_OPTIONS = Array.from({ length: ((23 - 7) * 2) + 3 }, (_, i) => {
@@ -207,8 +213,13 @@ function LocalCombobox<T extends { id: string }>(props: {
                     className="rounded-lg py-2.5"
                   >
                     <Check className={cn("mr-2 h-4 w-4", isSelected ? "opacity-100" : "opacity-0")} />
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
                       <div className="truncate font-medium">{label}</div>
+                      {meta ? (
+                        <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                          {meta}
+                        </span>
+                      ) : null}
                     </div>
                   </CommandItem>
                 )
@@ -225,6 +236,21 @@ async function fetchBookingOptions(): Promise<BookingOptionsResponse> {
   const res = await fetch("/api/bookings/options")
   if (!res.ok) throw new Error("Failed to load booking options")
   return (await res.json()) as BookingOptionsResponse
+}
+
+async function fetchLessonOptions(params: {
+  memberId: string
+  syllabusId?: string | null
+  lessonId?: string | null
+}): Promise<LessonOptionsResponse> {
+  const sp = new URLSearchParams()
+  sp.set("member_id", params.memberId)
+  if (params.syllabusId) sp.set("syllabus_id", params.syllabusId)
+  if (params.lessonId) sp.set("lesson_id", params.lessonId)
+
+  const res = await fetch(`/api/bookings/lesson-options?${sp.toString()}`)
+  if (!res.ok) throw new Error("Failed to load lesson options")
+  return (await res.json()) as LessonOptionsResponse
 }
 
 type BookingOverlapsResponse = {
@@ -379,6 +405,17 @@ export function NewBookingModal(props: {
 
   const flightTypeId = form.watch("flightTypeId")
   const bookingType = form.watch("bookingType")
+  const selectedMember = form.watch("member")
+  const selectedMemberId = selectedMember?.id ?? null
+  const selectedLessonId = form.watch("lessonId") ?? null
+
+  const [selectedSyllabusId, setSelectedSyllabusId] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!open) return
+    setSelectedSyllabusId(null)
+    form.setValue("lessonId", null, { shouldValidate: true })
+  }, [open, selectedMemberId, form])
 
   const filteredFlightTypes = React.useMemo(() => {
     const all = options?.flightTypes ?? []
@@ -471,6 +508,23 @@ export function NewBookingModal(props: {
     const rules = rosterRulesRes?.roster_rules ?? []
     return buildRosteredInstructorIdsForInterval({ rules, startHHmm: startTime, endHHmm: endTime })
   }, [isValidTimeRange, rosterRulesRes?.roster_rules, startTime, endTime])
+
+  const {
+    data: lessonOptions,
+    isFetching: lessonsLoading,
+    isError: lessonsError,
+  } = useQuery({
+    queryKey: ["bookings", "lesson-options", selectedMemberId, selectedSyllabusId, selectedLessonId],
+    queryFn: () =>
+      fetchLessonOptions({
+        memberId: selectedMemberId!,
+        syllabusId: selectedSyllabusId,
+        lessonId: selectedLessonId,
+      }),
+    enabled: open && !!selectedMemberId && !isMemberOrStudent,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  })
 
   const availableAircraft = React.useMemo(() => {
     const all = options?.aircraft ?? []
@@ -576,6 +630,21 @@ export function NewBookingModal(props: {
       form.setValue("instructorId", null, { shouldValidate: true, shouldDirty: true })
     }
   }, [open, shouldHideInstructor, form])
+
+  React.useEffect(() => {
+    if (!open) return
+    if (!lessonOptions?.selected_syllabus_id) return
+    if (selectedSyllabusId) return
+    setSelectedSyllabusId(lessonOptions.selected_syllabus_id)
+  }, [open, lessonOptions?.selected_syllabus_id, selectedSyllabusId])
+
+  React.useEffect(() => {
+    if (!open) return
+    if (!selectedLessonId) return
+    const lessonIds = new Set((lessonOptions?.lessons ?? []).map((lesson) => lesson.id))
+    if (lessonIds.has(selectedLessonId)) return
+    form.setValue("lessonId", null, { shouldValidate: true })
+  }, [open, selectedLessonId, lessonOptions?.lessons, form])
 
   const isRecurring = form.watch("isRecurring")
   const recurringDays = form.watch("recurringDays")
@@ -776,6 +845,8 @@ export function NewBookingModal(props: {
   const errors = form.formState.errors
   const isCheckingAvailability =
     open && isValidTimeRange && ((overlapsFetching && !overlaps) || rosterRulesFetching)
+
+  const suggestedLessonId = lessonOptions?.suggested_lesson_id ?? null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1122,6 +1193,11 @@ export function NewBookingModal(props: {
                   Could not load booking options. Please refresh and try again.
                 </div>
               ) : null}
+              {lessonsError ? (
+                <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-[10px] font-medium text-amber-700">
+                  Could not load syllabus lessons. Please try again.
+                </div>
+              ) : null}
               {overlapsError ? (
                 <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-[10px] font-medium text-amber-700">
                   Could not verify aircraft/instructor availability. You can still try to save; the database will prevent invalid overlaps.
@@ -1189,8 +1265,11 @@ export function NewBookingModal(props: {
                         No instructor
                       </SelectItem>
                       {availableInstructors.map((i) => {
-                        const full = [i.first_name, i.last_name].filter(Boolean).join(" ").trim()
-                        const label = full || i.user?.email || "Instructor"
+                        // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+                        const firstName = i.user?.first_name ?? i.first_name
+                        const lastName = i.user?.last_name ?? i.last_name
+                        const full = [firstName, lastName].filter(Boolean).join(" ").trim()
+                        const label = full || "Instructor"
                         const isInactive = !i.is_actively_instructing || i.user?.is_active === false
                         return (
                           <SelectItem key={i.id} value={i.id} className="rounded-lg py-2 text-xs">
@@ -1306,6 +1385,52 @@ export function NewBookingModal(props: {
                   </div>
                 )}
 
+                {/* Syllabus - Only show for staff */}
+                {!isMemberOrStudent && (
+                  <div>
+                    <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      SYLLABUS
+                    </label>
+                    <Select
+                      value={selectedSyllabusId ?? "none"}
+                      onValueChange={(id) => {
+                        if (id === "none") return
+                        setSelectedSyllabusId(id)
+                        form.setValue("lessonId", null, { shouldValidate: true })
+                      }}
+                      disabled={
+                        bookingType !== "flight" ||
+                        !selectedMemberId ||
+                        (lessonOptions?.syllabi ?? []).length <= 1 ||
+                        lessonsLoading
+                      }
+                    >
+                      <SelectTrigger className="h-10 w-full rounded-xl border-slate-200 bg-white px-3 text-base font-medium shadow-none hover:bg-slate-50 focus:ring-0">
+                        <SelectValue
+                          placeholder={
+                            bookingType !== "flight"
+                              ? "N/A"
+                              : !selectedMemberId
+                                ? "Select member to load syllabi"
+                                : (lessonOptions?.syllabi ?? []).length === 0
+                                  ? "No active syllabus enrollments"
+                                  : lessonsLoading
+                                    ? "Loading..."
+                                    : "Select syllabus"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)] rounded-xl border-slate-200 shadow-xl">
+                        {(lessonOptions?.syllabi ?? []).map((syllabus) => (
+                          <SelectItem key={syllabus.id} value={syllabus.id} className="rounded-lg py-2 text-xs">
+                            {syllabus.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 {/* Lesson - Only show for staff */}
                 {!isMemberOrStudent && (
                   <div>
@@ -1313,19 +1438,31 @@ export function NewBookingModal(props: {
                       LESSON
                     </label>
                     <LocalCombobox
-                      disabled={optionsLoading || !options || bookingType !== "flight"}
+                      disabled={
+                        optionsLoading ||
+                        !options ||
+                        bookingType !== "flight" ||
+                        !selectedMemberId ||
+                        !selectedSyllabusId ||
+                        lessonsLoading
+                      }
                       valueId={form.watch("lessonId") || null}
                       onChange={(id) => form.setValue("lessonId", id, { shouldValidate: true })}
                       placeholder={
                         bookingType !== "flight"
                           ? "N/A"
-                          : optionsLoading
-                            ? "Loading..."
-                            : "Select lesson"
+                          : !selectedMemberId
+                            ? "Select member to see lessons"
+                            : !selectedSyllabusId
+                              ? "Select syllabus"
+                              : lessonsLoading
+                                ? "Loading..."
+                                : "Select lesson"
                       }
-                      items={options?.lessons ?? []}
+                      items={lessonOptions?.lessons ?? []}
                       icon={<NotebookPen className="h-3.5 w-3.5 shrink-0" />}
                       itemLabel={(l) => l.name}
+                      itemMeta={(l) => (l.id === suggestedLessonId ? "Suggested lesson" : null)}
                     />
                     {errors.lessonId ? (
                       <p className="text-[10px] text-destructive mt-1">{errors.lessonId.message as string}</p>

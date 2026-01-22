@@ -130,6 +130,19 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T
 }
 
+async function fetchLessonOptions(params: {
+  memberId: string
+  syllabusId?: string | null
+  lessonId?: string | null
+}): Promise<LessonOptionsResponse> {
+  const sp = new URLSearchParams()
+  sp.set("member_id", params.memberId)
+  if (params.syllabusId) sp.set("syllabus_id", params.syllabusId)
+  if (params.lessonId) sp.set("lesson_id", params.lessonId)
+
+  return fetchJson<LessonOptionsResponse>(`/api/bookings/lesson-options?${sp.toString()}`)
+}
+
 // Form schema
 const bookingSchema = z.object({
   start_time: z.string(),
@@ -149,9 +162,15 @@ type BookingFormData = z.infer<typeof bookingSchema>
 interface BookingOptions {
   aircraft: Array<{ id: string; registration: string; type: string; model: string | null; manufacturer: string | null }>
   members: Array<{ id: string; first_name: string | null; last_name: string | null; email: string }>
-  instructors: Array<{ id: string; first_name: string | null; last_name: string | null; user: { id: string; email: string } | null }>
+  instructors: Array<{ id: string; first_name: string | null; last_name: string | null; user: { id: string; email: string; first_name: string | null; last_name: string | null } | null }>
   flightTypes: Array<{ id: string; name: string; instruction_type: 'trial' | 'dual' | 'solo' | null }>
-  lessons: Array<{ id: string; name: string; description: string | null }>
+}
+
+interface LessonOptionsResponse {
+  syllabi: Array<{ id: string; name: string }>
+  lessons: Array<{ id: string; name: string; description: string | null; order: number | null; syllabus_id: string | null }>
+  suggested_lesson_id: string | null
+  selected_syllabus_id: string | null
 }
 
 interface AuditLog {
@@ -509,6 +528,25 @@ export default function BookingDetailPage() {
   const [auditLogOpen, setAuditLogOpen] = React.useState(true)
   const [memberSearchOpen, setMemberSearchOpen] = React.useState(false)
   const [cancelModalOpen, setCancelModalOpen] = React.useState(false)
+  const [selectedSyllabusId, setSelectedSyllabusId] = React.useState<string | null>(null)
+
+  const selectedMemberId = watch("user_id") ?? booking?.user_id ?? null
+  const selectedLessonId = watch("lesson_id") ?? booking?.lesson_id ?? null
+
+  const lessonOptionsQuery = useQuery({
+    queryKey: ["bookingLessonOptions", selectedMemberId, selectedSyllabusId, selectedLessonId],
+    queryFn: () =>
+      fetchLessonOptions({
+        memberId: selectedMemberId!,
+        syllabusId: selectedSyllabusId,
+        lessonId: selectedLessonId,
+      }),
+    enabled: !!selectedMemberId,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  })
+
+  const lessonOptions = lessonOptionsQuery.data ?? null
 
   // Populate form when booking loads/changes (query-cached)
   React.useEffect(() => {
@@ -539,6 +577,22 @@ export default function BookingDetailPage() {
       })
     setIsFormReady(true)
   }, [booking, reset, isFormReady, isDirty])
+
+  React.useEffect(() => {
+    const defaultSyllabusId = lessonOptions?.selected_syllabus_id ?? null
+    if (!defaultSyllabusId) return
+    const syllabusIds = new Set((lessonOptions?.syllabi ?? []).map((s) => s.id))
+    if (!selectedSyllabusId || !syllabusIds.has(selectedSyllabusId)) {
+      setSelectedSyllabusId(defaultSyllabusId)
+    }
+  }, [lessonOptions?.selected_syllabus_id, lessonOptions?.syllabi, selectedSyllabusId])
+
+  React.useEffect(() => {
+    if (!selectedLessonId) return
+    const lessonIds = new Set((lessonOptions?.lessons ?? []).map((lesson) => lesson.id))
+    if (lessonIds.has(selectedLessonId)) return
+    setValue("lesson_id", null, { shouldDirty: true, shouldValidate: true })
+  }, [lessonOptions?.lessons, selectedLessonId, setValue])
 
   // Clear aircraft when booking type is changed to "groundwork"
   // Note: This is handled directly in the onValueChange handler for better UX,
@@ -1007,7 +1061,12 @@ export default function BookingDetailPage() {
     : "—"
   
   const instructorName = booking.instructor
-    ? [booking.instructor.first_name, booking.instructor.last_name].filter(Boolean).join(" ") || booking.instructor.user?.email || "—"
+    ? (() => {
+        // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+        const firstName = booking.instructor.user?.first_name ?? booking.instructor.first_name
+        const lastName = booking.instructor.user?.last_name ?? booking.instructor.last_name
+        return [firstName, lastName].filter(Boolean).join(" ") || booking.instructor.user?.email || "—"
+      })()
     : "—"
 
   const bookingInstructorId = booking?.instructor_id ?? null
@@ -1476,7 +1535,10 @@ export default function BookingDetailPage() {
                                         </SelectItem>
                                       )}
                                     {options.instructors.map((instructor) => {
-                                      const name = [instructor.first_name, instructor.last_name]
+                                      // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+                                      const firstName = instructor.user?.first_name ?? instructor.first_name
+                                      const lastName = instructor.user?.last_name ?? instructor.last_name
+                                      const name = [firstName, lastName]
                                         .filter(Boolean)
                                         .join(" ") || instructor.user?.email || "Unknown"
                                       return (
@@ -1593,27 +1655,83 @@ export default function BookingDetailPage() {
                             <Field>
                               <FieldLabel className="flex items-center gap-2 text-sm font-medium text-foreground">
                                 <IconBook className="h-4 w-4 text-foreground" />
+                                Syllabus
+                              </FieldLabel>
+                              {lessonOptions ? (
+                                (lessonOptions.syllabi ?? []).length === 0 ? (
+                                  <div className="px-3 py-2.5 border border-amber-200 rounded-md bg-amber-50/60 text-xs font-semibold text-amber-700">
+                                    No active syllabus enrollments
+                                  </div>
+                                ) : (lessonOptions.syllabi ?? []).length === 1 ? (
+                                  <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    {lessonOptions.syllabi[0]?.name ?? "Syllabus"}
+                                  </div>
+                                ) : (
+                                  <Select
+                                    value={selectedSyllabusId ?? "none"}
+                                    onValueChange={(value) => {
+                                      setSelectedSyllabusId(value === "none" ? null : value)
+                                      setValue("lesson_id", null, { shouldDirty: true, shouldValidate: true })
+                                    }}
+                                    disabled={isReadOnly || isMemberOrStudent || lessonOptionsQuery.isFetching}
+                                  >
+                                    <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                      <SelectValue placeholder={lessonOptionsQuery.isFetching ? "Loading..." : "Select Syllabus"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {(lessonOptions.syllabi ?? []).map((syllabus) => (
+                                        <SelectItem key={syllabus.id} value={syllabus.id}>
+                                          {syllabus.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )
+                              ) : (
+                                <div className="px-3 py-2.5 border border-border/50 rounded-md bg-muted/30 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  Select a member to load syllabi
+                                </div>
+                              )}
+                              {lessonOptionsQuery.isError && (
+                                <p className="text-xs text-destructive mt-1">Could not load syllabus options.</p>
+                              )}
+                            </Field>
+
+                            <Field>
+                              <FieldLabel className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                <IconBook className="h-4 w-4 text-foreground" />
                                 Lesson
                               </FieldLabel>
-                              {options ? (
+                              {lessonOptions ? (
                                 <Select
                                   value={watch("lesson_id") || "none"}
                                   onValueChange={(value) => setValue("lesson_id", value === "none" ? null : value, { shouldDirty: true })}
-                                  disabled={isReadOnly || isMemberOrStudent}
+                                  disabled={
+                                    isReadOnly ||
+                                    isMemberOrStudent ||
+                                    !selectedSyllabusId ||
+                                    lessonOptionsQuery.isFetching
+                                  }
                                 >
                                   <SelectTrigger className="w-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                                    <SelectValue placeholder="Select Lesson" />
+                                    <SelectValue placeholder={
+                                      !selectedSyllabusId
+                                        ? "Select syllabus"
+                                        : lessonOptionsQuery.isFetching
+                                          ? "Loading..."
+                                          : "Select Lesson"
+                                    } />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">No lesson selected</SelectItem>
                                     {!!bookingLessonId &&
                                       !!bookingLessonLabel &&
-                                      !options.lessons.some((l) => l.id === bookingLessonId) && (
+                                      !lessonOptions.lessons.some((l) => l.id === bookingLessonId) && (
                                         <SelectItem value={bookingLessonId}>
                                           {bookingLessonLabel} (inactive)
                                         </SelectItem>
                                       )}
-                                    {options.lessons.map((lesson) => (
+                                    {lessonOptions.lessons.map((lesson) => (
                                       <SelectItem key={lesson.id} value={lesson.id}>
                                         {lesson.name}
                                       </SelectItem>

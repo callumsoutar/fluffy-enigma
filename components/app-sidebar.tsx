@@ -18,7 +18,6 @@ import {
 } from "@tabler/icons-react"
 import { useAuth } from "@/contexts/auth-context"
 import type { UserRole } from "@/lib/types/roles"
-import { getCachedRole } from "@/lib/auth/resolve-role"
 
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
@@ -151,75 +150,30 @@ const secondaryNavItems: NavItem[] = [
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, role, profile, loading } = useAuth()
   const isMobile = useIsMobile()
-  const [mounted, setMounted] = React.useState(false)
-  const [localCachedRole, setLocalCachedRole] = React.useState<UserRole | null>(null)
-  
-  // Load cached role after mount (prevents hydration mismatch)
-  // Uses centralized cache function for consistency
-  React.useEffect(() => {
-    setMounted(true)
-    const cached = getCachedRole()
-    if (cached) {
-      setLocalCachedRole(cached)
-    }
-  }, [])
-  
-  // Sync local state with auth context role
-  // This effect runs whenever role, user, loading, or mounted changes
-  React.useEffect(() => {
-    if (!mounted) return
-    
-    if (role) {
-      // Role is available from auth context - use it
-      setLocalCachedRole(role)
-    } else if (!loading && user === null) {
-      // Not loading and no user - clear the cached role
-      // This handles the logout case
-      setLocalCachedRole(null)
-    } else if (!loading && user !== null && role === null) {
-      // Edge case: user exists but role is null (role resolution failed)
-      // Clear the stale cached role to prevent showing wrong permissions
-      setLocalCachedRole(null)
-    }
-    // Note: When loading=true, we keep the localCachedRole to prevent flicker
-  }, [role, user, loading, mounted])
-  
-  // Use current role from context (authoritative), or fall back to cached during loading
-  // Only use cached role after mount to prevent hydration mismatch
-  const effectiveRole = role || (mounted && loading ? localCachedRole : null)
 
   // Filter navigation items based on user role
-  // Use effectiveRole to prevent navigation from disappearing during refresh
   const filteredNavMain = React.useMemo(() => {
-    // During SSR or before mount, return empty to prevent hydration mismatch
-    if (!mounted) return []
-    
-    const roleToUse = effectiveRole || localCachedRole
-    if (!roleToUse) return []
+    if (!role) return []
     
     return navigationConfig
       .map(section => ({
         label: section.label,
         items: section.items
-          .filter(item => item.roles.includes(roleToUse))
+          .filter(item => item.roles.includes(role))
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           .map(({ roles, ...item }) => item), // Remove roles property
       }))
       .filter(section => section.items.length > 0) // Remove empty sections
-  }, [effectiveRole, localCachedRole, mounted])
+  }, [role])
 
   const filteredNavSecondary = React.useMemo(() => {
-    // During SSR or before mount, return empty to prevent hydration mismatch
-    if (!mounted) return []
-    
-    const roleToUse = effectiveRole || localCachedRole
-    if (!roleToUse) return []
+    if (!role) return []
     
     return secondaryNavItems
-      .filter(item => item.roles.includes(roleToUse))
+      .filter(item => item.roles.includes(role))
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       .map(({ roles, ...item }) => item) // Remove roles property
-  }, [effectiveRole, localCachedRole, mounted])
+  }, [role])
 
   const userData = React.useMemo(() => {
     // Priority 1: Use profile from auth context (cached and persisted across navigations)
@@ -260,14 +214,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [user, profile])
 
   // Determine if we should show the loading state
-  // Show loading when:
-  // 1. Not yet mounted (SSR/hydration)
-  // 2. Auth is loading AND we don't have a role to display
-  // Note: If loading is false but role is null (role resolution failed), we still render
-  // the navigation (which will be empty) - this is better than showing loading forever
-  const hasAnyRole = !!role || !!localCachedRole
-  const isAuthLoading = loading
-  const isInitialLoad = !mounted || (isAuthLoading && !hasAnyRole)
+  // Only show loading while auth state is being resolved.
+  // If role is null after loading completes, we render an empty nav rather than hanging.
+  const isInitialLoad = loading
 
   // Show loading state during SSR, initial load, or before mount
   if (isInitialLoad) {

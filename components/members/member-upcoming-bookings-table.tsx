@@ -109,7 +109,12 @@ export function MemberUpcomingBookingsTable({ memberId }: MemberUpcomingBookings
               const end = new Date(booking.end_time)
               const aircraftLabel = booking.aircraft?.registration || "No Aircraft"
               const instructorName = booking.instructor 
-                ? `${booking.instructor.first_name} ${booking.instructor.last_name}`.trim() 
+                ? (() => {
+                    // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+                    const firstName = booking.instructor.user?.first_name ?? booking.instructor.first_name
+                    const lastName = booking.instructor.user?.last_name ?? booking.instructor.last_name
+                    return `${firstName} ${lastName}`.trim()
+                  })()
                 : "Solo"
               
               return (
@@ -194,7 +199,12 @@ export function MemberUpcomingBookingsTable({ memberId }: MemberUpcomingBookings
                 <div className="space-y-1">
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Instructor</div>
                   <div className="text-xs font-medium text-slate-700 truncate">
-                    {booking.instructor ? `${booking.instructor.first_name} ${booking.instructor.last_name}` : "Solo"}
+                    {booking.instructor ? (() => {
+                      // Use user names as the source of truth (fallback to instructor table for backward compatibility)
+                      const firstName = booking.instructor.user?.first_name ?? booking.instructor.first_name
+                      const lastName = booking.instructor.user?.last_name ?? booking.instructor.last_name
+                      return `${firstName} ${lastName}`.trim()
+                    })() : "Solo"}
                   </div>
                 </div>
               </div>

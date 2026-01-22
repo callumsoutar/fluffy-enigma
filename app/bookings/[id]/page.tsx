@@ -588,11 +588,17 @@ export default function BookingDetailPage() {
   }, [lessonOptions?.selected_syllabus_id, lessonOptions?.syllabi, selectedSyllabusId])
 
   React.useEffect(() => {
+    // Only auto-clear an invalid lesson during an active edit session.
+    // On initial page load, `lessonOptions` is null while the query fetches,
+    // and clearing here would incorrectly mark the form dirty and wipe the lesson.
+    if (!isFormReady) return
+    if (!isDirty) return
+    if (!lessonOptions) return
     if (!selectedLessonId) return
-    const lessonIds = new Set((lessonOptions?.lessons ?? []).map((lesson) => lesson.id))
+    const lessonIds = new Set((lessonOptions.lessons ?? []).map((lesson) => lesson.id))
     if (lessonIds.has(selectedLessonId)) return
     setValue("lesson_id", null, { shouldDirty: true, shouldValidate: true })
-  }, [lessonOptions?.lessons, selectedLessonId, setValue])
+  }, [isFormReady, isDirty, lessonOptions, selectedLessonId, setValue])
 
   // Clear aircraft when booking type is changed to "groundwork"
   // Note: This is handled directly in the onValueChange handler for better UX,

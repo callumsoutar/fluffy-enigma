@@ -5,6 +5,16 @@ import { fetchUserProfile } from "@/lib/auth/user-profile"
 
 export async function GET() {
   const supabase = await createClient()
+  // Align with Supabase guidance: validate via getClaims() (signature verified).
+  const { data: claimsData } = await supabase.auth.getClaims()
+
+  if (!claimsData) {
+    return NextResponse.json(
+      { user: null, role: null, profile: null },
+      { status: 200 }
+    )
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser()

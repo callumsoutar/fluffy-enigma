@@ -12,9 +12,13 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
     request,
   })
 
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseKey,
     {
       cookies: {
         getAll() {
@@ -36,8 +40,12 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
   )
 
   // IMPORTANT: Avoid writing any logic between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+  // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
+
+  // Supabase guidance: use getClaims() (signature-verified) in the proxy/middleware.
+  // This refreshes the session cookie if needed and is safe to trust.
+  const { data: claimsData } = await supabase.auth.getClaims()
 
   const {
     data: { user },
@@ -49,7 +57,7 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
     request.nextUrl.pathname.startsWith(path)
   )
 
-  if (!user && !isPublicPath) {
+  if ((!claimsData || !user) && !isPublicPath) {
     // no user and not on a public path, redirect to login
     // IMPORTANT: Copy cookies to the redirect response
     const url = request.nextUrl.clone()

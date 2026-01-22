@@ -74,7 +74,10 @@ export function AuthProvider({
       setRole(null)
       setProfile(null)
     } finally {
-      if (!opts?.silent) setLoading(false)
+      // Always clear loading once a refresh completes.
+      // `silent` only controls whether we *set* loading true (to avoid flicker),
+      // not whether we can clear a loading state initiated by another event.
+      setLoading(false)
     }
   }, [supabase])
 

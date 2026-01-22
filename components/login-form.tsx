@@ -139,6 +139,13 @@ export function LoginForm({
       // Show success state
       setLoginState("success")
       
+      // Notify other tabs to refresh auth state.
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        const ch = new BroadcastChannel("aerosafety-auth")
+        ch.postMessage({ type: "auth-changed" })
+        ch.close()
+      }
+
       // Refresh server components to recognize the new session
       router.refresh()
       

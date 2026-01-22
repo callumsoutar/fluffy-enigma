@@ -2,12 +2,9 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 import type { User } from "@supabase/supabase-js"
 import type { UserRole } from "@/lib/types/roles"
-import { resolveUserRole } from "@/lib/auth/resolve-role"
 import type { UserProfile } from "@/lib/auth/user-profile"
-import { fetchUserProfile } from "@/lib/auth/user-profile"
 import { signOut as signOutAction } from "@/app/actions/auth"
 
 interface AuthContextType {
@@ -23,6 +20,12 @@ interface AuthContextType {
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined)
 
+type MeResponse = {
+  user: User | null
+  role: UserRole | null
+  profile: UserProfile | null
+}
+
 export function AuthProvider({
   children,
   initialUser = null,
@@ -36,9 +39,6 @@ export function AuthProvider({
 }) {
   const router = useRouter()
 
-  // Create supabase client once and memoize
-  const supabase = React.useMemo(() => createClient(), [])
-
   const [user, setUser] = React.useState<User | null>(initialUser)
   const [role, setRole] = React.useState<UserRole | null>(initialRole)
   const [profile, setProfile] = React.useState<UserProfile | null>(initialProfile)
@@ -47,27 +47,14 @@ export function AuthProvider({
   const refreshUser = React.useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true)
     try {
-      const {
-        data: { user: currentUser },
-        error,
-      } = await supabase.auth.getUser()
-
-      if (error || !currentUser) {
-        setUser(null)
-        setRole(null)
-        setProfile(null)
-        return
+      const res = await fetch("/api/auth/me", { cache: "no-store" })
+      if (!res.ok) {
+        throw new Error(`Failed to load session: ${res.status}`)
       }
-
-      // Resolve role + profile for the current user.
-      const [{ role: resolvedRole }, resolvedProfile] = await Promise.all([
-        resolveUserRole(supabase, currentUser),
-        fetchUserProfile(supabase, currentUser),
-      ])
-
-      setUser(currentUser)
-      setRole(resolvedRole)
-      setProfile(resolvedProfile)
+      const data = (await res.json()) as MeResponse
+      setUser(data.user)
+      setRole(data.role)
+      setProfile(data.profile)
     } catch (e) {
       console.error("Auth refresh failed:", e)
       setUser(null)
@@ -79,7 +66,7 @@ export function AuthProvider({
       // not whether we can clear a loading state initiated by another event.
       setLoading(false)
     }
-  }, [supabase])
+  }, [])
 
   // On mount:
   // - sync from current session
@@ -95,20 +82,30 @@ export function AuthProvider({
 
     run()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event) => {
-      if (!isActive) return
-      const silent = event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION"
-      await refreshUser({ silent })
-      router.refresh()
-    })
+    // Cross-tab consistency: broadcast auth changes (logout/login) explicitly.
+    const channel =
+      typeof window !== "undefined" && "BroadcastChannel" in window
+        ? new BroadcastChannel("aerosafety-auth")
+        : null
+
+    if (channel) {
+      channel.onmessage = () => {
+        refreshUser({ silent: true })
+        router.refresh()
+      }
+    }
+
+    const onFocus = () => {
+      refreshUser({ silent: true })
+    }
+    window.addEventListener("focus", onFocus)
 
     return () => {
       isActive = false
-      subscription.unsubscribe()
+      window.removeEventListener("focus", onFocus)
+      channel?.close()
     }
-  }, [supabase, refreshUser, router])
+  }, [refreshUser, router])
 
   /**
    * Sign out the current user
@@ -123,6 +120,13 @@ export function AuthProvider({
       // Clear server-side cookies via server action.
       // (This is the canonical source of session state in this app.)
       await signOutAction()
+
+      // Notify other tabs to refresh auth state.
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        const ch = new BroadcastChannel("aerosafety-auth")
+        ch.postMessage({ type: "auth-changed" })
+        ch.close()
+      }
 
       // Hard navigation ensures all client state is reset.
       window.location.assign("/login")

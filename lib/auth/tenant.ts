@@ -28,9 +28,10 @@ import type { Tenant, TenantContext, TenantError } from '@/lib/types/tenant'
  */
 export async function getTenantId(supabase?: SupabaseClient): Promise<string> {
   const client = supabase ?? await createClient()
-  const { data: { user } } = await client.auth.getUser()
+  const { data: claimsData } = await client.auth.getClaims()
+  const userId = claimsData?.claims?.sub
   
-  if (!user) {
+  if (!userId) {
     const error = new Error('Not authenticated') as TenantError
     error.code = 'UNAUTHORIZED'
     throw error
@@ -39,7 +40,7 @@ export async function getTenantId(supabase?: SupabaseClient): Promise<string> {
   const { data: memberships, error } = await client
     .from('tenant_users')
     .select('tenant_id')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('is_active', true)
   
   if (error) {
@@ -66,9 +67,10 @@ export async function getTenantId(supabase?: SupabaseClient): Promise<string> {
  */
 export async function getTenantContext(supabase?: SupabaseClient): Promise<TenantContext> {
   const client = supabase ?? await createClient()
-  const { data: { user } } = await client.auth.getUser()
+  const { data: claimsData } = await client.auth.getClaims()
+  const userId = claimsData?.claims?.sub
   
-  if (!user) {
+  if (!userId) {
     const error = new Error('Not authenticated') as TenantError
     error.code = 'UNAUTHORIZED'
     throw error
@@ -92,7 +94,7 @@ export async function getTenantContext(supabase?: SupabaseClient): Promise<Tenan
         name
       )
     `)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('is_active', true)
     .single()
   
@@ -114,7 +116,7 @@ export async function getTenantContext(supabase?: SupabaseClient): Promise<Tenan
     tenantId: membership.tenant_id,
     tenant: tenant as Tenant,
     userRole: role.name as UserRole,
-    userId: user.id,
+    userId,
   }
 }
 
@@ -202,14 +204,15 @@ export async function validateTenantAccess(
   supabase?: SupabaseClient
 ): Promise<boolean> {
   const client = supabase ?? await createClient()
-  const { data: { user } } = await client.auth.getUser()
+  const { data: claimsData } = await client.auth.getClaims()
+  const userId = claimsData?.claims?.sub
   
-  if (!user) return false
+  if (!userId) return false
   
   const { data, error } = await client
     .from('tenant_users')
     .select('id')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('tenant_id', providedTenantId)
     .eq('is_active', true)
     .single()
@@ -229,9 +232,10 @@ export async function getUserTenants(supabase?: SupabaseClient): Promise<Array<{
   role: UserRole
 }>> {
   const client = supabase ?? await createClient()
-  const { data: { user } } = await client.auth.getUser()
+  const { data: claimsData } = await client.auth.getClaims()
+  const userId = claimsData?.claims?.sub
   
-  if (!user) return []
+  if (!userId) return []
   
   const { data: memberships, error } = await client
     .from('tenant_users')
@@ -249,7 +253,7 @@ export async function getUserTenants(supabase?: SupabaseClient): Promise<Array<{
         name
       )
     `)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('is_active', true)
   
   if (error || !memberships) return []

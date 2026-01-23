@@ -1,10 +1,9 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
-import type { User } from "@supabase/supabase-js"
 
 export type UpdateSessionResult = {
   response: NextResponse
-  user: User | null
+  userId: string | null
 }
 
 export async function updateSession(request: NextRequest): Promise<UpdateSessionResult> {
@@ -46,10 +45,7 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
   // Supabase guidance: use getClaims() (signature-verified) in the proxy/middleware.
   // This refreshes the session cookie if needed and is safe to trust.
   const { data: claimsData } = await supabase.auth.getClaims()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const userId = claimsData?.claims?.sub ?? null
 
   // Public routes that don't require authentication
   const publicPaths = ["/login", "/signup", "/auth", "/onboarding", "/api/auth"]
@@ -57,7 +53,7 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
     request.nextUrl.pathname.startsWith(path)
   )
 
-  if ((!claimsData || !user) && !isPublicPath) {
+  if (!userId && !isPublicPath) {
     // no user and not on a public path, redirect to login
     // IMPORTANT: Copy cookies to the redirect response
     const url = request.nextUrl.clone()
@@ -69,7 +65,7 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
       redirectResponse.cookies.set(cookie.name, cookie.value)
     })
     
-    return { response: redirectResponse, user: null }
+    return { response: redirectResponse, userId: null }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
@@ -85,6 +81,6 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
   // If this is not done, you may be causing the browser and server to go out
   // of sync and terminate the user's session prematurely.
 
-  return { response: supabaseResponse, user }
+  return { response: supabaseResponse, userId }
 }
 

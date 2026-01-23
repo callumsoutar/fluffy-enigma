@@ -57,7 +57,13 @@ export async function POST(request: Request) {
   try {
     // Verify the user is authenticated
     const serverSupabase = await createClient()
-    const { data: { user: currentUser } } = await serverSupabase.auth.getUser()
+    const { data: claimsData } = await serverSupabase.auth.getClaims()
+    const claims = claimsData?.claims
+
+    const {
+      data: { session },
+    } = await serverSupabase.auth.getSession()
+    const currentUser = claims?.sub && session?.user?.id === claims.sub ? session.user : null
     
     if (!currentUser) {
       return NextResponse.json(

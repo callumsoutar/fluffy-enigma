@@ -32,9 +32,15 @@ export default async function RootLayout({
   // Resolve auth state on the server (cookie-based SSR via @supabase/ssr).
   // This makes auth predictable across reloads/new tabs and avoids client-side deadlocks.
   const supabase = await createClient()
+  // Prefer getClaims() (signature verified) over getUser() (always network).
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const claims = claimsData?.claims
+
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const user = claims?.sub && session?.user?.id === claims.sub ? session.user : null
 
   const initialRole = user ? (await resolveUserRole(supabase, user)).role : null
   const initialProfile = user ? await fetchUserProfile(supabase, user) : null

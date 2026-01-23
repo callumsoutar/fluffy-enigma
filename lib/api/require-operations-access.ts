@@ -27,17 +27,25 @@ export async function requireOperationsAccess(
   roles: UserRole[] = ["owner", "admin", "instructor"]
 ): Promise<OperationsAccessResult> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const claims = claimsData?.claims
+  const userId = claims?.sub
 
-  if (!user) {
+  if (!userId) {
     return {
       error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     }
   }
 
   try {
+    // We rely on getClaims() for signature verification.
+    // If we also need a full user object, it is safe to read it from the session
+    // (cookie storage) as long as we confirm it matches the verified `sub`.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const sessionUser = session?.user
+
     const tenantContext = await getTenantContext(supabase)
     
     // Check if user has any of the required roles at their tenant
@@ -52,7 +60,9 @@ export async function requireOperationsAccess(
 
     return {
       supabase,
-      user,
+      user: (sessionUser && sessionUser.id === userId
+        ? sessionUser
+        : ({ id: userId } as User)),
       tenantContext,
     }
   } catch (err) {

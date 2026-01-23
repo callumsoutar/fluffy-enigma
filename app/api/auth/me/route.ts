@@ -7,19 +7,23 @@ export async function GET() {
   const supabase = await createClient()
   // Align with Supabase guidance: validate via getClaims() (signature verified).
   const { data: claimsData } = await supabase.auth.getClaims()
+  const claims = claimsData?.claims
 
-  if (!claimsData) {
+  if (!claims?.sub) {
     return NextResponse.json(
       { user: null, role: null, profile: null },
       { status: 200 }
     )
   }
 
+  // It's safe to read the user object from cookie storage after we verify the JWT signature.
+  // (We also confirm the IDs match as an extra guard.)
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
+  const user = session?.user
 
-  if (!user) {
+  if (!user || user.id !== claims.sub) {
     return NextResponse.json(
       { user: null, role: null, profile: null },
       { status: 200 }

@@ -22,7 +22,12 @@ export async function RoleGuard({
   fallback,
 }: RoleGuardProps) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const claims = claimsData?.claims
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const user = claims?.sub && session?.user?.id === claims.sub ? session.user : null
 
   if (!user) {
     redirect('/login')

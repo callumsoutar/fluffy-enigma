@@ -12,11 +12,10 @@ import type { TenantContext } from "@/lib/types/tenant"
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function requireStaffAccess(_request: NextRequest): Promise<NextResponse | null> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const userId = claimsData?.claims?.sub
 
-  if (!user) {
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -52,11 +51,10 @@ export async function requireTenantAccess(
   requiredRoles?: ("owner" | "admin" | "instructor" | "member" | "student")[]
 ): Promise<TenantAccessResult> {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const userId = claimsData?.claims?.sub
 
-  if (!user) {
+  if (!userId) {
     return {
       error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
       context: null,

@@ -41,7 +41,11 @@ export default function OnboardingPage() {
   // Check if user is authenticated
   React.useEffect(() => {
     const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      // On the client, prefer getSession() for faster, local reads.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const user = session?.user
       if (!user) {
         router.push('/login')
         return

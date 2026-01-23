@@ -151,21 +151,25 @@ export async function userHasMinimumRole(
  */
 export async function getCurrentUserRole(): Promise<UserRole | null> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const claims = claimsData?.claims
+  const userId = claims?.sub
   
-  if (!user) {
+  if (!userId) {
     return null;
   }
   
   // Check JWT claims first (fast path)
-  const roleFromClaims = user.user_metadata?.role as string | undefined;
+  const roleFromClaims = (claims?.user_metadata as Record<string, unknown> | undefined)?.role as
+    | string
+    | undefined
   if (roleFromClaims && isValidRole(roleFromClaims)) {
     return roleFromClaims;
   }
   
   // Fallback to database lookup
   const { data, error } = await supabase.rpc('get_tenant_user_role', {
-    p_user_id: user.id
+    p_user_id: userId
   });
   
   if (error || !data) {

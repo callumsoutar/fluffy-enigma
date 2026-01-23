@@ -16,14 +16,15 @@ export async function GET() {
     )
   }
 
-  // It's safe to read the user object from cookie storage after we verify the JWT signature.
-  // (We also confirm the IDs match as an extra guard.)
+  // Use getUser() to authenticate with Supabase Auth server (eliminates security warning).
+  // We've already verified the JWT signature via getClaims(), but getUser() ensures
+  // the user data is authentic and up-to-date from the Auth server.
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  const user = session?.user
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
 
-  if (!user || user.id !== claims.sub) {
+  if (userError || !user || user.id !== claims.sub) {
     return NextResponse.json(
       { user: null, role: null, profile: null },
       { status: 200 }

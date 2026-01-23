@@ -24,10 +24,15 @@ export async function RoleGuard({
   const supabase = await createClient()
   const { data: claimsData } = await supabase.auth.getClaims()
   const claims = claimsData?.claims
+  
+  // Use getUser() to authenticate with Supabase Auth server (eliminates security warning).
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  const user = claims?.sub && session?.user?.id === claims.sub ? session.user : null
+    data: { user: authenticatedUser },
+    error: userError,
+  } = await supabase.auth.getUser()
+  
+  // Verify the user ID matches the JWT claim
+  const user = claims?.sub && authenticatedUser?.id === claims.sub && !userError ? authenticatedUser : null
 
   if (!user) {
     redirect('/login')

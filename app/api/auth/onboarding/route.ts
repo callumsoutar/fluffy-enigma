@@ -60,10 +60,14 @@ export async function POST(request: Request) {
     const { data: claimsData } = await serverSupabase.auth.getClaims()
     const claims = claimsData?.claims
 
+    // Use getUser() to authenticate with Supabase Auth server (eliminates security warning).
     const {
-      data: { session },
-    } = await serverSupabase.auth.getSession()
-    const currentUser = claims?.sub && session?.user?.id === claims.sub ? session.user : null
+      data: { user: authenticatedUser },
+      error: userError,
+    } = await serverSupabase.auth.getUser()
+    
+    // Verify the user ID matches the JWT claim
+    const currentUser = claims?.sub && authenticatedUser?.id === claims.sub && !userError ? authenticatedUser : null
     
     if (!currentUser) {
       return NextResponse.json(
